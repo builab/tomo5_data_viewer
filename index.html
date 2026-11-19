@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tomo5 Data Viewer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  /* same palette as the SerialEM Grid Viewer, so the two tools feel like one family */
+  --bg:#0f1417;
+  --panel:#151c20;
+  --ink:#dbe4e8;
+  --muted:#8c9aa3;
+  --line:#28333a;
+  --accent:#3bb4c4;
+  --accent-ink:#06191c;
+  --canvas:#0b1013;
+  --warn:#e0a54a;
+  --err:#e06a5a;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--font-body)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:auto 1fr;height:100%}
+header{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font:600 16px/1 var(--font-body);margin:0;letter-spacing:.01em}
+header h1 small{font:400 12px var(--font-mono);color:var(--muted);margin-left:8px}
+.opens{display:flex;flex-wrap:wrap;gap:6px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--bg);border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:default;border-color:var(--line)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.small{padding:3px 8px;font-size:12px}
+.spacer{flex:1}
+#status{font-size:12.5px;color:var(--muted);max-width:52ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#status.err{color:var(--err)}
+
+aside{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:18px}
+.sec h2{font:600 11px/1 var(--font-body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 8px;display:flex;align-items:center;gap:8px}
+.sec h2 .act{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
+.empty{color:var(--muted);font-size:13px;padding:10px;border:1px dashed var(--line);border-radius:6px}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:12.5px}
+dl.kv dt{color:var(--muted)}
+dl.kv dd{margin:0;font:12px/1.45 var(--font-mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+dl.kv dd.warn{color:var(--warn)}
+.ctl{display:grid;grid-template-columns:72px 1fr 54px;align-items:center;gap:6px 8px;font-size:12.5px}
+.ctl label{color:var(--muted)}
+.ctl input[type=range]{width:100%;accent-color:var(--accent)}
+.ctl output{font:12px var(--font-mono);text-align:right;font-variant-numeric:tabular-nums}
+.ctl select{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:3px 6px;font-size:12.5px;grid-column:2/-1}
+.row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px}
+.row input[type=checkbox]{accent-color:var(--accent);margin:0}
+#hist{width:100%;height:46px;display:block;margin-bottom:8px;border-radius:4px;background:var(--bg)}
+.meta-filter{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:4px 7px;font-size:12px;margin-bottom:6px}
+.meta{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.meta table{border-collapse:collapse;width:100%;font:11.5px/1.35 var(--font-mono)}
+.meta td{padding:3px 7px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
+.meta td:first-child{color:var(--muted);width:58%}
+.meta tr:last-child td{border-bottom:none}
+.found{list-style:none;margin:0;padding:0;font-size:12.5px;display:flex;flex-direction:column;gap:3px}
+.found li{display:flex;gap:8px}
+.found li span:first-child{flex:1;color:var(--muted)}
+.found li span:last-child{font:12px var(--font-mono)}
+
+main{position:relative;overflow:hidden;background:var(--canvas)}
+#view{position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}
+#view.drag{cursor:grabbing}
+.overlay{position:absolute;pointer-events:none;font:12px var(--font-mono);color:var(--ink);background:rgba(11,16,19,.78);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-variant-numeric:tabular-nums}
+#readout{right:12px;bottom:12px;white-space:pre}
+#scalebar{left:12px;bottom:12px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+#scalebar .bar{height:5px;background:var(--ink);border-radius:1px}
+#hint{right:12px;top:12px;color:var(--muted)}
+#welcome{position:absolute;inset:0;display:grid;place-items:center;padding:24px}
+#welcome .card{max-width:520px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 24px}
+#welcome h2{margin:0 0 8px;font:600 18px var(--font-body)}
+#welcome p{margin:0 0 12px;color:var(--muted)}
+#welcome code{font:12.5px var(--font-mono);color:var(--ink)}
+
+/* folder picker */
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:0;width:min(640px,92vw)}
+dialog::backdrop{background:rgba(0,0,0,.55)}
+.fp-head{padding:14px 16px 8px;border-bottom:1px solid var(--line)}
+.fp-head h3{margin:0 0 6px;font:600 15px var(--font-body)}
+.fp-crumbs{font:12px var(--font-mono);color:var(--muted);display:flex;flex-wrap:wrap;gap:2px}
+.fp-crumbs button{background:none;border:none;padding:0 2px;cursor:pointer;color:var(--accent);font:inherit}
+.fp-list{height:340px;overflow:auto;padding:6px}
+.fp-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:1px solid transparent;border-radius:5px;padding:5px 8px;cursor:pointer;font-size:13px}
+.fp-item:hover{border-color:var(--line);background:var(--bg)}
+.fp-item.file{cursor:default;color:var(--muted)}
+.fp-item.file:hover{border-color:transparent;background:none}
+.fp-item .ic{width:16px;text-align:center;color:var(--muted)}
+.fp-item .sz{margin-left:auto;font:11.5px var(--font-mono);color:var(--muted)}
+.fp-foot{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line)}
+.fp-note{font-size:12.5px;color:var(--muted)}
+.fp-note.ok{color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Tomo5 Data Viewer<small>v0.1 · atlas</small></h1>
+    <div class="opens">
+      <button class="btn primary" id="openServer" hidden>Open session…</button>
+      <button class="btn" id="openLocal">Open folder from this computer…</button>
+      <input type="file" id="localDir" webkitdirectory directory multiple hidden>
+    </div>
+    <span class="spacer"></span>
+    <span id="status"></span>
+  </header>
+
+  <aside>
+    <section class="sec">
+      <h2>Session</h2>
+      <div id="sessionBox"><div class="empty">No session open. Open a Tomo5 session folder (the one with <code>Atlas/</code>, <code>Batch/</code> and <code>SearchMaps/</code>).</div></div>
+    </section>
+
+    <section class="sec">
+      <h2>Atlas</h2>
+      <div id="atlasBox"><div class="empty">The atlas appears here once a session is open.</div></div>
+    </section>
+
+    <section class="sec" id="displaySec" hidden>
+      <h2>Display <button class="btn small act" id="autoContrast">Auto</button></h2>
+      <canvas id="hist" width="300" height="46"></canvas>
+      <div class="ctl">
+        <label for="source">Image</label><select id="source"><option value="mrc">MRC (full data)</option><option value="jpg">JPG preview</option></select>
+        <label for="lo">Black</label><input type="range" id="lo" min="0" max="1000" value="5"><output id="loOut"></output>
+        <label for="hi">White</label><input type="range" id="hi" min="0" max="1000" value="995"><output id="hiOut"></output>
+      </div>
+      <div class="row"><input type="checkbox" id="invert"><label for="invert">Invert</label>
+        <span class="spacer"></span><button class="btn small" id="fit">Fit to window</button></div>
+    </section>
+
+    <section class="sec" id="metaSec" hidden>
+      <h2>Atlas XML <span class="act count" id="metaCount"></span></h2>
+      <input class="meta-filter" id="metaFilter" placeholder="Filter, e.g. pixelSize or stage" spellcheck="false">
+      <div class="meta"><table id="metaTable"></table></div>
+    </section>
+  </aside>
+
+  <main>
+    <canvas id="view"></canvas>
+    <div id="welcome">
+      <div class="card">
+        <h2>Open a Tomo5 session</h2>
+        <p>Pick the session folder. The viewer finds <code>Atlas/Atlas_*.xml</code> and its <code>.mrc</code>, reads the metadata and shows the stitched atlas.</p>
+        <p id="welcomeServer" hidden>Folders shared by the server are listed under <b>Open session…</b>.</p>
+        <p id="welcomeLocal">Without the server, use <b>Open folder from this computer…</b>. The browser only reads the atlas files, not the tilt series.</p>
+      </div>
+    </div>
+    <div class="overlay" id="scalebar" hidden><div class="bar"></div><span></span></div>
+    <div class="overlay" id="readout" hidden></div>
+    <div class="overlay" id="hint" hidden>Scroll to zoom · drag to pan · F to fit</div>
+  </main>
+</div>
+
+<dialog id="picker">
+  <div class="fp-head"><h3>Open a Tomo5 session</h3><div class="fp-crumbs" id="fpCrumbs"></div></div>
+  <div class="fp-list" id="fpList"></div>
+  <div class="fp-foot">
+    <span class="fp-note" id="fpNote"></span><span class="spacer"></span>
+    <button class="btn" id="fpCancel">Cancel</button>
+    <button class="btn primary" id="fpUse">Open this folder</button>
+  </div>
+</dialog>
+
+<script>
+"use strict";
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const MAX_DIM = 4096;            // atlas is shown at most this many pixels wide/high (binned on load)
+
+function status(msg, isErr){ const el = $("#status"); el.textContent = msg || ""; el.title = msg || ""; el.classList.toggle("err", !!isErr); }
+function fmtBytes(n){ if(n == null) return ""; const u = ["B","KB","MB","GB","TB"]; let i = 0; while(n >= 1024 && i < u.length - 1){ n /= 1024; i++; } return `${n < 10 && i ? n.toFixed(1) : Math.round(n)} ${u[i]}`; }
+function fmtNum(v, d = 2){ return Number.isFinite(v) ? v.toFixed(d) : "–"; }
+
+/* ------------------------------------------------------------------ data sources
+   A source lists folders and reads files. Paths are '/'-separated and relative to the source. */
+const ServerSource = {
+  kind: "server",
+  async list(path){
+    const r = await fetch(`api/list?path=${encodeURIComponent(path)}`);
+    const j = await r.json(); if(!r.ok) throw new Error(j.error || r.statusText); return j;
+  },
+  async text(path){
+    const r = await fetch(`api/file?path=${encodeURIComponent(path)}`);
+    if(!r.ok) throw new Error(`${path}: ${r.status} ${r.statusText}`); return r.text();
+  },
+  async bytes(path, start, end){       // inclusive byte range
+    const r = await fetch(`api/file?path=${encodeURIComponent(path)}`, {headers: {Range: `bytes=${start}-${end}`}});
+    if(!r.ok) throw new Error(`${path}: ${r.status} ${r.statusText}`); return r.arrayBuffer();
+  },
+  async section(path, z, bin){         // binned float32 section, if the server has numpy
+    if(!SERVER.numpy) return null;
+    const r = await fetch(`api/section?path=${encodeURIComponent(path)}&z=${z}&bin=${bin}`);
+    if(!r.ok) return null;
+    return {data: new Float32Array(await r.arrayBuffer()), w: +r.headers.get("X-Bw"), h: +r.headers.get("X-Bh")};
+  },
+  url(path){ return `api/file?path=${encodeURIComponent(path)}`; },
+};
+
+function LocalSource(fileList){
+  // a folder picked with <input webkitdirectory>: files are known by their relative path
+  const files = new Map();
+  for(const f of fileList) files.set(f.webkitRelativePath || f.name, f);
+  return {
+    kind: "local",
+    async list(path){
+      const pre = path ? path + "/" : "", dirs = new Set(), out = [];
+      for(const [p, f] of files){
+        if(!p.startsWith(pre)) continue;
+        const rest = p.slice(pre.length), i = rest.indexOf("/");
+        if(i < 0) out.push({name: rest, size: f.size}); else dirs.add(rest.slice(0, i));
+      }
+      return {path, dirs: [...dirs].sort().map(name => ({name})), files: out.sort((a, b) => a.name.localeCompare(b.name))};
+    },
+    file(path){ const f = files.get(path); if(!f) throw new Error(`${path} not found`); return f; },
+    async text(path){ return this.file(path).text(); },
+    async bytes(path, start, end){ return this.file(path).slice(start, end + 1).arrayBuffer(); },
+    async section(){ return null; },
+    url(path){ return URL.createObjectURL(this.file(path)); },
+    root(){ const first = files.keys().next().value || ""; return first.split("/")[0]; },
+  };
+}
+
+/* ------------------------------------------------------------------ MRC */
+function parseMrcHeader(buf){
+  const dv = new DataView(buf);
+  const nx = dv.getInt32(0, true), ny = dv.getInt32(4, true), nz = dv.getInt32(8, true), mode = dv.getInt32(12, true);
+  if(!(nx > 0 && ny > 0 && nz > 0 && nx < 200000 && ny < 200000)) throw new Error("Not a little-endian MRC file.");
+  const mx = dv.getInt32(28, true), xlen = dv.getFloat32(40, true);
+  const nxt = Math.max(0, dv.getInt32(92, true));
+  const imodStamp = dv.getInt32(152, true), imodFlags = dv.getInt32(156, true);
+  const signedBytes = imodStamp === 1146047817 && (imodFlags & 1) === 1;
+  const bytesPer = {0: 1, 1: 2, 2: 4, 6: 2, 12: 2}[mode];
+  if(!bytesPer) throw new Error(`MRC mode ${mode} is not supported.`);
+  const pixelA = mx > 0 && xlen > 0 ? xlen / mx : NaN;     // Å per pixel from the header
+  return {nx, ny, nz, mode, nxt, signedBytes, bytesPer, pixelA};
+}
+let HALF = null;
+function halfTable(){
+  if(HALF) return HALF;
+  HALF = new Float32Array(65536);
+  for(let i = 0; i < 65536; i++){
+    const s = i & 0x8000 ? -1 : 1, e = (i >> 10) & 0x1f, f = i & 0x3ff;
+    HALF[i] = e === 0 ? s * Math.pow(2, -14) * (f / 1024) : e === 31 ? (f ? NaN : s * Infinity) : s * Math.pow(2, e - 15) * (1 + f / 1024);
+  }
+  return HALF;
+}
+function typedSection(buf, h){
+  if(h.mode === 0) return h.signedBytes ? new Int8Array(buf) : new Uint8Array(buf);
+  if(h.mode === 1) return new Int16Array(buf);
+  if(h.mode === 2) return new Float32Array(buf);
+  if(h.mode === 6) return new Uint16Array(buf);
+  const u = new Uint16Array(buf), t = halfTable(), o = new Float32Array(u.length);
+  for(let i = 0; i < u.length; i++) o[i] = t[u[i]];
+  return o;
+}
+function binImage(a, nx, ny, b){
+  const w = Math.floor(nx / b), h = Math.floor(ny / b), out = new Float32Array(w * h), inv = 1 / (b * b);
+  for(let y = 0; y < h; y++) for(let x = 0; x < w; x++){
+    let s = 0;
+    for(let j = 0; j < b; j++){ const row = (y * b + j) * nx + x * b; for(let i = 0; i < b; i++) s += a[row + i]; }
+    out[y * w + x] = s * inv;
+  }
+  return {data: out, w, h};
+}
+async function readMrc(src, path, z = 0){
+  const h = parseMrcHeader(await src.bytes(path, 0, 1023));
+  const bin = Math.max(1, Math.ceil(Math.max(h.nx, h.ny) / MAX_DIM));
+  let img = await src.section(path, z, bin);
+  if(!img){
+    const n = h.nx * h.ny * h.bytesPer, start = 1024 + h.nxt + z * n;
+    status(`Reading ${fmtBytes(n)} of image data…`);
+    const a = typedSection(await src.bytes(path, start, start + n - 1), h);
+    if(a.length < h.nx * h.ny) throw new Error("The MRC file is shorter than its header says.");
+    img = bin > 1 ? binImage(a, h.nx, h.ny, bin) : {data: Float32Array.from(a), w: h.nx, h: h.ny};
+  }
+  return {header: h, bin, ...img};
+}
+
+/* ------------------------------------------------------------------ Thermo Fisher XML (EPU / Tomo5 MicroscopeImage)
+   Flatten every leaf into "path/to/leaf" = value, using local names (namespaces dropped).
+   Key/Value pairs (e.g. CustomData) become "…/<Key>" = value. */
+function flattenXml(text){
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if(doc.querySelector("parsererror")) throw new Error("The atlas XML could not be read.");
+  const rows = [];
+  const kids = el => [...el.children];
+  function walk(el, path){
+    const ch = kids(el);
+    if(!ch.length){ rows.push([path, el.textContent.trim()]); return; }
+    const names = ch.map(c => c.localName);
+    const kIdx = names.findIndex(n => /^key$/i.test(n)), vIdx = names.findIndex(n => /^value$/i.test(n));
+    if(ch.length === 2 && kIdx >= 0 && vIdx >= 0){
+      const v = ch[vIdx];
+      if(!v.children.length){ rows.push([`${path}/${ch[kIdx].textContent.trim()}`, v.textContent.trim()]); return; }
+      walk(v, `${path}/${ch[kIdx].textContent.trim()}`); return;
+    }
+    const count = {}, seen = {};
+    names.forEach(n => count[n] = (count[n] || 0) + 1);
+    for(const c of ch){
+      const n = c.localName; seen[n] = (seen[n] || 0) + 1;
+      walk(c, `${path ? path + "/" : ""}${n}${count[n] > 1 ? `[${seen[n]}]` : ""}`);
+    }
+  }
+  walk(doc.documentElement, "");
+  return {root: doc.documentElement.localName, rows};
+}
+const UNIT = {m: 1, mm: 1e-3, "µm": 1e-6, um: 1e-6, nm: 1e-9, "Å": 1e-10, A: 1e-10};
+function atlasInfo(rows){
+  const find = re => { const r = rows.find(([p]) => re.test(p)); return r ? r[1] : undefined; };
+  const num = re => { const v = parseFloat(find(re)); return Number.isFinite(v) ? v : NaN; };
+  const unit = find(/pixelSize\/x\/unit\/symbol$/i) || "m";
+  const pxM = num(/pixelSize\/x\/numericValue$/i) * (UNIT[unit] ?? 1);
+  return {
+    pixelM: pxM,                                                     // metres per pixel of the atlas image
+    stage: {x: num(/stage\/Position\/X$/i), y: num(/stage\/Position\/Y$/i), z: num(/stage\/Position\/Z$/i),
+            a: num(/stage\/Position\/A$/i), b: num(/stage\/Position\/B$/i)},
+    mag: find(/NominalMagnification$/i),
+    date: find(/acquisitionDateTime$/i),
+    camera: find(/camera\/Name$/i),
+    readout: [num(/ReadoutArea\/width$/i), num(/ReadoutArea\/height$/i)],
+    binning: num(/Binning\/x$/i),
+  };
+}
+
+/* ------------------------------------------------------------------ session discovery */
+let SRC = null, SERVER = null, SESSION = null;
+const ATLAS_RE = /^Atlas_.*\.xml$/i;
+
+async function openSession(src, path){
+  SRC = src; SESSION = null; clearAtlas();
+  status(`Opening ${path || "folder"}…`);
+  try{
+    const top = await src.list(path);
+    const dirNames = new Set(top.dirs.map(d => d.name));
+    // the folder may be the session itself, or its Atlas/ folder
+    let atlasDir = path, atlasList = top;
+    if(dirNames.has("Atlas")){ atlasDir = join(path, "Atlas"); atlasList = await src.list(atlasDir); }
+    const xmls = atlasList.files.filter(f => ATLAS_RE.test(f.name)).map(f => f.name).sort();
+    const s = {path, top, atlasDir, xml: xmls.length ? xmls[xmls.length - 1] : null, xmlCount: xmls.length};
+    if(s.xml){
+      const stem = s.xml.replace(/\.xml$/i, "");
+      const has = n => atlasList.files.find(f => f.name.toLowerCase() === n.toLowerCase());
+      s.mrc = has(stem + ".mrc"); s.jpg = has(stem + ".jpg");
+    }
+    s.counts = await sessionCounts(src, path, top);
+    SESSION = s;
+    renderSession();
+    if(src.kind === "server") history.replaceState(null, "", "#session=" + encodeURIComponent(path));
+    if(!s.xml){ status("No Atlas_*.xml found in this folder or its Atlas/ folder.", true); return; }
+    await loadAtlas();
+  }catch(e){ console.error(e); status(e.message, true); }
+}
+const join = (a, b) => a ? `${a}/${b}` : b;
+
+async function sessionCounts(src, path, top){
+  const dirs = new Set(top.dirs.map(d => d.name)), c = {};
+  c.sessionDm = top.files.some(f => f.name === "Session.dm");
+  c.tiltSeries = top.files.filter(f => /^Position_.*\.mdoc$/i.test(f.name)).length;
+  const safe = async p => { try{ return await src.list(p); }catch{ return null; } };
+  if(dirs.has("SearchMaps")){ const l = await safe(join(path, "SearchMaps")); if(l) c.searchMaps = l.dirs.filter(d => /^SearchMap_/i.test(d.name)).length; }
+  if(dirs.has("Batch")){ const l = await safe(join(path, "Batch")); if(l) c.positions = l.files.filter(f => /^Position_.*_Exposure\.mrc$/i.test(f.name)).length; }
+  return c;
+}
+
+function renderSession(){
+  const s = SESSION, c = s.counts;
+  const name = s.path ? s.path.split("/").pop() : (SRC.root ? SRC.root() : "folder");
+  const li = (k, v) => `<li><span>${k}</span><span>${v}</span></li>`;
+  $("#sessionBox").innerHTML = `
+    <dl class="kv" style="margin-bottom:8px"><dt>Folder</dt><dd title="${esc(s.path)}">${esc(name)}</dd>
+      <dt>Source</dt><dd>${SRC.kind === "server" ? "server" : "this computer"}</dd></dl>
+    <ul class="found">
+      ${li("Atlas", s.xml ? esc(s.xml.replace(/\.xml$/i, "")) : '<span style="color:var(--warn)">not found</span>')}
+      ${li("Search maps", c.searchMaps ?? "–")}
+      ${li("Batch positions (exposures)", c.positions ?? "–")}
+      ${li("Tilt series (.mdoc)", c.tiltSeries)}
+      ${li("Session.dm", c.sessionDm ? "yes" : "no")}
+    </ul>
+    ${s.xmlCount > 1 ? `<p class="fp-note" style="margin:8px 0 0">${s.xmlCount} atlas XML files; showing the newest.</p>` : ""}`;
+}
+
+/* ------------------------------------------------------------------ atlas loading */
+let ATLAS = null;   // {info, rows, mrc: {data,w,h,bin,header}, jpg: HTMLImageElement, pixelM}
+
+function clearAtlas(){
+  ATLAS = null; IMG = null;
+  $("#atlasBox").innerHTML = '<div class="empty">The atlas appears here once a session is open.</div>';
+  $("#displaySec").hidden = $("#metaSec").hidden = true;
+  $("#scalebar").hidden = $("#readout").hidden = $("#hint").hidden = true;
+  draw();
+}
+
+async function loadAtlas(){
+  const s = SESSION, xmlPath = join(s.atlasDir, s.xml);
+  status(`Reading ${s.xml}…`);
+  const {rows, root} = flattenXml(await SRC.text(xmlPath));
+  const info = atlasInfo(rows);
+  ATLAS = {rows, root, info, mrc: null, jpg: null};
+  renderMeta();
+  renderAtlasInfo();
+  $("#metaSec").hidden = false;
+  if(s.mrc){
+    status(`Loading ${s.mrc.name}…`);
+    ATLAS.mrc = await readMrc(SRC, join(s.atlasDir, s.mrc.name));
+    setSource("mrc");
+  }else if(s.jpg){
+    setSource("jpg");
+  }
+  renderAtlasInfo();
+  $("#source").querySelector('[value="mrc"]').disabled = !ATLAS.mrc;
+  $("#source").querySelector('[value="jpg"]').disabled = !s.jpg;
+  status(ATLAS.mrc ? `Atlas loaded: ${ATLAS.mrc.header.nx} × ${ATLAS.mrc.header.ny} px${ATLAS.mrc.header.nz > 1 ? `, ${ATLAS.mrc.header.nz} sections` : ""}.` : "Showing the JPG preview (no MRC found).");
+}
+
+// pixel size of the image as loaded (metres per original pixel): XML first, MRC header as fallback
+function pixelM(){
+  if(!ATLAS) return NaN;
+  if(Number.isFinite(ATLAS.info.pixelM) && ATLAS.info.pixelM > 0) return ATLAS.info.pixelM;
+  const a = ATLAS.mrc?.header.pixelA;
+  return Number.isFinite(a) && a > 0 && a !== 1 ? a * 1e-10 : NaN;
+}
+function fullSize(){   // size of the full-resolution atlas in original pixels
+  if(ATLAS?.mrc) return [ATLAS.mrc.header.nx, ATLAS.mrc.header.ny];
+  if(ATLAS?.jpg) return [ATLAS.jpg.naturalWidth, ATLAS.jpg.naturalHeight];
+  return [NaN, NaN];
+}
+
+function renderAtlasInfo(){
+  const i = ATLAS.info, h = ATLAS.mrc?.header, px = pixelM(), [nx, ny] = fullSize();
+  const um = v => fmtNum(v * 1e6, 2);
+  const rows = [];
+  rows.push(["File", esc(SESSION.xml.replace(/\.xml$/i, "")) + (SESSION.mrc ? ` <span style="color:var(--muted)">(${fmtBytes(SESSION.mrc.size)})</span>` : "")]);
+  if(Number.isFinite(nx)) rows.push(["Image", `${nx} × ${ny} px${h && h.nz > 1 ? ` · ${h.nz} sections` : " · single stitched image"}`]);
+  if(ATLAS.mrc && ATLAS.mrc.bin > 1) rows.push(["Shown at", `bin ${ATLAS.mrc.bin} (${ATLAS.mrc.w} × ${ATLAS.mrc.h})`]);
+  const xmlPx = i.pixelM, hdrPx = h?.pixelA;
+  rows.push(["Pixel size", Number.isFinite(px) ? `${fmtNum(px * 1e9, 1)} nm${Number.isFinite(xmlPx) ? "" : " (MRC header)"}` : '<span class="warn">unknown</span>']);
+  if(Number.isFinite(xmlPx) && Number.isFinite(hdrPx) && hdrPx > 0 && hdrPx !== 1 && Math.abs(hdrPx * 1e-10 / xmlPx - 1) > 0.02)
+    rows.push(["MRC header", `<span style="color:var(--warn)">${fmtNum(hdrPx / 10, 1)} nm (differs from XML)</span>`]);
+  if(Number.isFinite(px) && Number.isFinite(nx)) rows.push(["Field of view", `${fmtNum(nx * px * 1e6, 0)} × ${fmtNum(ny * px * 1e6, 0)} µm`]);
+  if(Number.isFinite(i.stage.x)) rows.push(["Stage X, Y", `${um(i.stage.x)}, ${um(i.stage.y)} µm`]);
+  if(Number.isFinite(i.stage.z)) rows.push(["Stage Z", `${um(i.stage.z)} µm`]);
+  if(Number.isFinite(i.stage.a)) rows.push(["Stage α", `${fmtNum(i.stage.a * 180 / Math.PI, 2)}°`]);
+  if(i.mag) rows.push(["Magnification", `${esc(i.mag)}×`]);
+  if(i.camera) rows.push(["Camera", esc(i.camera)]);
+  if(Number.isFinite(i.binning)) rows.push(["Binning", i.binning]);
+  if(i.date) rows.push(["Acquired", esc(i.date.replace("T", " ").replace(/\.\d+.*$/, ""))]);
+  $("#atlasBox").innerHTML = `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+}
+
+function renderMeta(){
+  const f = $("#metaFilter").value.trim().toLowerCase();
+  const rows = ATLAS.rows.filter(([p, v]) => !f || p.toLowerCase().includes(f) || v.toLowerCase().includes(f));
+  $("#metaCount").textContent = f ? `${rows.length} / ${ATLAS.rows.length}` : `${ATLAS.rows.length} fields`;
+  $("#metaTable").innerHTML = rows.map(([p, v]) => `<tr><td>${esc(p)}</td><td>${esc(v)}</td></tr>`).join("") ||
+    '<tr><td colspan="2" style="color:var(--muted)">No match.</td></tr>';
+}
+
+/* ------------------------------------------------------------------ display: contrast → 8-bit canvas */
+let IMG = null;      // {canvas, w, h, bin}  what is drawn, in loaded pixels; bin = original px per loaded px
+let STATS = null;    // sorted sample of the MRC values, for percentiles and the histogram
+
+function sampleStats(data){
+  const n = data.length, step = Math.max(1, Math.floor(n / 500000)), s = [];
+  for(let i = 0; i < n; i += step){ const v = data[i]; if(Number.isFinite(v)) s.push(v); }
+  const a = Float32Array.from(s).sort();
+  return {sorted: a, min: a[0], max: a[a.length - 1]};
+}
+const pct = (p) => STATS.sorted[Math.min(STATS.sorted.length - 1, Math.max(0, Math.round(p * (STATS.sorted.length - 1))))];
+
+function renderMrc(){
+  const m = ATLAS.mrc;
+  if(!STATS) STATS = sampleStats(m.data);
+  let lo = pct(+$("#lo").value / 1000), hi = pct(+$("#hi").value / 1000);
+  if(hi <= lo) hi = lo + 1e-6;
+  $("#loOut").value = fmtVal(lo); $("#hiOut").value = fmtVal(hi);
+  const inv = $("#invert").checked, k = 255 / (hi - lo);
+  const c = IMG?.canvas?.width === m.w && IMG.canvas.height === m.h && IMG.kind === "mrc" ? IMG.canvas : Object.assign(document.createElement("canvas"), {width: m.w, height: m.h});
+  const ctx = c.getContext("2d"), id = ctx.createImageData(m.w, m.h), px = id.data, d = m.data;
+  for(let i = 0, j = 0; i < d.length; i++, j += 4){
+    let v = (d[i] - lo) * k; v = v < 0 ? 0 : v > 255 ? 255 : v;
+    if(inv) v = 255 - v;
+    px[j] = px[j + 1] = px[j + 2] = v; px[j + 3] = 255;
+  }
+  ctx.putImageData(id, 0, 0);
+  IMG = {canvas: c, w: m.w, h: m.h, bin: m.bin, kind: "mrc"};
+  drawHist(lo, hi);
+  draw();
+}
+const fmtVal = v => Math.abs(v) >= 1000 || (Math.abs(v) < 0.01 && v !== 0) ? v.toExponential(1) : v.toFixed(Math.abs(v) < 10 ? 2 : 0);
+
+function drawHist(lo, hi){
+  const cv = $("#hist"), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
+  const a = STATS.sorted, x0 = pct(0.001), x1 = pct(0.999), nb = Math.max(20, Math.floor(W / 2)), bins = new Uint32Array(nb);
+  if(x1 <= x0) return;
+  for(const v of a){ const b = Math.floor((v - x0) / (x1 - x0) * nb); if(b >= 0 && b < nb) bins[b]++; }
+  const peak = Math.max(...bins), cs = getComputedStyle(document.documentElement);
+  ctx.fillStyle = cs.getPropertyValue("--muted");
+  for(let i = 0; i < nb; i++){ const h = Math.sqrt(bins[i] / peak) * (H - 4); ctx.fillRect(i * W / nb, H - h, Math.max(1, W / nb - .5), h); }
+  ctx.fillStyle = cs.getPropertyValue("--accent");
+  for(const v of [lo, hi]){ const x = (v - x0) / (x1 - x0) * W; if(x >= 0 && x <= W) ctx.fillRect(x - 1, 0, 2, H); }
+}
+
+async function setSource(kind){
+  $("#source").value = kind;
+  $("#displaySec").hidden = false;
+  const contrast = kind === "mrc";
+  for(const id of ["#lo", "#hi", "#invert", "#autoContrast"]) $(id).disabled = !contrast;
+  $("#hist").style.opacity = contrast ? 1 : .35;
+  if(kind === "mrc"){ STATS = null; renderMrc(); }
+  else{
+    if(!ATLAS.jpg){
+      const img = new Image();
+      img.src = SRC.url(join(SESSION.atlasDir, SESSION.jpg.name));
+      await img.decode();
+      ATLAS.jpg = img;
+    }
+    // the JPG may be smaller than the MRC; express its pixels in original (MRC) pixels
+    const origW = ATLAS.mrc ? ATLAS.mrc.header.nx : ATLAS.jpg.naturalWidth;
+    IMG = {canvas: ATLAS.jpg, w: ATLAS.jpg.naturalWidth, h: ATLAS.jpg.naturalHeight, bin: origW / ATLAS.jpg.naturalWidth, kind: "jpg"};
+  }
+  $("#welcome").hidden = true;
+  $("#scalebar").hidden = $("#hint").hidden = false;
+  fit();
+}
+
+/* ------------------------------------------------------------------ view: pan / zoom */
+const view = $("#view");
+const V = {s: 1, ox: 0, oy: 0};   // screen px per loaded px; screen position of loaded pixel (0,0)
+
+function fit(){
+  if(!IMG) return;
+  const W = view.clientWidth, H = view.clientHeight;
+  V.s = Math.min(W / IMG.w, H / IMG.h) * 0.96;
+  V.ox = (W - IMG.w * V.s) / 2; V.oy = (H - IMG.h * V.s) / 2;
+  draw();
+}
+function draw(){
+  const dpr = devicePixelRatio || 1, W = view.clientWidth, H = view.clientHeight;
+  if(view.width !== Math.round(W * dpr) || view.height !== Math.round(H * dpr)){ view.width = Math.round(W * dpr); view.height = Math.round(H * dpr); }
+  const ctx = view.getContext("2d");
+  ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, view.width, view.height);
+  if(!IMG) return;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.imageSmoothingEnabled = V.s < 2; ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(IMG.canvas, V.ox, V.oy, IMG.w * V.s, IMG.h * V.s);
+  drawScaleBar();
+}
+function drawScaleBar(){
+  const px = pixelM(), el = $("#scalebar");
+  if(!Number.isFinite(px)){ el.hidden = true; return; }
+  el.hidden = false;
+  const umPerScreen = px * 1e6 * IMG.bin / V.s, target = 140 * umPerScreen;
+  const p = Math.pow(10, Math.floor(Math.log10(target))), nice = [1, 2, 5, 10].map(m => m * p).filter(v => v <= target).pop() || p;
+  el.querySelector(".bar").style.width = `${nice / umPerScreen}px`;
+  el.querySelector("span").textContent = nice >= 1000 ? `${nice / 1000} mm` : nice >= 1 ? `${nice} µm` : `${nice * 1000} nm`;
+}
+function zoomAt(f, sx, sy){
+  const s = Math.min(64, Math.max(0.01, V.s * f)); f = s / V.s;
+  V.ox = sx - (sx - V.ox) * f; V.oy = sy - (sy - V.oy) * f; V.s = s; draw();
+}
+
+let drag = null;
+view.addEventListener("pointerdown", e => { if(!IMG) return; drag = {x: e.clientX, y: e.clientY, ox: V.ox, oy: V.oy}; view.setPointerCapture(e.pointerId); view.classList.add("drag"); });
+view.addEventListener("pointermove", e => {
+  if(drag){ V.ox = drag.ox + e.clientX - drag.x; V.oy = drag.oy + e.clientY - drag.y; draw(); }
+  readout(e);
+});
+const endDrag = () => { drag = null; view.classList.remove("drag"); };
+view.addEventListener("pointerup", endDrag); view.addEventListener("pointercancel", endDrag);
+view.addEventListener("pointerleave", () => { $("#readout").hidden = true; });
+view.addEventListener("wheel", e => { if(!IMG) return; e.preventDefault(); const r = view.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015)), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+view.addEventListener("dblclick", fit);
+addEventListener("resize", () => { draw(); });
+addEventListener("keydown", e => {
+  if(!IMG || e.target.closest("input,select,dialog")) return;
+  const W = view.clientWidth / 2, H = view.clientHeight / 2;
+  if(e.key === "f" || e.key === "F") fit();
+  else if(e.key === "+" || e.key === "=") zoomAt(1.25, W, H);
+  else if(e.key === "-" || e.key === "_") zoomAt(0.8, W, H);
+});
+
+function readout(e){
+  const el = $("#readout");
+  if(!IMG){ el.hidden = true; return; }
+  const r = view.getBoundingClientRect(), lx = (e.clientX - r.left - V.ox) / V.s, ly = (e.clientY - r.top - V.oy) / V.s;
+  if(lx < 0 || ly < 0 || lx >= IMG.w || ly >= IMG.h){ el.hidden = true; return; }
+  const [nx, ny] = fullSize(), X = lx * IMG.bin, Y = ly * IMG.bin, px = pixelM();
+  const lines = [`pixel   ${Math.floor(X)}, ${Math.floor(Y)}`];
+  if(Number.isFinite(px)) lines.push(`offset  ${fmtNum((X - nx / 2) * px * 1e6, 1)}, ${fmtNum((Y - ny / 2) * px * 1e6, 1)} µm`);
+  if(IMG.kind === "mrc"){ const v = ATLAS.mrc.data[Math.floor(ly) * ATLAS.mrc.w + Math.floor(lx)]; lines.push(`value   ${fmtVal(v)}`); }
+  lines.push(`zoom    ${fmtNum(V.s / IMG.bin * 100, V.s / IMG.bin < 0.1 ? 1 : 0)} %`);
+  el.textContent = lines.join("\n"); el.hidden = false;
+}
+
+/* ------------------------------------------------------------------ controls */
+for(const id of ["#lo", "#hi"]) $(id).addEventListener("input", () => { if(+$("#lo").value >= +$("#hi").value) $(id === "#lo" ? "#hi" : "#lo").value = id === "#lo" ? +$("#lo").value + 1 : +$("#hi").value - 1; renderMrc(); });
+$("#invert").addEventListener("change", renderMrc);
+$("#autoContrast").addEventListener("click", () => { $("#lo").value = 5; $("#hi").value = 995; renderMrc(); });
+$("#source").addEventListener("change", e => setSource(e.target.value).catch(err => status(err.message, true)));
+$("#fit").addEventListener("click", fit);
+$("#metaFilter").addEventListener("input", renderMeta);
+
+$("#openLocal").addEventListener("click", () => $("#localDir").click());
+$("#localDir").addEventListener("change", e => {
+  const files = e.target.files; if(!files.length) return;
+  // File objects are only handles: picking a session with big tilt series reads nothing until needed
+  const src = LocalSource(files);
+  openSession(src, src.root());
+  e.target.value = "";
+});
+
+/* ------------------------------------------------------------------ server folder picker */
+const FP = {path: ""};
+async function fpGo(path){
+  FP.path = path;
+  const list = $("#fpList"), note = $("#fpNote");
+  list.innerHTML = '<div class="fp-note" style="padding:8px">Loading…</div>';
+  try{
+    const l = await ServerSource.list(path);
+    const parts = path ? path.split("/") : [];
+    $("#fpCrumbs").innerHTML = `<button data-go="">shared folders</button>` + parts.map((p, i) => ` / <button data-go="${esc(parts.slice(0, i + 1).join("/"))}">${esc(p)}</button>`).join("");
+    const dirs = l.dirs.map(d => `<button class="fp-item" data-go="${esc(join(path, d.name))}"><span class="ic">▸</span>${esc(d.name)}</button>`);
+    const files = l.files.slice(0, 200).map(f => `<div class="fp-item file"><span class="ic">·</span>${esc(f.name)}<span class="sz">${fmtBytes(f.size)}</span></div>`);
+    list.innerHTML = dirs.join("") + files.join("") + (l.files.length > 200 ? `<div class="fp-note" style="padding:6px 8px">… and ${l.files.length - 200} more files</div>` : "") ||
+      '<div class="fp-note" style="padding:8px">Empty folder.</div>';
+    const looks = l.dirs.some(d => d.name === "Atlas") || l.files.some(f => f.name === "Session.dm");
+    note.textContent = !path ? "Pick a shared folder." : looks ? "Looks like a Tomo5 session." : "";
+    note.classList.toggle("ok", looks);
+    $("#fpUse").disabled = !path;
+  }catch(e){ list.innerHTML = `<div class="fp-note" style="padding:8px;color:var(--err)">${esc(e.message)}</div>`; }
+}
+$("#fpList").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if(b) fpGo(b.dataset.go); });
+$("#fpCrumbs").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if(b) fpGo(b.dataset.go); });
+$("#fpCancel").addEventListener("click", () => $("#picker").close());
+$("#fpUse").addEventListener("click", () => { $("#picker").close(); openSession(ServerSource, FP.path); });
+$("#openServer").addEventListener("click", () => { $("#picker").showModal(); fpGo(FP.path || (SESSION && SRC === ServerSource ? SESSION.path : (SERVER.roots.length === 1 ? SERVER.roots[0].name : ""))); });
+
+/* ------------------------------------------------------------------ start */
+(async function start(){
+  try{
+    const r = await fetch("api/info");
+    if(r.ok){
+      SERVER = await r.json();
+      $("#openServer").hidden = false; $("#welcomeServer").hidden = false;
+      $("#openLocal").textContent = "From this computer…";
+      $("#welcomeLocal").hidden = true;
+      const m = location.hash.match(/session=([^&]+)/);
+      if(m) openSession(ServerSource, decodeURIComponent(m[1]));
+    }
+  }catch{ /* opened as a plain file: local folders only */ }
+  draw();
+})();
+</script>
+</body>
+</html>
