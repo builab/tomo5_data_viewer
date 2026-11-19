@@ -277,9 +277,18 @@ def main():
         print("  numpy not found: large images are sent in full and shrunk in the browser.")
     # like Jupyter: tell the user how to reach this server from their own computer
     try:
-        user, host = getpass.getuser(), socket.getfqdn() or socket.gethostname()
+        user = getpass.getuser()
     except Exception:
-        user, host = "user", "this-workstation"
+        user = "user"
+    host = "this-workstation"
+    for get in (socket.getfqdn, socket.gethostname):
+        try:
+            h = get()
+        except Exception:
+            continue
+        if h and not h.startswith("localhost"):
+            host = h
+            break
     target = "localhost" if a.host in ("127.0.0.1", "0.0.0.0", "localhost") else a.host
     print("To view it from your own computer, run there:")
     print(f"  ssh -N -L {a.port}:{target}:{a.port} {user}@{host}")
