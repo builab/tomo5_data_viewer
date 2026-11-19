@@ -20,9 +20,11 @@ before sending them (much less data over the network); without numpy the viewer
 reads the full file and shrinks it itself.
 """
 import argparse
+import getpass
 import json
 import os
 import re
+import socket
 import struct
 import sys
 import urllib.parse
@@ -35,6 +37,7 @@ except ImportError:
 
 APP = "tomo5-data-viewer"
 VERSION = "0.1"
+TESTED_WITH = "Tomo5 5.26"
 CHUNK = 1 << 20          # 1 MiB per write when streaming a file
 
 ROOTS = {}               # name -> absolute path
@@ -269,10 +272,29 @@ def main():
 
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
     print(f"Tomo5 Data Viewer {VERSION} on http://{'localhost' if a.host in ('127.0.0.1', '0.0.0.0') else a.host}:{a.port}")
+    print(f"  Tested with {TESTED_WITH}")
     for n, r in ROOTS.items():
         print(f"  sharing  {n}  ->  {r}")
     if np is None:
         print("  numpy not found: large images are sent in full and shrunk in the browser.")
+    # like Jupyter: tell the user how to reach this server from their own computer
+    try:
+        user = getpass.getuser()
+    except Exception:
+        user = "user"
+    host = "this-workstation"
+    for get in (socket.getfqdn, socket.gethostname):
+        try:
+            h = get()
+        except Exception:
+            continue
+        if h and not h.startswith("localhost"):
+            host = h
+            break
+    target = "localhost" if a.host in ("127.0.0.1", "0.0.0.0", "localhost") else a.host
+    print("To view it from your own computer, run there:")
+    print(f"  ssh -N -L {a.port}:{target}:{a.port} {user}@{host}")
+    print(f"then open http://localhost:{a.port}")
     print("Press Ctrl+C to stop.")
     try:
         srv.serve_forever()
