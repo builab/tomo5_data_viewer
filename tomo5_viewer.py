@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-tomo5_server.py - serve Tomo5 session folders to the Tomo5 Data Viewer (index.html).
+tomo5_viewer.py - serve Tomo5 session folders to the Tomo5 Data Viewer (index.html).
 
 The viewer page (index.html) must sit next to this script, or be given with --html.
 Only the folders you list are reachable, and the server never writes anything.
 
 Usage
-    python3 tomo5_server.py /path/to/data [/another/root ...] [--port 8766] [--host 127.0.0.1]
+    python3 tomo5_viewer.py /path/to/data [/another/root ...] [--port 8766] [--host 127.0.0.1]
 
 Then open  http://localhost:8766  in Chrome, Edge or Firefox.
 
@@ -175,7 +175,7 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if url.path in ("/", "/index.html"):
                 if not HTML_PATH or not os.path.isfile(HTML_PATH):
-                    return self.send_err(404, "index.html not found. Put it next to tomo5_server.py or pass --html.")
+                    return self.send_err(404, "index.html not found. Put it next to tomo5_viewer.py or pass --html.")
                 return self.send_path(HTML_PATH, "text/html; charset=utf-8")
             if url.path == "/api/info":
                 return self.send_json({"app": APP, "version": VERSION, "numpy": np is not None,

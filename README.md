@@ -3,7 +3,7 @@
 A web-based interface to view Thermo Scientific Tomography 5 (Tomo5) data, in the spirit of the
 [SerialEM Grid Viewer](https://github.com/builab/serialEM_grid_viewer).
 
-It is one HTML page (`index.html`) plus a small Python server (`tomo5_server.py`) that serves your
+It is one HTML page (`index.html`) plus a small Python server (`tomo5_viewer.py`) that serves your
 session folders to the browser, read-only.
 
 **Status: v0.1, atlas only.** The viewer opens a Tomo5 session, reads the atlas XML and shows the
@@ -17,7 +17,7 @@ On the computer that has the data:
 ```bash
 git clone https://github.com/builab/tomo5_data_viewer.git
 cd tomo5_data_viewer
-python3 tomo5_server.py /path/to/Tomo5/sessions --port 8766
+python3 tomo5_viewer.py /path/to/Tomo5/sessions --port 8766
 ```
 
 If the data is on a remote workstation, tunnel the port from your own computer:
@@ -52,7 +52,7 @@ does the binning; otherwise the browser reads the full file and bins it.
 ## Server options
 
 ```text
-python3 tomo5_server.py ROOT [ROOT ...] [--port 8766] [--host 127.0.0.1] [--html index.html] [--verbose]
+python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--host 127.0.0.1] [--html index.html] [--verbose]
 ```
 
 - Only the listed folders are reachable, and nothing is ever written.
