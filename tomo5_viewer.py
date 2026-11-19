@@ -20,9 +20,11 @@ before sending them (much less data over the network); without numpy the viewer
 reads the full file and shrinks it itself.
 """
 import argparse
+import getpass
 import json
 import os
 import re
+import socket
 import struct
 import sys
 import urllib.parse
@@ -273,6 +275,15 @@ def main():
         print(f"  sharing  {n}  ->  {r}")
     if np is None:
         print("  numpy not found: large images are sent in full and shrunk in the browser.")
+    # like Jupyter: tell the user how to reach this server from their own computer
+    try:
+        user, host = getpass.getuser(), socket.getfqdn() or socket.gethostname()
+    except Exception:
+        user, host = "user", "this-workstation"
+    target = "localhost" if a.host in ("127.0.0.1", "0.0.0.0", "localhost") else a.host
+    print("To view it from your own computer, run there:")
+    print(f"  ssh -N -L {a.port}:{target}:{a.port} {user}@{host}")
+    print(f"then open http://localhost:{a.port}")
     print("Press Ctrl+C to stop.")
     try:
         srv.serve_forever()
