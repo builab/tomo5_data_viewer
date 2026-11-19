@@ -44,6 +44,8 @@ header h1 small{font:400 12px var(--font-mono);color:var(--muted);margin-left:8p
 .spacer{flex:1}
 #status{font-size:12.5px;color:var(--muted);max-width:52ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #status.err{color:var(--err)}
+.credit{font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap;border-left:1px solid var(--line);padding-left:14px}
+.credit:hover{color:var(--accent);text-decoration:underline}
 
 aside{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:18px}
 .sec h2{font:600 11px/1 var(--font-body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 8px;display:flex;align-items:center;gap:8px}
@@ -116,6 +118,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     </div>
     <span class="spacer"></span>
     <span id="status"></span>
+    <a class="credit" href="https://github.com/builab/tomo5_data_viewer" target="_blank" rel="noopener">Vibe-coded by Builab@McGill</a>
   </header>
 
   <aside>

@@ -37,6 +37,7 @@ except ImportError:
 
 APP = "tomo5-data-viewer"
 VERSION = "0.1"
+TESTED_WITH = "Tomo5 5.26"
 CHUNK = 1 << 20          # 1 MiB per write when streaming a file
 
 ROOTS = {}               # name -> absolute path
@@ -271,6 +272,7 @@ def main():
 
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
     print(f"Tomo5 Data Viewer {VERSION} on http://{'localhost' if a.host in ('127.0.0.1', '0.0.0.0') else a.host}:{a.port}")
+    print(f"  Tested with {TESTED_WITH}")
     for n, r in ROOTS.items():
         print(f"  sharing  {n}  ->  {r}")
     if np is None:

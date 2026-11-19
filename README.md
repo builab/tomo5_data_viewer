@@ -6,7 +6,7 @@ A web-based interface to view Thermo Scientific Tomography 5 (Tomo5) data, in th
 It is one HTML page (`index.html`) plus a small Python server (`tomo5_viewer.py`) that serves your
 session folders to the browser, read-only.
 
-**Status: v0.1, atlas only.** The viewer opens a Tomo5 session, reads the atlas XML and shows the
+**Status: v0.1, atlas only. Tested with Tomo5 5.26.** The viewer opens a Tomo5 session, reads the atlas XML and shows the
 stitched atlas image. Search maps, batch positions and tilt series come next.
 The session layout is described in [tomo5_data_struct.md](tomo5_data_struct.md).
 
@@ -64,6 +64,7 @@ When it starts, the viewer prints the tunnel command to run on your own computer
 
 ```text
 Tomo5 Data Viewer 0.1 on http://localhost:8766
+  Tested with Tomo5 5.26
   sharing  sessions  ->  /path/to/Tomo5/sessions
 To view it from your own computer, run there:
   ssh -N -L 8766:localhost:8766 user@workstation
