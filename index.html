@@ -442,7 +442,6 @@ function xmlInfo(rows){
     defocus: num(/AppliedDefocus$/i),
     dose: num(/Detectors\[[^\]]*\]\.TotalDose$/i),        // e/Å² on the camera
     binning: num(/Binning\/x$/i),
-    readoutW: num(/camera\/ReadoutArea\/width$/i),
   };
 }
 
@@ -468,8 +467,8 @@ const tryXml = async path => { try{ return await getXml(path); }catch{ return nu
 
 /* metres per original pixel: XML first, MRC header as fallback (1 Å in the header means "not set") */
 function pixelOf(xml, header){
-  const x = xml?.info.pixelM, rw = xml?.info.readoutW;
-  if(Number.isFinite(x) && x > 0) return {m: rw > 0 && header && rw !== header.nx ? x * rw / header.nx : x, from: "xml"};
+  const x = xml?.info.pixelM;          // per pixel of the saved image, also for stitched images
+  if(Number.isFinite(x) && x > 0) return {m: x, from: "xml"};
   const a = header?.pixelA;
   if(Number.isFinite(a) && a > 0 && a !== 1) return {m: a * 1e-10, from: "mrc"};
   return {m: NaN, from: null};
@@ -590,7 +589,7 @@ async function select(i){
   if(!SESSION || i < 0 || i >= SESSION.maps.length || i === STATE.sel) return;
   STATE.sel = i;
   renderTable(); updateChrome();
-  if(STATE.tab !== "atlas") await loadScene();
+  if(STATE.tab !== "atlas") await loadScene(); else draw();
 }
 function updateChrome(){
   const s = SESSION, has = !!(s && s.maps.length), map = has ? s.maps[STATE.sel] : null;
@@ -664,8 +663,28 @@ async function atlasScene(a, id){
   if(!a.mrc) throw new Error(`${a.stem}.mrc not found.`);
   status(`Loading ${a.stem}…`);
   const sc = await singleImageScene("atlas", a.xml, a.mrc, MAX_ATLAS, id);
-  if(sc) status(`Atlas: ${sc.layers[0].img.header.nx} × ${sc.layers[0].img.header.ny} px.`);
+  if(!sc) return null;
+  sc.marks = (await Promise.all(SESSION.maps.map(mapFootprint))).filter(Boolean);
+  if(stale(id)) return null;
+  const n = sc.marks.length;
+  status(`Atlas: ${sc.layers[0].img.header.nx} × ${sc.layers[0].img.header.ny} px, ${n} search map${n === 1 ? "" : "s"} marked.`);
   return sc;
+}
+
+// where a search map sits on the atlas: SearchMap.xml + SearchMap.mrc size, else a point at the overview centre
+async function mapFootprint(map, i){
+  try{
+    if(map.names.has("SearchMap.xml") && map.names.has("SearchMap.mrc")){
+      const xml = await getXml(join(map.dir, "SearchMap.xml")), header = await getHeader(join(map.dir, "SearchMap.mrc"));
+      if(Number.isFinite(xml.info.stage.x)) return {i, map, geo: geoOf(xml, header, pixelOf(xml, header))};
+    }
+    for(const f of ["SearchMap.xml", "Overview.xml"]){
+      if(!map.names.has(f)) continue;
+      const xml = await getXml(join(map.dir, f));
+      if(Number.isFinite(xml.info.stage.x)) return {i, map, point: [xml.info.stage.x * 1e6, xml.info.stage.y * 1e6]};
+    }
+  }catch(e){ console.warn(map.name, e); }
+  return null;
 }
 
 // tiles of a search map: XML + MRC header, each with its geometry
@@ -763,7 +782,7 @@ function stageRows(i){
   if(Number.isFinite(i.defocus)) r.push(["Applied Defocus", `${fmtNum(i.defocus * 1e6, 2)} µm`]);
   if(Number.isFinite(i.dose)) r.push(["Dose", fmtVal(i.dose)]);
   if(Number.isFinite(i.exposure)) r.push(["Exposure Time", `${fmtNum(i.exposure, 2)} s`]);
-  if(i.mag) r.push(["Magnification", `${esc(i.mag)}×`]);
+  if(i.mag) r.push(["Magnification", `${Number.isFinite(+i.mag) ? +(+i.mag).toFixed(1) : esc(i.mag)}×`]);
   if(Number.isFinite(i.stage.x)) r.push(["Stage X, Y", `${fmtNum(i.stage.x * 1e6, 2)}, ${fmtNum(i.stage.y * 1e6, 2)} µm`]);
   if(Number.isFinite(i.stage.z)) r.push(["Stage Z", `${fmtNum(i.stage.z * 1e6, 2)} µm`]);
   if(Number.isFinite(i.stage.a)) r.push(["Tilt Angle", `${fmtNum(i.stage.a * 180 / Math.PI, 2)}°`]);
@@ -904,7 +923,42 @@ function draw(){
     const pts = corners(o.geo).map(toScreen);
     ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.stroke();
   }
+  if(SCENE.marks) drawMarks(ctx);
   drawScaleBar(); syncZoom();
+}
+const MARK_COLOR = {Acquired: "#39e639", "In Progress": "#f0a030", Queued: "#f0a030"};
+function markShape(m){       // screen polygon of a marker
+  if(m.geo) return corners(m.geo).map(toScreen);
+  const [x, y] = toScreen(m.point), r = 6;
+  return [[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]];
+}
+function drawMarks(ctx){
+  ctx.font = "600 11px " + getComputedStyle(document.body).fontFamily;
+  for(const pass of [0, 1]) for(const m of SCENE.marks){        // selected one last, on top
+    const sel = m.i === STATE.sel;
+    if(sel !== !!pass) continue;
+    const pts = markShape(m), col = MARK_COLOR[m.map.status] || "#39e639";
+    ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
+    // filled while small (like Tomo5), outline only once zoomed in so the image stays visible
+    const size = Math.hypot(pts[0][0] - pts[2][0], pts[0][1] - pts[2][1]);
+    const fill = (sel ? 0.45 : 0.3) * Math.max(0, Math.min(1, (120 - size) / 80));
+    if(fill > 0){ ctx.globalAlpha = fill; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.lineWidth = sel ? 2.5 : 1.3; ctx.strokeStyle = sel ? "#ffffff" : col; ctx.stroke();
+    const x = Math.max(...pts.map(p => p[0])), y = Math.min(...pts.map(p => p[1]));
+    ctx.fillStyle = sel ? "#ffffff" : col; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
+    ctx.fillText(String(m.map.id), x + 3, y + 9); ctx.shadowBlur = 0;
+  }
+}
+function markAt(sx, sy){      // marker under a screen point
+  if(!SCENE?.marks) return null;
+  const inside = (pts, x, y) => { let c = false; for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const [xi, yi] = pts[i], [xj, yj] = pts[j]; if((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  for(const m of SCENE.marks){
+    let pts = markShape(m);
+    const cx = pts.reduce((a, p) => a + p[0], 0) / 4, cy = pts.reduce((a, p) => a + p[1], 0) / 4;
+    pts = pts.map(([x, y]) => [cx + Math.max(1, 8 / Math.hypot(x - cx, y - cy)) * (x - cx), cy + Math.max(1, 8 / Math.hypot(x - cx, y - cy)) * (y - cy)]);  // at least ~8 px to hit
+    if(inside(pts, sx, sy)) return m;
+  }
+  return null;
 }
 function drawScaleBar(){
   const el = $("#scalebar");
@@ -928,18 +982,31 @@ $("#zoom").addEventListener("input", e => zoomTo(V.fitS * 2 ** (Z_MIN + e.target
 
 let drag = null;
 view.addEventListener("pointerdown", e => { if(!SCENE) return; drag = {x: e.clientX, y: e.clientY, tx: V.tx, ty: V.ty}; view.setPointerCapture(e.pointerId); view.classList.add("drag"); });
+view.addEventListener("click", e => {
+  if(!SCENE?.marks || (drag0 && Math.hypot(e.clientX - drag0.x, e.clientY - drag0.y) > 4)) return;
+  const r = view.getBoundingClientRect(), m = markAt(e.clientX - r.left, e.clientY - r.top);
+  if(m) select(m.i);
+});
 view.addEventListener("pointermove", e => {
   if(drag){ V.tx = drag.tx + e.clientX - drag.x; V.ty = drag.ty + e.clientY - drag.y; draw(); }
   if(!SCENE) return;
   const r = view.getBoundingClientRect();
+  const over = !drag && SCENE.marks && markAt(e.clientX - r.left, e.clientY - r.top);
+  view.style.cursor = over ? "pointer" : "";
+  view.title = over ? `${over.map.name} (${over.map.status}): click to select, double-click to open its overview` : "";
   const st = mul(transpose(SCENE.Q), [(e.clientX - r.left - V.tx) / V.s, (e.clientY - r.top - V.ty) / V.s]);
   $("#readout").textContent = SCENE.scaled ? `stage X ${fmtNum(st[0], 2)}  Y ${fmtNum(st[1], 2)} µm` : "";
 });
-const endDrag = () => { drag = null; view.classList.remove("drag"); };
+let drag0 = null;       // where the last drag started, to tell a click from a pan
+const endDrag = () => { drag0 = drag; drag = null; view.classList.remove("drag"); };
 view.addEventListener("pointerup", endDrag); view.addEventListener("pointercancel", endDrag);
 view.addEventListener("pointerleave", () => { $("#readout").textContent = ""; });
 view.addEventListener("wheel", e => { if(!SCENE) return; e.preventDefault(); const r = view.getBoundingClientRect(); zoomTo(V.s * Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015)), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
-view.addEventListener("dblclick", fit);
+view.addEventListener("dblclick", e => {
+  const r = view.getBoundingClientRect(), m = SCENE?.marks && markAt(e.clientX - r.left, e.clientY - r.top);
+  if(m){ select(m.i).then(() => setTab("overview")); return; }
+  fit();
+});
 new ResizeObserver(() => draw()).observe(view);
 
 /* ------------------------------------------------------------------ controls */

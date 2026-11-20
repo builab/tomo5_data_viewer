@@ -50,7 +50,7 @@ The layout follows Tomo5:
 
 | Tab | Shows |
 |---|---|
-| Atlas | `Atlas/Atlas_<date>_<time>.mrc`, the stitched atlas |
+| Atlas | `Atlas/Atlas_<date>_<time>.mrc`, the stitched atlas, with every search map marked: green = acquired, orange = in progress / queued, white outline = selected. Click a marker to select that map; double-click to open its overview. |
 | Overview | `SearchMaps/SearchMap_<N>_<date>_<time>/Overview.mrc`, with the outline of every `Tile_*` drawn in green |
 | Search Map | The `Tile_*.mrc` images placed and stitched in the browser. The drop-down switches to `SearchMap.mrc`, the map as stitched by Tomo5. |
 
@@ -69,7 +69,11 @@ Every Tomo5 image XML (`Overview.xml`, `Tile_*.xml`, …) has:
   the overview and the tiles). It is given per unbinned camera pixel, so the viewer uses only its
   direction and takes the size from the pixel size.
 
-So `stage = S + pixelSize · R · (pixel − centre)`. The view is turned so the main image (atlas,
+So `stage = S + pixelSize · R · (pixel − centre)`. The pixel size always refers to the saved
+image, also for stitched images (the atlas, `SearchMap.mrc`) whose size differs from the camera
+readout. A search map is marked on the atlas with the footprint of `SearchMap.mrc`
+(`SearchMap.xml` position, pixel size and direction); a map without `SearchMap.mrc` yet is shown
+as a point at its overview centre. The view is turned so the main image (atlas,
 overview, or the first tile) looks as it does in Tomo5. If the tile XML files have no positions,
 the tiles are laid out as a grid in file order (grid size from `TileSetAcquisitionOptions.xml`),
 and a note says so.

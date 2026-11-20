@@ -159,7 +159,25 @@ Thermo Fisher `MicroscopeImage` documents, like EPU's.
 | `CustomData/…/AppliedDefocus` | Applied defocus, in metres |
 | `microscopeData/acquisition/acquisitionDateTime` | Acquisition time |
 
+Notes:
+
+- The pixel size is per pixel of the saved image. For stitched images (`Atlas_*.mrc`,
+  `SearchMap.mrc`) it is not tied to the camera `ReadoutArea`: e.g. `SearchMap.mrc` is
+  4005 × 4005 px at 8.65 nm (34.64 µm) while its XML lists a 2048 × 2048 readout.
+- The `ReferenceTransformation` scale can be per unbinned pixel (tiles, `SearchMap.xml`:
+  half the pixel size at binning 2), so only its direction should be used.
+
+Atlas (`Atlas/`):
+
+- `Atlas_<date>_<time>.xml`: the stitched atlas. Stage X/Y = 0, 0 (centre of the grid),
+  pixel size ≈ 505 nm at 110×. `CustomData` has `NumberOfTilesPlanned` / `NumberOfTilesAcquired`
+  (e.g. 25 = 5 × 5 tiles). Written by `TemAppCommon`.
+- `AtlasImportParameters.xml`: `ImageFileFormat` (`Mrc`) and `Name` (the atlas file stem).
+
 Search map folder:
+
+- `SearchMap.xml`: the stitched search map: stage X/Y of its centre, pixel size, direction;
+  `CustomData` has `NumberOfTilesPlanned` / `NumberOfTilesAcquired` and `AppliedDefocus`.
 
 - `TileSetAcquisitionOptions.xml`: tile grid size (`GridSize/width`, `GridSize/height`), e.g. 3 × 3.
 - `SearchMap.dm`: the tile set (`TileSetXml`), including `AcquiredWithImageBeamShift`.
