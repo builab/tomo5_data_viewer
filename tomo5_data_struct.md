@@ -142,3 +142,47 @@ to `Tile_24587947_9`.
 | File | Description |
 |---|---|
 | `Position_<N>.mrc` | Thumbnail for each position |
+
+## Metadata used by the viewer (Tomo5 5.26)
+
+Image XML files (`Atlas_*.xml`, `Overview.xml`, `Tile_*.xml`, `SearchMap.xml`) are
+Thermo Fisher `MicroscopeImage` documents, like EPU's.
+
+| Field | Meaning |
+|---|---|
+| `microscopeData/stage/Position/X, Y, Z` | Stage position of the image centre, in metres. For tiles, it includes the image shift used to reach the tile. |
+| `microscopeData/stage/Position/A` | Tilt angle, in radians |
+| `SpatialScale/pixelSize/x/numericValue` | Pixel size of the image, in metres |
+| `ReferenceTransformation/matrix/_m11 … _m22` | Image pixels → stage metres (rotation and flip), per unbinned camera pixel |
+| `microscopeData/optics/TemMagnification/NominalMagnification` | Magnification |
+| `microscopeData/acquisition/camera/ExposureTime` | Exposure time, in seconds |
+| `CustomData/…/AppliedDefocus` | Applied defocus, in metres |
+| `microscopeData/acquisition/acquisitionDateTime` | Acquisition time |
+
+Notes:
+
+- The pixel size is per pixel of the saved image. For stitched images (`Atlas_*.mrc`,
+  `SearchMap.mrc`) it is not tied to the camera `ReadoutArea`: e.g. `SearchMap.mrc` is
+  4005 × 4005 px at 8.65 nm (34.64 µm) while its XML lists a 2048 × 2048 readout.
+- The `ReferenceTransformation` scale can be per unbinned pixel (tiles, `SearchMap.xml`:
+  half the pixel size at binning 2), so only its direction should be used.
+
+Atlas (`Atlas/`):
+
+- `Atlas_<date>_<time>.xml`: the stitched atlas. Stage X/Y = 0, 0 (centre of the grid),
+  pixel size ≈ 505 nm at 110×. `CustomData` has `NumberOfTilesPlanned` / `NumberOfTilesAcquired`
+  (e.g. 25 = 5 × 5 tiles). Written by `TemAppCommon`.
+- `AtlasImportParameters.xml`: `ImageFileFormat` (`Mrc`) and `Name` (the atlas file stem).
+
+Search map folder:
+
+- `SearchMap.xml`: the stitched search map: stage X/Y of its centre, pixel size, direction;
+  `CustomData` has `NumberOfTilesPlanned` / `NumberOfTilesAcquired` and `AppliedDefocus`.
+
+- `TileSetAcquisitionOptions.xml`: tile grid size (`GridSize/width`, `GridSize/height`), e.g. 3 × 3.
+- `SearchMap.dm`: the tile set (`TileSetXml`), including `AcquiredWithImageBeamShift`.
+- Tiles are numbered from the centre outward in a spiral: `Tile_<ID>_1` is the centre tile, at
+  the same position as the overview.
+- `Overview.mrc` has a FEI extended header (`FEI2`, about 0.9 MB) before the image data.
+- `SearchMaps/QueuedSearchMapList.xml` lists queued search maps (`QueuedTileSets`).
+

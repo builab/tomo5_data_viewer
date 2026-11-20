@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  /* same palette as the SerialEM Grid Viewer, so the two tools feel like one family */
+  /* top bar: same palette as the SerialEM Grid Viewer */
   --bg:#0f1417;
   --panel:#151c20;
   --ink:#dbe4e8;
@@ -17,9 +17,20 @@
   --line:#28333a;
   --accent:#3bb4c4;
   --accent-ink:#06191c;
-  --canvas:#0b1013;
   --warn:#e0a54a;
   --err:#e06a5a;
+  /* work area: Tomo5-like slate blue */
+  --t-bg:#1f2d3a;
+  --t-panel:#263747;
+  --t-row:#2b3d4f;
+  --t-row2:#273849;
+  --t-bar:#2c3e51;
+  --t-tab:#33475b;
+  --t-line:#1a2530;
+  --t-sel:#2d9be3;
+  --t-ink:#e8eef3;
+  --t-muted:#9fb1c1;
+  --tile:#39e639;
   --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color-scheme:dark;
@@ -27,12 +38,14 @@
 *{box-sizing:border-box}
 [hidden]{display:none !important}
 html,body{height:100%;margin:0}
-body{background:var(--bg);color:var(--ink);font:14px/1.45 var(--font-body)}
+body{background:var(--t-bg);color:var(--t-ink);font:13px/1.4 var(--font-body)}
 button,input,select{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+:focus-visible{outline:2px solid var(--t-sel);outline-offset:1px}
 
-.app{display:grid;grid-template-columns:340px 1fr;grid-template-rows:auto 1fr;height:100%}
-header{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+.app{display:grid;grid-template-columns:200px minmax(0,1fr) 380px;grid-template-rows:auto minmax(0,1fr);height:100%}
+
+/* ---------- top bar (unchanged look) */
+header{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:14px}
 header h1{font:600 16px/1 var(--font-body);margin:0;letter-spacing:.01em}
 header h1 small{font:400 12px var(--font-mono);color:var(--muted);margin-left:8px}
 .opens{display:flex;flex-wrap:wrap;gap:6px}
@@ -40,56 +53,99 @@ header h1 small{font:400 12px var(--font-mono);color:var(--muted);margin-left:8p
 .btn:hover{border-color:var(--accent)}
 .btn:disabled{opacity:.5;cursor:default;border-color:var(--line)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
-.btn.small{padding:3px 8px;font-size:12px}
 .spacer{flex:1}
 #status{font-size:12.5px;color:var(--muted);max-width:52ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #status.err{color:var(--err)}
 .credit{font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap;border-left:1px solid var(--line);padding-left:14px}
 .credit:hover{color:var(--accent);text-decoration:underline}
 
-aside{border-right:1px solid var(--line);background:var(--panel);overflow:auto;padding:14px 14px 24px;display:flex;flex-direction:column;gap:18px}
-.sec h2{font:600 11px/1 var(--font-body);text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:0 0 8px;display:flex;align-items:center;gap:8px}
-.sec h2 .act{margin-left:auto;text-transform:none;letter-spacing:0;font-weight:500}
-.empty{color:var(--muted);font-size:13px;padding:10px;border:1px dashed var(--line);border-radius:6px}
-dl.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0;font-size:12.5px}
-dl.kv dt{color:var(--muted)}
-dl.kv dd{margin:0;font:12px/1.45 var(--font-mono);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
-dl.kv dd.warn{color:var(--warn)}
-.ctl{display:grid;grid-template-columns:72px 1fr 54px;align-items:center;gap:6px 8px;font-size:12.5px}
-.ctl label{color:var(--muted)}
-.ctl input[type=range]{width:100%;accent-color:var(--accent)}
-.ctl output{font:12px var(--font-mono);text-align:right;font-variant-numeric:tabular-nums}
-.ctl select{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:3px 6px;font-size:12.5px;grid-column:2/-1}
-.row{display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12.5px}
-.row input[type=checkbox]{accent-color:var(--accent);margin:0}
-#hist{width:100%;height:46px;display:block;margin-bottom:8px;border-radius:4px;background:var(--bg)}
-.meta-filter{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:4px 7px;font-size:12px;margin-bottom:6px}
-.meta{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
-.meta table{border-collapse:collapse;width:100%;font:11.5px/1.35 var(--font-mono)}
-.meta td{padding:3px 7px;border-bottom:1px solid var(--line);vertical-align:top;overflow-wrap:anywhere}
-.meta td:first-child{color:var(--muted);width:58%}
-.meta tr:last-child td{border-bottom:none}
-.found{list-style:none;margin:0;padding:0;font-size:12.5px;display:flex;flex-direction:column;gap:3px}
-.found li{display:flex;gap:8px}
-.found li span:first-child{flex:1;color:var(--muted)}
-.found li span:last-child{font:12px var(--font-mono)}
+/* ---------- left: tasks */
+nav.tasks{background:var(--t-panel);border-right:3px solid var(--t-line);overflow:auto}
+.tasks-head{display:flex;align-items:center;gap:10px;padding:10px 12px;font-size:14px;font-weight:500;cursor:pointer;user-select:none;background:none;border:none;width:100%;text-align:left}
+.tasks-head .chev{display:inline-block;transition:transform .15s;font-size:11px}
+.tasks-head[aria-expanded=false] .chev{transform:rotate(-90deg)}
+.task{display:flex;align-items:center;width:100%;padding:6px 12px;background:none;border:none;border-bottom:1px solid var(--t-line);text-align:left;cursor:pointer;font-size:12.5px}
+.task:hover{background:var(--t-row)}
+.task.active{background:var(--t-sel);color:#fff}
+.task.soon{color:var(--t-muted);cursor:default}
+.task.soon:hover{background:none}
+.task .cnt{margin-left:auto;font:12px var(--font-mono);font-variant-numeric:tabular-nums;padding-right:16px}
 
-main{position:relative;overflow:hidden;background:var(--canvas)}
+/* ---------- centre: tabs, viewer, toolbar */
+.center{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--t-bg)}
+.tabs{display:flex;gap:2px;padding:6px 8px 4px}
+.tab{flex:1;height:28px;border:none;background:var(--t-tab);color:#cfdae4;font-size:12.5px;cursor:pointer;
+  clip-path:polygon(0 0,calc(100% - 11px) 0,100% 50%,calc(100% - 11px) 100%,0 100%,11px 50%);padding:0 14px}
+.tab:first-child{clip-path:polygon(0 0,calc(100% - 11px) 0,100% 50%,calc(100% - 11px) 100%,0 100%)}
+.tab:hover:not(:disabled){background:#3d5368}
+.tab.active{background:var(--t-sel);color:#fff;font-weight:600}
+.tab:disabled{opacity:.4;cursor:default}
+.subbar{display:flex;align-items:center;gap:8px;height:30px;margin:0 8px;padding:0 4px;background:var(--t-bar);font-size:12.5px}
+.subbar .nav{width:24px;height:22px;border:none;background:#3a4f64;cursor:pointer;border-radius:2px;line-height:1}
+.subbar .nav:disabled{opacity:.35;cursor:default}
+.subbar .title{margin-left:auto;display:flex;align-items:baseline;gap:8px;white-space:nowrap;overflow:hidden}
+.subbar .title b{font-weight:600}
+.subbar .title small{font:11px var(--font-mono);color:var(--t-muted)}
+.subbar select{background:var(--t-tab);border:1px solid var(--t-line);border-radius:3px;padding:1px 4px;font-size:12px}
+.stage{position:relative;flex:1;min-height:0;margin:0 8px;background:#000;overflow:hidden}
 #view{position:absolute;inset:0;width:100%;height:100%;cursor:grab;touch-action:none}
 #view.drag{cursor:grabbing}
-.overlay{position:absolute;pointer-events:none;font:12px var(--font-mono);color:var(--ink);background:rgba(11,16,19,.78);border:1px solid var(--line);border-radius:6px;padding:6px 9px;font-variant-numeric:tabular-nums}
-#readout{right:12px;bottom:12px;white-space:pre}
-#scalebar{left:12px;bottom:12px;display:flex;flex-direction:column;gap:4px;align-items:flex-start}
-#scalebar .bar{height:5px;background:var(--ink);border-radius:1px}
-#hint{right:12px;top:12px;color:var(--muted)}
+#scalebar{position:absolute;left:24px;bottom:12px;pointer-events:none;color:#fff;font-size:13px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-shadow:0 0 3px #000}
+#scalebar .bar{height:2px;background:#fff;box-shadow:0 0 2px #000}
+#msg{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--t-muted);pointer-events:none}
 #welcome{position:absolute;inset:0;display:grid;place-items:center;padding:24px}
-#welcome .card{max-width:520px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 24px}
-#welcome h2{margin:0 0 8px;font:600 18px var(--font-body)}
-#welcome p{margin:0 0 12px;color:var(--muted)}
-#welcome code{font:12.5px var(--font-mono);color:var(--ink)}
+#welcome .card{max-width:520px;background:var(--t-panel);border:1px solid var(--t-line);border-radius:8px;padding:20px 22px}
+#welcome h2{margin:0 0 8px;font:600 17px var(--font-body)}
+#welcome p{margin:0 0 10px;color:var(--t-muted)}
+#welcome code{font:12px var(--font-mono);color:var(--t-ink)}
+.toolbar{display:flex;align-items:center;gap:6px;height:36px;margin:0 8px 8px;padding:0 6px;background:var(--t-bar)}
+.zbtn{width:24px;height:24px;border:none;border-radius:2px;background:#3a4f64;cursor:pointer;font-size:16px;line-height:1;display:grid;place-items:center}
+.zbtn:hover{background:#4a6278}
+#zoom{width:110px;accent-color:#d8e2ea}
+#readout{margin-left:auto;font:12px var(--font-mono);color:var(--t-muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 
-/* folder picker */
-dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:0;width:min(640px,92vw)}
+/* ---------- right: list + panels */
+.right{display:flex;flex-direction:column;min-height:0;background:var(--t-panel);border-left:3px solid var(--t-line);overflow:auto}
+.list{flex:1 1 220px;min-height:160px;overflow:auto}
+table.grid{border-collapse:collapse;width:100%;font-size:12.5px}
+table.grid th{position:sticky;top:0;background:var(--t-bar);font-weight:600;text-align:center;padding:8px 6px;border-right:1px solid var(--t-line);white-space:nowrap}
+table.grid td{text-align:center;padding:5px 6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+table.grid tbody tr{cursor:pointer;background:var(--t-row)}
+table.grid tbody tr:nth-child(even){background:var(--t-row2)}
+table.grid tbody tr:hover{background:#34495e}
+table.grid tbody tr.sel{background:var(--t-sel);color:#fff}
+table.grid td.st-ok{color:#bfe3ff}
+table.grid tr.sel td.st-ok{color:#fff}
+.list .empty{color:var(--t-muted);padding:14px;font-size:12.5px}
+details.panel{border-top:3px solid var(--t-line)}
+details.panel>summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:14px;font-weight:500;user-select:none}
+details.panel>summary::-webkit-details-marker{display:none}
+details.panel>summary::before{content:"▾";font-size:11px;transition:transform .15s}
+details.panel:not([open])>summary::before{transform:rotate(-90deg)}
+.pbody{padding:2px 12px 12px}
+#hist{width:100%;height:90px;display:block;background:#1b2834;border-radius:2px}
+.ctl{display:grid;grid-template-columns:52px 1fr 58px;align-items:center;gap:4px 8px;margin-top:8px;font-size:12px}
+.ctl label{color:var(--t-muted)}
+.ctl input[type=range]{width:100%;accent-color:var(--t-sel)}
+.ctl output{font:11.5px var(--font-mono);text-align:right;font-variant-numeric:tabular-nums}
+.checks{display:flex;gap:16px;margin-top:8px;font-size:12.5px}
+.checks label{display:flex;align-items:center;gap:6px;cursor:pointer}
+.checks input{accent-color:var(--t-sel);margin:0}
+dl.info{display:grid;grid-template-columns:auto 1fr;gap:2px 14px;margin:0;font-size:12.5px}
+dl.info dt{color:var(--t-ink)}
+dl.info dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+dl.info dd.warn{color:var(--warn)}
+.note{color:var(--t-muted);font-size:12px;margin:8px 0 0}
+details.xml{margin-top:10px}
+details.xml>summary{cursor:pointer;color:var(--t-muted);font-size:12px}
+.meta-filter{width:100%;background:#1b2834;border:1px solid var(--t-line);border-radius:3px;padding:4px 7px;font-size:12px;margin:6px 0}
+.meta{max-height:280px;overflow:auto;border:1px solid var(--t-line);background:#1b2834}
+.meta table{border-collapse:collapse;width:100%;font:11px/1.35 var(--font-mono)}
+.meta td{padding:3px 6px;border-bottom:1px solid var(--t-line);vertical-align:top;overflow-wrap:anywhere}
+.meta td:first-child{color:var(--t-muted);width:58%}
+
+/* ---------- folder picker */
+dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:0;width:min(640px,92vw);font-size:14px}
 dialog::backdrop{background:rgba(0,0,0,.55)}
 .fp-head{padding:14px 16px 8px;border-bottom:1px solid var(--line)}
 .fp-head h3{margin:0 0 6px;font:600 15px var(--font-body)}
@@ -110,7 +166,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 <body>
 <div class="app">
   <header>
-    <h1>Tomo5 Data Viewer<small>v0.1 · atlas</small></h1>
+    <h1>Tomo5 Data Viewer<small>v0.2</small></h1>
     <div class="opens">
       <button class="btn primary" id="openServer" hidden>Open session…</button>
       <button class="btn" id="openLocal">Open folder from this computer…</button>
@@ -121,50 +177,91 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <a class="credit" href="https://github.com/builab/tomo5_data_viewer" target="_blank" rel="noopener">Vibe-coded by Builab@McGill</a>
   </header>
 
-  <aside>
-    <section class="sec">
-      <h2>Session</h2>
-      <div id="sessionBox"><div class="empty">No session open. Open a Tomo5 session folder (the one with <code>Atlas/</code>, <code>Batch/</code> and <code>SearchMaps/</code>).</div></div>
-    </section>
+  <!-- left: tasks -->
+  <nav class="tasks" aria-label="Tasks">
+    <button class="tasks-head" id="tasksHead" aria-expanded="true"><span class="chev">▼</span>Tasks</button>
+    <div id="taskList">
+      <button class="task active" data-task="searchMaps">Search Maps<span class="cnt" id="cntMaps">–</span></button>
+      <button class="task soon" data-task="batch" title="Coming later">Batch Positions<span class="cnt" id="cntBatch">–</span></button>
+      <button class="task soon" data-task="acq" title="Coming later">Data Acquisition</button>
+      <button class="task soon" data-task="movie" title="Coming later">Movie Player</button>
+    </div>
+  </nav>
 
-    <section class="sec">
-      <h2>Atlas</h2>
-      <div id="atlasBox"><div class="empty">The atlas appears here once a session is open.</div></div>
-    </section>
-
-    <section class="sec" id="displaySec" hidden>
-      <h2>Display <button class="btn small act" id="autoContrast">Auto</button></h2>
-      <canvas id="hist" width="300" height="46"></canvas>
-      <div class="ctl">
-        <label for="source">Image</label><select id="source"><option value="mrc">MRC (full data)</option><option value="jpg">JPG preview</option></select>
-        <label for="lo">Black</label><input type="range" id="lo" min="0" max="1000" value="5"><output id="loOut"></output>
-        <label for="hi">White</label><input type="range" id="hi" min="0" max="1000" value="995"><output id="hiOut"></output>
-      </div>
-      <div class="row"><input type="checkbox" id="invert"><label for="invert">Invert</label>
-        <span class="spacer"></span><button class="btn small" id="fit">Fit to window</button></div>
-    </section>
-
-    <section class="sec" id="metaSec" hidden>
-      <h2>Atlas XML <span class="act count" id="metaCount"></span></h2>
-      <input class="meta-filter" id="metaFilter" placeholder="Filter, e.g. pixelSize or stage" spellcheck="false">
-      <div class="meta"><table id="metaTable"></table></div>
-    </section>
-  </aside>
-
-  <main>
-    <canvas id="view"></canvas>
-    <div id="welcome">
-      <div class="card">
-        <h2>Open a Tomo5 session</h2>
-        <p>Pick the session folder. The viewer finds <code>Atlas/Atlas_*.xml</code> and its <code>.mrc</code>, reads the metadata and shows the stitched atlas.</p>
-        <p id="welcomeServer" hidden>Folders shared by the server are listed under <b>Open session…</b>.</p>
-        <p id="welcomeLocal">Without the server, use <b>Open folder from this computer…</b>. The browser only reads the atlas files, not the tilt series.</p>
+  <!-- centre: viewer -->
+  <section class="center">
+    <div class="tabs" role="tablist">
+      <button class="tab active" data-tab="atlas" role="tab">Atlas</button>
+      <button class="tab" data-tab="overview" role="tab" disabled>Overview</button>
+      <button class="tab" data-tab="searchmap" role="tab" disabled>Search Map</button>
+      <button class="tab" data-tab="search" role="tab" disabled title="Coming later">Search</button>
+    </div>
+    <div class="subbar">
+      <button class="nav" id="prevMap" title="Previous search map" disabled>‹</button>
+      <select id="smMode" hidden title="How to show the search map">
+        <option value="tiles">Tiles, stitched here</option>
+        <option value="stitched">SearchMap.mrc (stitched by Tomo5)</option>
+      </select>
+      <span class="title" id="subTitle"></span>
+      <button class="nav" id="nextMap" title="Next search map" disabled>›</button>
+    </div>
+    <div class="stage">
+      <canvas id="view"></canvas>
+      <div id="msg" hidden></div>
+      <div id="scalebar" hidden><span></span><div class="bar"></div></div>
+      <div id="welcome">
+        <div class="card">
+          <h2>Open a Tomo5 session</h2>
+          <p>Pick the session folder (the one with <code>Atlas/</code>, <code>Batch/</code> and <code>SearchMaps/</code>).</p>
+          <p id="welcomeServer" hidden>Folders shared by the server are listed under <b>Open session…</b>.</p>
+          <p id="welcomeLocal">Without the server, use <b>Open folder from this computer…</b>. Only the files being shown are read.</p>
+        </div>
       </div>
     </div>
-    <div class="overlay" id="scalebar" hidden><div class="bar"></div><span></span></div>
-    <div class="overlay" id="readout" hidden></div>
-    <div class="overlay" id="hint" hidden>Scroll to zoom · drag to pan · F to fit</div>
-  </main>
+    <div class="toolbar">
+      <button class="zbtn" id="zoomOut" title="Zoom out (−)">−</button>
+      <input type="range" id="zoom" min="0" max="1000" value="111" title="Zoom" aria-label="Zoom">
+      <button class="zbtn" id="zoomIn" title="Zoom in (+)">+</button>
+      <span id="readout"></span>
+    </div>
+  </section>
+
+  <!-- right: search map list + panels -->
+  <section class="right">
+    <div class="list">
+      <table class="grid" id="mapTable">
+        <thead><tr><th>Id</th><th title="Tilt angle">∠</th><th>Status</th><th>Name</th><th>Rating</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="empty" id="mapEmpty">No session open.</div>
+    </div>
+    <details class="panel" open>
+      <summary>Histogram</summary>
+      <div class="pbody">
+        <canvas id="hist"></canvas>
+        <div class="checks">
+          <label><input type="checkbox" id="auto" checked>Auto Filter</label>
+          <label><input type="checkbox" id="invert">Invert</label>
+        </div>
+        <div class="ctl">
+          <label for="lo">Black</label><input type="range" id="lo" min="0" max="1000" value="5"><output id="loOut"></output>
+          <label for="hi">White</label><input type="range" id="hi" min="0" max="1000" value="995"><output id="hiOut"></output>
+        </div>
+      </div>
+    </details>
+    <details class="panel" open>
+      <summary>Image Information</summary>
+      <div class="pbody">
+        <dl class="info" id="info"><dt style="color:var(--t-muted)">Nothing shown yet.</dt><dd></dd></dl>
+        <div id="infoNote"></div>
+        <details class="xml" id="xmlBox" hidden>
+          <summary id="xmlSummary">All XML fields</summary>
+          <input class="meta-filter" id="metaFilter" placeholder="Filter, e.g. pixelSize or stage" spellcheck="false">
+          <div class="meta"><table id="metaTable"></table></div>
+        </details>
+      </div>
+    </details>
+  </section>
 </div>
 
 <dialog id="picker">
@@ -180,15 +277,35 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 <script>
 "use strict";
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const MAX_DIM = 4096;            // atlas is shown at most this many pixels wide/high (binned on load)
+const join = (a, b) => a ? `${a}/${b}` : b;
+
+/* Size limits for what is drawn (images are binned on load to stay under these) */
+const MAX_ATLAS = 4096, MAX_OVERVIEW = 2048, MAX_STITCH = 4096;
+
+/* Geometry. Scene coordinates are stage coordinates in µm.
+   Each image's XML has ReferenceTransformation, a 2×2 matrix mapping image pixels (x right,
+   y down, as stored in the MRC) to stage metres. It includes the camera rotation and a flip,
+   and it is given per *unbinned* camera pixel, so only its direction is used here; the size
+   comes from the pixel size. For an image:
+       stage = S + ps · R · (p − centre)          S: stage X/Y of the image (its centre)
+   The view is turned by the inverse of the main image's R, so that image looks as in Tomo5. */
+const IDENT = [[1, 0], [0, 1]];
+const mul = (A, v) => [A[0][0] * v[0] + A[0][1] * v[1], A[1][0] * v[0] + A[1][1] * v[1]];
+const mmul = (A, B) => [[A[0][0] * B[0][0] + A[0][1] * B[1][0], A[0][0] * B[0][1] + A[0][1] * B[1][1]],
+                        [A[1][0] * B[0][0] + A[1][1] * B[1][0], A[1][0] * B[0][1] + A[1][1] * B[1][1]]];
+const transpose = A => [[A[0][0], A[1][0]], [A[0][1], A[1][1]]];   // inverse, for rotation/flip matrices
 
 function status(msg, isErr){ const el = $("#status"); el.textContent = msg || ""; el.title = msg || ""; el.classList.toggle("err", !!isErr); }
 function fmtBytes(n){ if(n == null) return ""; const u = ["B","KB","MB","GB","TB"]; let i = 0; while(n >= 1024 && i < u.length - 1){ n /= 1024; i++; } return `${n < 10 && i ? n.toFixed(1) : Math.round(n)} ${u[i]}`; }
 function fmtNum(v, d = 2){ return Number.isFinite(v) ? v.toFixed(d) : "–"; }
+const fmtVal = v => !Number.isFinite(v) ? "–" : Math.abs(v) >= 1e5 || (Math.abs(v) < 0.01 && v !== 0) ? v.toExponential(2) : v.toFixed(Math.abs(v) < 10 ? 2 : Math.abs(v) < 1000 ? 1 : 0);
+function fmtLen(um){ return um >= 1000 ? `${+(um / 1000).toFixed(2)} mm` : um >= 1 ? `${+um.toFixed(2)} µm` : `${+(um * 1000).toFixed(1)} nm`; }
 
 /* ------------------------------------------------------------------ data sources
    A source lists folders and reads files. Paths are '/'-separated and relative to the source. */
+let SERVER = null;
 const ServerSource = {
   kind: "server",
   async list(path){
@@ -204,12 +321,11 @@ const ServerSource = {
     if(!r.ok) throw new Error(`${path}: ${r.status} ${r.statusText}`); return r.arrayBuffer();
   },
   async section(path, z, bin){         // binned float32 section, if the server has numpy
-    if(!SERVER.numpy) return null;
+    if(!SERVER?.numpy) return null;
     const r = await fetch(`api/section?path=${encodeURIComponent(path)}&z=${z}&bin=${bin}`);
     if(!r.ok) return null;
     return {data: new Float32Array(await r.arrayBuffer()), w: +r.headers.get("X-Bw"), h: +r.headers.get("X-Bh")};
   },
-  url(path){ return `api/file?path=${encodeURIComponent(path)}`; },
 };
 
 function LocalSource(fileList){
@@ -231,7 +347,6 @@ function LocalSource(fileList){
     async text(path){ return this.file(path).text(); },
     async bytes(path, start, end){ return this.file(path).slice(start, end + 1).arrayBuffer(); },
     async section(){ return null; },
-    url(path){ return URL.createObjectURL(this.file(path)); },
     root(){ const first = files.keys().next().value || ""; return first.split("/")[0]; },
   };
 }
@@ -278,37 +393,23 @@ function binImage(a, nx, ny, b){
   }
   return {data: out, w, h};
 }
-async function readMrc(src, path, z = 0){
-  const h = parseMrcHeader(await src.bytes(path, 0, 1023));
-  const bin = Math.max(1, Math.ceil(Math.max(h.nx, h.ny) / MAX_DIM));
-  let img = await src.section(path, z, bin);
-  if(!img){
-    const n = h.nx * h.ny * h.bytesPer, start = 1024 + h.nxt + z * n;
-    status(`Reading ${fmtBytes(n)} of image data…`);
-    const a = typedSection(await src.bytes(path, start, start + n - 1), h);
-    if(a.length < h.nx * h.ny) throw new Error("The MRC file is shorter than its header says.");
-    img = bin > 1 ? binImage(a, h.nx, h.ny, bin) : {data: Float32Array.from(a), w: h.nx, h: h.ny};
-  }
-  return {header: h, bin, ...img};
-}
 
 /* ------------------------------------------------------------------ Thermo Fisher XML (EPU / Tomo5 MicroscopeImage)
    Flatten every leaf into "path/to/leaf" = value, using local names (namespaces dropped).
    Key/Value pairs (e.g. CustomData) become "…/<Key>" = value. */
 function flattenXml(text){
   const doc = new DOMParser().parseFromString(text, "application/xml");
-  if(doc.querySelector("parsererror")) throw new Error("The atlas XML could not be read.");
+  if(doc.querySelector("parsererror")) throw new Error("An XML file could not be read.");
   const rows = [];
-  const kids = el => [...el.children];
   function walk(el, path){
-    const ch = kids(el);
+    const ch = [...el.children];
     if(!ch.length){ rows.push([path, el.textContent.trim()]); return; }
     const names = ch.map(c => c.localName);
     const kIdx = names.findIndex(n => /^key$/i.test(n)), vIdx = names.findIndex(n => /^value$/i.test(n));
     if(ch.length === 2 && kIdx >= 0 && vIdx >= 0){
-      const v = ch[vIdx];
-      if(!v.children.length){ rows.push([`${path}/${ch[kIdx].textContent.trim()}`, v.textContent.trim()]); return; }
-      walk(v, `${path}/${ch[kIdx].textContent.trim()}`); return;
+      const v = ch[vIdx], key = `${path}/${ch[kIdx].textContent.trim()}`;
+      if(!v.children.length) rows.push([key, v.textContent.trim()]); else walk(v, key);
+      return;
     }
     const count = {}, seen = {};
     names.forEach(n => count[n] = (count[n] || 0) + 1);
@@ -318,238 +419,485 @@ function flattenXml(text){
     }
   }
   walk(doc.documentElement, "");
-  return {root: doc.documentElement.localName, rows};
+  return rows;
 }
 const UNIT = {m: 1, mm: 1e-3, "µm": 1e-6, um: 1e-6, nm: 1e-9, "Å": 1e-10, A: 1e-10};
-function atlasInfo(rows){
+function xmlInfo(rows){
   const find = re => { const r = rows.find(([p]) => re.test(p)); return r ? r[1] : undefined; };
   const num = re => { const v = parseFloat(find(re)); return Number.isFinite(v) ? v : NaN; };
-  const unit = find(/pixelSize\/x\/unit\/symbol$/i) || "m";
-  const pxM = num(/pixelSize\/x\/numericValue$/i) * (UNIT[unit] ?? 1);
+  const unit = find(/pixelSize\/x\/unit\/[^/]*symbol[^/]*$/i) || "m";
+  // ReferenceTransformation: keep only its direction (rotation, flip), normalised
+  const m = ["11", "12", "21", "22"].map(k => num(new RegExp(`^ReferenceTransformation/matrix/_m${k}$`, "i")));
+  const det = m[0] * m[3] - m[1] * m[2], n = Math.sqrt(Math.abs(det));
+  const R = m.every(Number.isFinite) && n > 0 ? [[m[0] / n, m[1] / n], [m[2] / n, m[3] / n]] : null;
   return {
-    pixelM: pxM,                                                     // metres per pixel of the atlas image
+    R,
+    pixelM: num(/pixelSize\/x\/numericValue$/i) * (UNIT[unit] ?? 1),   // metres per pixel
     stage: {x: num(/stage\/Position\/X$/i), y: num(/stage\/Position\/Y$/i), z: num(/stage\/Position\/Z$/i),
             a: num(/stage\/Position\/A$/i), b: num(/stage\/Position\/B$/i)},
     mag: find(/NominalMagnification$/i),
     date: find(/acquisitionDateTime$/i),
     camera: find(/camera\/Name$/i),
-    readout: [num(/ReadoutArea\/width$/i), num(/ReadoutArea\/height$/i)],
+    exposure: num(/camera\/ExposureTime$/i),
+    defocus: num(/AppliedDefocus$/i),
+    dose: num(/Detectors\[[^\]]*\]\.TotalDose$/i),        // e/Å² on the camera
     binning: num(/Binning\/x$/i),
   };
 }
 
-/* ------------------------------------------------------------------ session discovery */
-let SRC = null, SERVER = null, SESSION = null;
-const ATLAS_RE = /^Atlas_.*\.xml$/i;
+/* ------------------------------------------------------------------ caches: XML, MRC headers, images */
+let SRC = null;
+const CACHE = new Map();
+function cached(key, fn){ if(!CACHE.has(key)){ const p = fn(); CACHE.set(key, p); p.catch(() => CACHE.delete(key)); } return CACHE.get(key); }
+const getXml = path => cached("x:" + path, async () => { const rows = flattenXml(await SRC.text(path)); return {rows, info: xmlInfo(rows)}; });
+const getHeader = path => cached("h:" + path, async () => parseMrcHeader(await SRC.bytes(path, 0, 1023)));
+const getImage = (path, maxDim) => cached(`i:${maxDim}:${path}`, async () => {
+  const h = await getHeader(path);
+  const bin = Math.max(1, Math.ceil(Math.max(h.nx, h.ny) / maxDim));
+  let img = await SRC.section(path, 0, bin);
+  if(!img){
+    const n = h.nx * h.ny * h.bytesPer, start = 1024 + h.nxt;
+    const a = typedSection(await SRC.bytes(path, start, start + n - 1), h);
+    if(a.length < h.nx * h.ny) throw new Error(`${path.split("/").pop()} is shorter than its header says.`);
+    img = bin > 1 ? binImage(a, h.nx, h.ny, bin) : {data: Float32Array.from(a), w: h.nx, h: h.ny};
+  }
+  return {header: h, bin, ...img};
+});
+const tryXml = async path => { try{ return await getXml(path); }catch{ return null; } };
 
-async function openSession(src, path){
-  SRC = src; SESSION = null; clearAtlas();
+/* metres per original pixel: XML first, MRC header as fallback (1 Å in the header means "not set") */
+function pixelOf(xml, header){
+  const x = xml?.info.pixelM;          // per pixel of the saved image, also for stitched images
+  if(Number.isFinite(x) && x > 0) return {m: x, from: "xml"};
+  const a = header?.pixelA;
+  if(Number.isFinite(a) && a > 0 && a !== 1) return {m: a * 1e-10, from: "mrc"};
+  return {m: NaN, from: null};
+}
+/* geometry of one image: {S: stage centre [x, y] µm, R, ps: µm per original pixel, nx, ny} */
+function geoOf(xml, header, px, fallbackR = IDENT){
+  const st = xml?.info.stage;
+  return {
+    S: st && Number.isFinite(st.x) ? [st.x * 1e6, st.y * 1e6] : [0, 0],
+    R: xml?.info.R || fallbackR,
+    ps: Number.isFinite(px.m) ? px.m * 1e6 : 1,
+    nx: header.nx, ny: header.ny,
+  };
+}
+// stage µm of original pixel (x, y) of an image
+const pixToStage = (g, x, y) => { const d = mul(g.R, [(x - g.nx / 2) * g.ps, (y - g.ny / 2) * g.ps]); return [g.S[0] + d[0], g.S[1] + d[1]]; };
+const corners = g => [[0, 0], [g.nx, 0], [g.nx, g.ny], [0, g.ny]].map(([x, y]) => pixToStage(g, x, y));
+
+/* ------------------------------------------------------------------ session discovery */
+let SESSION = null;
+const STATE = {task: "searchMaps", tab: "atlas", sel: -1, smMode: "tiles"};
+const MAP_RE = /^SearchMap_(\d+)_(\d{8}_\d{6})$/i;
+
+async function openSession(src, path, want = {}){
+  SRC = src; SESSION = null; CACHE.clear();
+  STATE.tab = "atlas"; STATE.sel = -1;
+  showScene(null);
   status(`Opening ${path || "folder"}…`);
   try{
     const top = await src.list(path);
-    const dirNames = new Set(top.dirs.map(d => d.name));
-    // the folder may be the session itself, or its Atlas/ folder
-    let atlasDir = path, atlasList = top;
-    if(dirNames.has("Atlas")){ atlasDir = join(path, "Atlas"); atlasList = await src.list(atlasDir); }
-    const xmls = atlasList.files.filter(f => ATLAS_RE.test(f.name)).map(f => f.name).sort();
-    const s = {path, top, atlasDir, xml: xmls.length ? xmls[xmls.length - 1] : null, xmlCount: xmls.length};
-    if(s.xml){
-      const stem = s.xml.replace(/\.xml$/i, "");
-      const has = n => atlasList.files.find(f => f.name.toLowerCase() === n.toLowerCase());
-      s.mrc = has(stem + ".mrc"); s.jpg = has(stem + ".jpg");
+    const dirs = new Set(top.dirs.map(d => d.name));
+    const s = {path, atlas: null, maps: [], tiltSeries: 0, positions: null};
+
+    // atlas: <session>/Atlas/Atlas_*.xml (or the folder itself is Atlas/)
+    const atlasDir = dirs.has("Atlas") ? join(path, "Atlas") : path;
+    const al = atlasDir === path ? top : await src.list(atlasDir);
+    const xmls = al.files.map(f => f.name).filter(n => /^Atlas_.*\.xml$/i.test(n)).sort();
+    if(xmls.length){
+      const stem = xmls[xmls.length - 1].replace(/\.xml$/i, "");
+      const has = n => al.files.some(f => f.name.toLowerCase() === n.toLowerCase());
+      s.atlas = {dir: atlasDir, stem, xml: join(atlasDir, stem + ".xml"), mrc: has(stem + ".mrc") ? join(atlasDir, stem + ".mrc") : null};
     }
-    s.counts = await sessionCounts(src, path, top);
+
+    // search maps: <session>/SearchMaps/SearchMap_<N>_<date>_<time>/
+    if(dirs.has("SearchMaps")){
+      const sl = await src.list(join(path, "SearchMaps"));
+      for(const d of sl.dirs){
+        const m = d.name.match(MAP_RE);
+        if(!m) continue;
+        const dir = join(path, `SearchMaps/${d.name}`);
+        const fl = await src.list(dir);
+        const names = new Set(fl.files.map(f => f.name));
+        const tiles = fl.files.map(f => f.name.match(/^Tile_(\d+)_(\d+)\.mrc$/i)).filter(Boolean)
+          .map(t => ({stem: `Tile_${t[1]}_${t[2]}`, id: t[1], idx: +t[2]})).sort((a, b) => a.idx - b.idx);
+        s.maps.push({id: +m[1], name: `SearchMap_${m[1]}`, stamp: m[2], dir, names, tiles,
+          status: names.has("SearchMap.mrc") ? "Acquired" : names.has("Overview.mrc") || tiles.length ? "In Progress" : "Queued",
+          tilt: NaN});
+      }
+      s.maps.sort((a, b) => a.id - b.id);
+    }
+
+    // counts for the task list
+    s.tiltSeries = top.files.filter(f => /^Position_.*\.mdoc$/i.test(f.name)).length;
+    if(dirs.has("Batch")){
+      try{ const bl = await src.list(join(path, "Batch")); s.positions = bl.files.filter(f => /^Position_.*_Exposure\.mrc$/i.test(f.name)).length; }catch{}
+    }
+
     SESSION = s;
-    renderSession();
-    if(src.kind === "server") history.replaceState(null, "", "#session=" + encodeURIComponent(path));
-    if(!s.xml){ status("No Atlas_*.xml found in this folder or its Atlas/ folder.", true); return; }
-    await loadAtlas();
+    renderTasks(); renderTable();
+    if(!s.atlas && !s.maps.length){ status("No Atlas_*.xml or SearchMaps/ found in this folder.", true); return; }
+    status(`${s.maps.length} search map${s.maps.length === 1 ? "" : "s"}${s.atlas ? ", atlas" : ""} found.`);
+    fillTilts();
+
+    const pick = want.map ? s.maps.findIndex(m => m.id === +want.map) : -1;
+    STATE.sel = pick >= 0 ? pick : s.maps.length ? Math.max(0, s.maps.findIndex(m => m.status === "Acquired")) : -1;
+    renderTable();
+    await setTab(want.tab && ["atlas", "overview", "searchmap"].includes(want.tab) ? want.tab : s.atlas ? "atlas" : "overview");
   }catch(e){ console.error(e); status(e.message, true); }
 }
-const join = (a, b) => a ? `${a}/${b}` : b;
 
-async function sessionCounts(src, path, top){
-  const dirs = new Set(top.dirs.map(d => d.name)), c = {};
-  c.sessionDm = top.files.some(f => f.name === "Session.dm");
-  c.tiltSeries = top.files.filter(f => /^Position_.*\.mdoc$/i.test(f.name)).length;
-  const safe = async p => { try{ return await src.list(p); }catch{ return null; } };
-  if(dirs.has("SearchMaps")){ const l = await safe(join(path, "SearchMaps")); if(l) c.searchMaps = l.dirs.filter(d => /^SearchMap_/i.test(d.name)).length; }
-  if(dirs.has("Batch")){ const l = await safe(join(path, "Batch")); if(l) c.positions = l.files.filter(f => /^Position_.*_Exposure\.mrc$/i.test(f.name)).length; }
-  return c;
-}
-
-function renderSession(){
-  const s = SESSION, c = s.counts;
-  const name = s.path ? s.path.split("/").pop() : (SRC.root ? SRC.root() : "folder");
-  const li = (k, v) => `<li><span>${k}</span><span>${v}</span></li>`;
-  $("#sessionBox").innerHTML = `
-    <dl class="kv" style="margin-bottom:8px"><dt>Folder</dt><dd title="${esc(s.path)}">${esc(name)}</dd>
-      <dt>Source</dt><dd>${SRC.kind === "server" ? "server" : "this computer"}</dd></dl>
-    <ul class="found">
-      ${li("Atlas", s.xml ? esc(s.xml.replace(/\.xml$/i, "")) : '<span style="color:var(--warn)">not found</span>')}
-      ${li("Search maps", c.searchMaps ?? "–")}
-      ${li("Batch positions (exposures)", c.positions ?? "–")}
-      ${li("Tilt series (.mdoc)", c.tiltSeries)}
-      ${li("Session.dm", c.sessionDm ? "yes" : "no")}
-    </ul>
-    ${s.xmlCount > 1 ? `<p class="fp-note" style="margin:8px 0 0">${s.xmlCount} atlas XML files; showing the newest.</p>` : ""}`;
-}
-
-/* ------------------------------------------------------------------ atlas loading */
-let ATLAS = null;   // {info, rows, mrc: {data,w,h,bin,header}, jpg: HTMLImageElement, pixelM}
-
-function clearAtlas(){
-  ATLAS = null; IMG = null;
-  $("#atlasBox").innerHTML = '<div class="empty">The atlas appears here once a session is open.</div>';
-  $("#displaySec").hidden = $("#metaSec").hidden = true;
-  $("#scalebar").hidden = $("#readout").hidden = $("#hint").hidden = true;
-  draw();
-}
-
-async function loadAtlas(){
-  const s = SESSION, xmlPath = join(s.atlasDir, s.xml);
-  status(`Reading ${s.xml}…`);
-  const {rows, root} = flattenXml(await SRC.text(xmlPath));
-  const info = atlasInfo(rows);
-  ATLAS = {rows, root, info, mrc: null, jpg: null};
-  renderMeta();
-  renderAtlasInfo();
-  $("#metaSec").hidden = false;
-  if(s.mrc){
-    status(`Loading ${s.mrc.name}…`);
-    ATLAS.mrc = await readMrc(SRC, join(s.atlasDir, s.mrc.name));
-    setSource("mrc");
-  }else if(s.jpg){
-    setSource("jpg");
+// fill the ∠ column from each search map's XML, in the background
+async function fillTilts(){
+  const s = SESSION;
+  for(const m of s.maps){
+    const f = m.names.has("SearchMap.xml") ? "SearchMap.xml" : m.names.has("Overview.xml") ? "Overview.xml" : null;
+    if(!f) continue;
+    const x = await tryXml(join(m.dir, f));
+    if(SESSION !== s) return;
+    if(x && Number.isFinite(x.info.stage.a)){ m.tilt = x.info.stage.a * 180 / Math.PI; renderTable(); }
   }
-  renderAtlasInfo();
-  $("#source").querySelector('[value="mrc"]').disabled = !ATLAS.mrc;
-  $("#source").querySelector('[value="jpg"]').disabled = !s.jpg;
-  status(ATLAS.mrc ? `Atlas loaded: ${ATLAS.mrc.header.nx} × ${ATLAS.mrc.header.ny} px${ATLAS.mrc.header.nz > 1 ? `, ${ATLAS.mrc.header.nz} sections` : ""}.` : "Showing the JPG preview (no MRC found).");
 }
 
-// pixel size of the image as loaded (metres per original pixel): XML first, MRC header as fallback
-function pixelM(){
-  if(!ATLAS) return NaN;
-  if(Number.isFinite(ATLAS.info.pixelM) && ATLAS.info.pixelM > 0) return ATLAS.info.pixelM;
-  const a = ATLAS.mrc?.header.pixelA;
-  return Number.isFinite(a) && a > 0 && a !== 1 ? a * 1e-10 : NaN;
-}
-function fullSize(){   // size of the full-resolution atlas in original pixels
-  if(ATLAS?.mrc) return [ATLAS.mrc.header.nx, ATLAS.mrc.header.ny];
-  if(ATLAS?.jpg) return [ATLAS.jpg.naturalWidth, ATLAS.jpg.naturalHeight];
-  return [NaN, NaN];
+function renderTasks(){
+  const s = SESSION;
+  const acq = s.maps.filter(m => m.status === "Acquired").length;
+  $("#cntMaps").textContent = s ? `${acq} / ${s.maps.length}` : "–";
+  $("#cntBatch").textContent = s && s.positions != null ? `${s.tiltSeries} / ${s.positions}` : "–";
 }
 
-function renderAtlasInfo(){
-  const i = ATLAS.info, h = ATLAS.mrc?.header, px = pixelM(), [nx, ny] = fullSize();
-  const um = v => fmtNum(v * 1e6, 2);
-  const rows = [];
-  rows.push(["File", esc(SESSION.xml.replace(/\.xml$/i, "")) + (SESSION.mrc ? ` <span style="color:var(--muted)">(${fmtBytes(SESSION.mrc.size)})</span>` : "")]);
-  if(Number.isFinite(nx)) rows.push(["Image", `${nx} × ${ny} px${h && h.nz > 1 ? ` · ${h.nz} sections` : " · single stitched image"}`]);
-  if(ATLAS.mrc && ATLAS.mrc.bin > 1) rows.push(["Shown at", `bin ${ATLAS.mrc.bin} (${ATLAS.mrc.w} × ${ATLAS.mrc.h})`]);
-  const xmlPx = i.pixelM, hdrPx = h?.pixelA;
-  rows.push(["Pixel size", Number.isFinite(px) ? `${fmtNum(px * 1e9, 1)} nm${Number.isFinite(xmlPx) ? "" : " (MRC header)"}` : '<span class="warn">unknown</span>']);
-  if(Number.isFinite(xmlPx) && Number.isFinite(hdrPx) && hdrPx > 0 && hdrPx !== 1 && Math.abs(hdrPx * 1e-10 / xmlPx - 1) > 0.02)
-    rows.push(["MRC header", `<span style="color:var(--warn)">${fmtNum(hdrPx / 10, 1)} nm (differs from XML)</span>`]);
-  if(Number.isFinite(px) && Number.isFinite(nx)) rows.push(["Field of view", `${fmtNum(nx * px * 1e6, 0)} × ${fmtNum(ny * px * 1e6, 0)} µm`]);
-  if(Number.isFinite(i.stage.x)) rows.push(["Stage X, Y", `${um(i.stage.x)}, ${um(i.stage.y)} µm`]);
-  if(Number.isFinite(i.stage.z)) rows.push(["Stage Z", `${um(i.stage.z)} µm`]);
-  if(Number.isFinite(i.stage.a)) rows.push(["Stage α", `${fmtNum(i.stage.a * 180 / Math.PI, 2)}°`]);
-  if(i.mag) rows.push(["Magnification", `${esc(i.mag)}×`]);
-  if(i.camera) rows.push(["Camera", esc(i.camera)]);
-  if(Number.isFinite(i.binning)) rows.push(["Binning", i.binning]);
-  if(i.date) rows.push(["Acquired", esc(i.date.replace("T", " ").replace(/\.\d+.*$/, ""))]);
-  $("#atlasBox").innerHTML = `<dl class="kv">${rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
+function renderTable(){
+  const tb = $("#mapTable tbody"), s = SESSION;
+  const maps = s ? s.maps : [];
+  $("#mapEmpty").hidden = maps.length > 0;
+  $("#mapEmpty").textContent = s ? "No search maps in this session." : "No session open.";
+  tb.innerHTML = maps.map((m, i) => `<tr data-i="${i}" class="${i === STATE.sel ? "sel" : ""}">
+    <td>${m.id}</td><td>${Number.isFinite(m.tilt) ? Math.round(m.tilt) : "–"}</td>
+    <td class="${m.status === "Acquired" ? "st-ok" : ""}">${m.status}</td><td>${esc(m.name)}</td><td>–</td></tr>`).join("");
+  const sel = tb.querySelector("tr.sel"); if(sel) sel.scrollIntoView({block: "nearest"});
 }
 
+/* ------------------------------------------------------------------ tabs and selection */
+async function setTab(tab){
+  STATE.tab = tab;
+  updateChrome();
+  await loadScene();
+}
+async function select(i){
+  if(!SESSION || i < 0 || i >= SESSION.maps.length || i === STATE.sel) return;
+  STATE.sel = i;
+  renderTable(); updateChrome();
+  if(STATE.tab !== "atlas") await loadScene(); else draw();
+}
+function updateChrome(){
+  const s = SESSION, has = !!(s && s.maps.length), map = has ? s.maps[STATE.sel] : null;
+  for(const b of $$(".tab")){
+    const t = b.dataset.tab;
+    b.disabled = !s || t === "search" || (t === "atlas" ? !s.atlas : !has);
+    b.classList.toggle("active", t === STATE.tab);
+    b.setAttribute("aria-selected", t === STATE.tab);
+  }
+  const onMap = STATE.tab !== "atlas" && map;
+  $("#prevMap").disabled = !onMap || STATE.sel <= 0;
+  $("#nextMap").disabled = !onMap || STATE.sel >= s.maps.length - 1;
+  $("#smMode").hidden = STATE.tab !== "searchmap" || !map;
+  if(map){
+    $("#smMode").querySelector('[value="tiles"]').disabled = !map.tiles.length;
+    $("#smMode").querySelector('[value="stitched"]').disabled = !map.names.has("SearchMap.mrc");
+    // keep the user's choice when this map has it; otherwise show what the map has
+    const want = STATE.smMode === "stitched" ? (map.names.has("SearchMap.mrc") ? "stitched" : "tiles") : (map.tiles.length ? "tiles" : "stitched");
+    $("#smMode").value = want;
+  }
+  $("#subTitle").innerHTML = !s ? "" : STATE.tab === "atlas"
+    ? (s.atlas ? `<b>${esc(s.atlas.stem)}</b>` : "")
+    : map ? `<b>${map.id} : ${esc(map.name)}</b><small>${map.stamp}</small>` : "";
+  if(s && s.path && SRC.kind === "server")
+    history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}&tab=${STATE.tab}`);
+}
+
+/* ------------------------------------------------------------------ scenes
+   A scene is what the viewer draws. Everything is placed in stage µm:
+     layers:   images, each {img: {data, w, h, bin}, geo}
+     outlines: rectangles, each {geo}   (tile footprints)
+     Q:        view orientation (inverse of the main image's R)
+     info:     rows and notes for the Image Information panel, plus the XML shown there */
+let SCENE = null, SCENE_ID = 0;
+
+async function loadScene(){
+  const id = ++SCENE_ID, s = SESSION, tab = STATE.tab, map = s?.maps[STATE.sel];
+  showMessage(""); $("#welcome").hidden = !!s;
+  if(!s) return;
+  try{
+    let scene;
+    if(tab === "atlas") scene = await atlasScene(s.atlas, id);
+    else if(tab === "overview") scene = await overviewScene(map, id);
+    else if(tab === "searchmap"){
+      if(map && !map.tiles.length && !map.names.has("SearchMap.mrc")) throw new Error(`${map.name} has no tiles or SearchMap.mrc yet.`);
+      scene = $("#smMode").value === "stitched" ? await searchMapImageScene(map, id) : await tilesScene(map, id);
+    }
+    if(id !== SCENE_ID) return;            // a newer request took over
+    showScene(scene);
+  }catch(e){
+    if(id !== SCENE_ID) return;
+    console.error(e); showScene(null); showMessage(e.message); status(e.message, true);
+  }
+}
+const stale = id => id !== SCENE_ID;
+
+// one image (atlas, overview or SearchMap.mrc) as a scene
+async function singleImageScene(kind, xmlPath, mrcPath, maxDim, id, extra = {}){
+  const xml = xmlPath ? await tryXml(xmlPath) : null;
+  const img = await getImage(mrcPath, maxDim);
+  if(stale(id)) return null;
+  const px = pixelOf(xml, img.header), geo = geoOf(xml, img.header, px);
+  return {
+    kind, layers: [{img, geo}], outlines: [], Q: transpose(geo.R), scaled: Number.isFinite(px.m),
+    info: imageInfo(xml, img, px, extra.notes || []), xmlName: xmlPath ? xmlPath.split("/").pop() : "", xmlRows: xml?.rows || [],
+  };
+}
+
+async function atlasScene(a, id){
+  if(!a) throw new Error("This session has no atlas.");
+  if(!a.mrc) throw new Error(`${a.stem}.mrc not found.`);
+  status(`Loading ${a.stem}…`);
+  const sc = await singleImageScene("atlas", a.xml, a.mrc, MAX_ATLAS, id);
+  if(!sc) return null;
+  sc.marks = (await Promise.all(SESSION.maps.map(mapFootprint))).filter(Boolean);
+  if(stale(id)) return null;
+  const n = sc.marks.length;
+  status(`Atlas: ${sc.layers[0].img.header.nx} × ${sc.layers[0].img.header.ny} px, ${n} search map${n === 1 ? "" : "s"} marked.`);
+  return sc;
+}
+
+// where a search map sits on the atlas: SearchMap.xml + SearchMap.mrc size, else a point at the overview centre
+async function mapFootprint(map, i){
+  try{
+    if(map.names.has("SearchMap.xml") && map.names.has("SearchMap.mrc")){
+      const xml = await getXml(join(map.dir, "SearchMap.xml")), header = await getHeader(join(map.dir, "SearchMap.mrc"));
+      if(Number.isFinite(xml.info.stage.x)) return {i, map, geo: geoOf(xml, header, pixelOf(xml, header))};
+    }
+    for(const f of ["SearchMap.xml", "Overview.xml"]){
+      if(!map.names.has(f)) continue;
+      const xml = await getXml(join(map.dir, f));
+      if(Number.isFinite(xml.info.stage.x)) return {i, map, point: [xml.info.stage.x * 1e6, xml.info.stage.y * 1e6]};
+    }
+  }catch(e){ console.warn(map.name, e); }
+  return null;
+}
+
+// tiles of a search map: XML + MRC header, each with its geometry
+async function tileLayout(map, refR){
+  const tiles = await Promise.all(map.tiles.map(async t => {
+    const xml = map.names.has(t.stem + ".xml") ? await tryXml(join(map.dir, t.stem + ".xml")) : null;
+    const header = await getHeader(join(map.dir, t.stem + ".mrc"));
+    const px = pixelOf(xml, header);
+    return {...t, xml, header, px, geo: geoOf(xml, header, px, refR)};
+  }));
+  if(!tiles.length) return {tiles, fromStage: false};
+  // positions from each tile's stage X/Y (Tomo5 folds the image shift into it), if they differ
+  const S = tiles.map(t => t.xml && Number.isFinite(t.xml.info.stage.x) ? t.geo.S : null);
+  const ok = S.every(Boolean), w = tiles[0].geo.nx * tiles[0].geo.ps;
+  const spread = ok ? Math.max(...S.map(p => p[0])) - Math.min(...S.map(p => p[0])) + Math.max(...S.map(p => p[1])) - Math.min(...S.map(p => p[1])) : 0;
+  if(ok && spread > 0.05 * w) return {tiles, fromStage: true};
+  // fallback: a grid (size from TileSetAcquisitionOptions.xml if there), row by row, no overlap
+  const opt = map.names.has("TileSetAcquisitionOptions.xml") ? await tryXml(join(map.dir, "TileSetAcquisitionOptions.xml")) : null;
+  const gw = parseInt(opt?.rows.find(([p]) => /GridSize\/width$/i.test(p))?.[1]);
+  const cols = gw > 0 ? gw : Math.ceil(Math.sqrt(tiles.length)), rows = Math.ceil(tiles.length / cols);
+  const c0 = ok ? S[0] : [0, 0];
+  tiles.forEach((t, i) => {
+    const g = t.geo, d = mul(g.R, [(i % cols - (cols - 1) / 2) * g.nx * g.ps, (Math.floor(i / cols) - (rows - 1) / 2) * g.ny * g.ps]);
+    g.S = [c0[0] + d[0], c0[1] + d[1]];
+  });
+  return {tiles, fromStage: false};
+}
+const GRID_NOTE = "Tile positions were not found in the tile XML files, so the tiles are laid out as a grid in file order.";
+
+async function overviewScene(map, id){
+  if(!map) throw new Error("No search map selected.");
+  if(!map.names.has("Overview.mrc")) throw new Error(`${map.name} has no Overview.mrc.`);
+  status(`Loading ${map.name} overview…`);
+  const sc = await singleImageScene("overview", map.names.has("Overview.xml") ? join(map.dir, "Overview.xml") : null, join(map.dir, "Overview.mrc"), MAX_OVERVIEW, id);
+  if(!sc) return null;
+  const lay = await tileLayout(map, sc.layers[0].geo.R);
+  if(stale(id)) return null;
+  sc.outlines = lay.tiles.map(t => ({geo: t.geo}));
+  if(lay.tiles.length && !lay.fromStage) sc.info.notes.push(GRID_NOTE + " Their place on the overview is a guess.");
+  if(!sc.scaled) sc.info.notes.push("The overview pixel size is unknown, so the tiles cannot be drawn to scale.");
+  status(`${map.name}: overview with ${lay.tiles.length} tile${lay.tiles.length === 1 ? "" : "s"}.`);
+  return sc;
+}
+
+async function tilesScene(map, id){
+  if(!map) throw new Error("No search map selected.");
+  if(!map.tiles.length) throw new Error(`${map.name} has no Tile_*.mrc files.`);
+  const lay = await tileLayout(map);
+  if(stale(id)) return null;
+  const cols = Math.max(1, Math.round(Math.sqrt(lay.tiles.length)));
+  const maxTile = Math.max(256, Math.ceil(MAX_STITCH / cols));
+  const layers = new Array(lay.tiles.length);
+  let done = 0, next = 0;
+  async function worker(){
+    while(next < lay.tiles.length){
+      const i = next++, t = lay.tiles[i];
+      const img = await getImage(join(map.dir, t.stem + ".mrc"), maxTile);
+      if(stale(id)) return;
+      layers[i] = {img, geo: t.geo};
+      status(`${map.name}: loading tiles ${++done} / ${lay.tiles.length}…`);
+    }
+  }
+  await Promise.all([worker(), worker(), worker()]);
+  if(stale(id)) return null;
+  const smXml = map.names.has("SearchMap.xml") ? await tryXml(join(map.dir, "SearchMap.xml")) : null;
+  const t0 = lay.tiles[0], scaled = Number.isFinite(t0.px.m), Q = transpose(t0.geo.R);
+  // size of the stitched area, in the view frame
+  const pts = lay.tiles.flatMap(t => corners(t.geo).map(c => mul(Q, c)));
+  const W = Math.max(...pts.map(p => p[0])) - Math.min(...pts.map(p => p[0])), H = Math.max(...pts.map(p => p[1])) - Math.min(...pts.map(p => p[1]));
+  const rows = [["Tiles", `${lay.tiles.length} × (${t0.header.nx} × ${t0.header.ny})`]];
+  if(layers[0].img.bin > 1) rows.push(["Shown at", `bin ${layers[0].img.bin}`]);
+  rows.push(["Pixel Size", scaled ? `${fmtNum(t0.px.m * 1e9, 2)} nm${t0.px.from === "mrc" ? " (MRC header)" : ""}` : '<span class="warn">unknown</span>']);
+  if(scaled) rows.push(["Field Of View", `${fmtNum(W, 2)} × ${fmtNum(H, 2)} µm`]);
+  rows.push(...stageRows(smXml?.info || t0.xml?.info), ...statRows(layers.map(l => l.img)));
+  status(`${map.name}: ${lay.tiles.length} tiles stitched${lay.fromStage ? " from their stage positions" : " as a grid"}.`);
+  return {
+    kind: "tiles", layers, outlines: [], Q, scaled,
+    info: {rows, notes: lay.fromStage ? [] : [GRID_NOTE]},
+    xmlName: smXml ? "SearchMap.xml" : `${t0.stem}.xml`, xmlRows: (smXml || t0.xml)?.rows || [],
+  };
+}
+
+async function searchMapImageScene(map, id){
+  if(!map?.names.has("SearchMap.mrc")) throw new Error("SearchMap.mrc not found.");
+  status(`Loading ${map.name}/SearchMap.mrc…`);
+  const sc = await singleImageScene("searchmap", map.names.has("SearchMap.xml") ? join(map.dir, "SearchMap.xml") : null, join(map.dir, "SearchMap.mrc"), MAX_STITCH, id);
+  if(sc) status(`${map.name}: SearchMap.mrc, ${sc.layers[0].img.header.nx} × ${sc.layers[0].img.header.ny} px.`);
+  return sc;
+}
+
+/* ------------------------------------------------------------------ Image Information panel */
+function stageRows(i){
+  if(!i) return [];
+  const r = [];
+  if(Number.isFinite(i.defocus)) r.push(["Applied Defocus", `${fmtNum(i.defocus * 1e6, 2)} µm`]);
+  if(Number.isFinite(i.dose)) r.push(["Dose", fmtVal(i.dose)]);
+  if(Number.isFinite(i.exposure)) r.push(["Exposure Time", `${fmtNum(i.exposure, 2)} s`]);
+  if(i.mag) r.push(["Magnification", `${Number.isFinite(+i.mag) ? +(+i.mag).toFixed(1) : esc(i.mag)}×`]);
+  if(Number.isFinite(i.stage.x)) r.push(["Stage X, Y", `${fmtNum(i.stage.x * 1e6, 2)}, ${fmtNum(i.stage.y * 1e6, 2)} µm`]);
+  if(Number.isFinite(i.stage.z)) r.push(["Stage Z", `${fmtNum(i.stage.z * 1e6, 2)} µm`]);
+  if(Number.isFinite(i.stage.a)) r.push(["Tilt Angle", `${fmtNum(i.stage.a * 180 / Math.PI, 2)}°`]);
+  if(i.camera) r.push(["Camera", esc(i.camera)]);
+  if(i.date) r.push(["Acquired", esc(i.date.replace("T", " ").replace(/\.\d+.*$/, ""))]);
+  return r;
+}
+function statRows(imgs){
+  let mn = Infinity, mx = -Infinity, sum = 0, n = 0;
+  for(const im of imgs) for(const v of im.data){ if(v < mn) mn = v; if(v > mx) mx = v; sum += v; n++; }
+  return [["Maximum", fmtVal(mx)], ["Mean", fmtVal(sum / n)], ["Minimum", fmtVal(mn)]];
+}
+function imageInfo(xml, img, px, notes = []){
+  const h = img.header, rows = [];
+  rows.push(["Image Size", `${h.nx} × ${h.ny}${h.nz > 1 ? ` × ${h.nz}` : ""}`]);
+  if(img.bin > 1) rows.push(["Shown at", `bin ${img.bin} (${img.w} × ${img.h})`]);
+  rows.push(["Pixel Size", Number.isFinite(px.m) ? `${fmtNum(px.m * 1e9, 2)} nm${px.from === "mrc" ? " (MRC header)" : ""}` : '<span class="warn">unknown</span>']);
+  if(px.from === "xml" && Number.isFinite(h.pixelA) && h.pixelA > 0 && h.pixelA !== 1 && Math.abs(h.pixelA * 1e-10 / px.m - 1) > 0.02)
+    rows.push(["MRC Header", `<span style="color:var(--warn)">${fmtNum(h.pixelA / 10, 2)} nm (differs from XML)</span>`]);
+  if(Number.isFinite(px.m)) rows.push(["Field Of View", `${fmtNum(h.nx * px.m * 1e6, 2)} µm`]);
+  rows.push(...stageRows(xml?.info), ...statRows([img]));
+  return {rows, notes};
+}
+function renderInfo(){
+  const sc = SCENE;
+  if(!sc){ $("#info").innerHTML = '<dt style="color:var(--t-muted)">Nothing shown yet.</dt><dd></dd>'; $("#infoNote").innerHTML = ""; $("#xmlBox").hidden = true; return; }
+  $("#info").innerHTML = sc.info.rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  $("#infoNote").innerHTML = sc.info.notes.map(n => `<p class="note">${esc(n)}</p>`).join("");
+  $("#xmlBox").hidden = !sc.xmlRows.length;
+  renderMeta();
+}
 function renderMeta(){
-  const f = $("#metaFilter").value.trim().toLowerCase();
-  const rows = ATLAS.rows.filter(([p, v]) => !f || p.toLowerCase().includes(f) || v.toLowerCase().includes(f));
-  $("#metaCount").textContent = f ? `${rows.length} / ${ATLAS.rows.length}` : `${ATLAS.rows.length} fields`;
+  if(!SCENE) return;
+  const all = SCENE.xmlRows, f = $("#metaFilter").value.trim().toLowerCase();
+  const rows = all.filter(([p, v]) => !f || p.toLowerCase().includes(f) || v.toLowerCase().includes(f));
+  $("#xmlSummary").textContent = `All XML fields: ${SCENE.xmlName} (${f ? `${rows.length} / ` : ""}${all.length})`;
   $("#metaTable").innerHTML = rows.map(([p, v]) => `<tr><td>${esc(p)}</td><td>${esc(v)}</td></tr>`).join("") ||
-    '<tr><td colspan="2" style="color:var(--muted)">No match.</td></tr>';
+    '<tr><td colspan="2" style="color:var(--t-muted)">No match.</td></tr>';
 }
 
-/* ------------------------------------------------------------------ display: contrast → 8-bit canvas */
-let IMG = null;      // {canvas, w, h, bin}  what is drawn, in loaded pixels; bin = original px per loaded px
-let STATS = null;    // sorted sample of the MRC values, for percentiles and the histogram
-
-function sampleStats(data){
-  const n = data.length, step = Math.max(1, Math.floor(n / 500000)), s = [];
-  for(let i = 0; i < n; i += step){ const v = data[i]; if(Number.isFinite(v)) s.push(v); }
-  const a = Float32Array.from(s).sort();
-  return {sorted: a, min: a[0], max: a[a.length - 1]};
+/* ------------------------------------------------------------------ contrast (shared by all layers of a scene) */
+let STATS = null;
+function sceneStats(layers){
+  const total = layers.reduce((n, l) => n + l.img.data.length, 0), step = Math.max(1, Math.floor(total / 600000)), s = [];
+  for(const l of layers){ const d = l.img.data; for(let i = 0; i < d.length; i += step){ const v = d[i]; if(Number.isFinite(v)) s.push(v); } }
+  return {sorted: Float32Array.from(s).sort()};
 }
-const pct = (p) => STATS.sorted[Math.min(STATS.sorted.length - 1, Math.max(0, Math.round(p * (STATS.sorted.length - 1))))];
+const pct = p => STATS.sorted[Math.min(STATS.sorted.length - 1, Math.max(0, Math.round(p * (STATS.sorted.length - 1))))];
 
-function renderMrc(){
-  const m = ATLAS.mrc;
-  if(!STATS) STATS = sampleStats(m.data);
+function renderContrast(){
+  if(!SCENE || !SCENE.layers.length) return;
+  if($("#auto").checked){ $("#lo").value = 5; $("#hi").value = 995; }
   let lo = pct(+$("#lo").value / 1000), hi = pct(+$("#hi").value / 1000);
   if(hi <= lo) hi = lo + 1e-6;
   $("#loOut").value = fmtVal(lo); $("#hiOut").value = fmtVal(hi);
   const inv = $("#invert").checked, k = 255 / (hi - lo);
-  const c = IMG?.canvas?.width === m.w && IMG.canvas.height === m.h && IMG.kind === "mrc" ? IMG.canvas : Object.assign(document.createElement("canvas"), {width: m.w, height: m.h});
-  const ctx = c.getContext("2d"), id = ctx.createImageData(m.w, m.h), px = id.data, d = m.data;
-  for(let i = 0, j = 0; i < d.length; i++, j += 4){
-    let v = (d[i] - lo) * k; v = v < 0 ? 0 : v > 255 ? 255 : v;
-    if(inv) v = 255 - v;
-    px[j] = px[j + 1] = px[j + 2] = v; px[j + 3] = 255;
+  for(const l of SCENE.layers){
+    const {w, h, data} = l.img;
+    if(!l.canvas) l.canvas = Object.assign(document.createElement("canvas"), {width: w, height: h});
+    const ctx = l.canvas.getContext("2d"), id = ctx.createImageData(w, h), px = id.data;
+    for(let i = 0, j = 0; i < data.length; i++, j += 4){
+      let v = (data[i] - lo) * k; v = v < 0 ? 0 : v > 255 ? 255 : v;
+      if(inv) v = 255 - v;
+      px[j] = px[j + 1] = px[j + 2] = v; px[j + 3] = 255;
+    }
+    ctx.putImageData(id, 0, 0);
   }
-  ctx.putImageData(id, 0, 0);
-  IMG = {canvas: c, w: m.w, h: m.h, bin: m.bin, kind: "mrc"};
   drawHist(lo, hi);
   draw();
 }
-const fmtVal = v => Math.abs(v) >= 1000 || (Math.abs(v) < 0.01 && v !== 0) ? v.toExponential(1) : v.toFixed(Math.abs(v) < 10 ? 2 : 0);
-
 function drawHist(lo, hi){
   const cv = $("#hist"), dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  if(!W) return;
   cv.width = W * dpr; cv.height = H * dpr;
   const ctx = cv.getContext("2d"); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, W, H);
-  const a = STATS.sorted, x0 = pct(0.001), x1 = pct(0.999), nb = Math.max(20, Math.floor(W / 2)), bins = new Uint32Array(nb);
-  if(x1 <= x0) return;
-  for(const v of a){ const b = Math.floor((v - x0) / (x1 - x0) * nb); if(b >= 0 && b < nb) bins[b]++; }
+  if(!STATS) return;
+  const x0 = pct(0.001), x1 = pct(0.999); if(x1 <= x0) return;
+  const nb = Math.max(32, Math.floor(W / 2)), bins = new Float64Array(nb);
+  for(const v of STATS.sorted){ const b = Math.floor((v - x0) / (x1 - x0) * nb); if(b >= 0 && b < nb) bins[b]++; }
   const peak = Math.max(...bins), cs = getComputedStyle(document.documentElement);
-  ctx.fillStyle = cs.getPropertyValue("--muted");
-  for(let i = 0; i < nb; i++){ const h = Math.sqrt(bins[i] / peak) * (H - 4); ctx.fillRect(i * W / nb, H - h, Math.max(1, W / nb - .5), h); }
-  ctx.fillStyle = cs.getPropertyValue("--accent");
-  for(const v of [lo, hi]){ const x = (v - x0) / (x1 - x0) * W; if(x >= 0 && x <= W) ctx.fillRect(x - 1, 0, 2, H); }
+  ctx.beginPath(); ctx.moveTo(0, H);
+  for(let i = 0; i < nb; i++) ctx.lineTo((i + .5) * W / nb, H - Math.sqrt(bins[i] / peak) * (H - 6));
+  ctx.lineTo(W, H); ctx.closePath(); ctx.fillStyle = cs.getPropertyValue("--t-sel"); ctx.fill();
+  const xl = (lo - x0) / (x1 - x0) * W, xh = (hi - x0) / (x1 - x0) * W;
+  ctx.strokeStyle = "#e0e6ea"; ctx.lineWidth = 1.2; ctx.beginPath(); ctx.moveTo(xl, H); ctx.lineTo(xh, 2); ctx.stroke();
+  ctx.fillStyle = "#e05050"; ctx.fillRect(xl - 1, 0, 2, H); ctx.fillRect(xh - 1, 0, 2, H);
 }
 
-async function setSource(kind){
-  $("#source").value = kind;
-  $("#displaySec").hidden = false;
-  const contrast = kind === "mrc";
-  for(const id of ["#lo", "#hi", "#invert", "#autoContrast"]) $(id).disabled = !contrast;
-  $("#hist").style.opacity = contrast ? 1 : .35;
-  if(kind === "mrc"){ STATS = null; renderMrc(); }
-  else{
-    if(!ATLAS.jpg){
-      const img = new Image();
-      img.src = SRC.url(join(SESSION.atlasDir, SESSION.jpg.name));
-      await img.decode();
-      ATLAS.jpg = img;
-    }
-    // the JPG may be smaller than the MRC; express its pixels in original (MRC) pixels
-    const origW = ATLAS.mrc ? ATLAS.mrc.header.nx : ATLAS.jpg.naturalWidth;
-    IMG = {canvas: ATLAS.jpg, w: ATLAS.jpg.naturalWidth, h: ATLAS.jpg.naturalHeight, bin: origW / ATLAS.jpg.naturalWidth, kind: "jpg"};
-  }
-  $("#welcome").hidden = true;
-  $("#scalebar").hidden = $("#hint").hidden = false;
-  fit();
+function showScene(scene){
+  SCENE = scene && scene.layers.length ? scene : null;
+  STATS = SCENE ? sceneStats(SCENE.layers) : null;
+  renderInfo();
+  if(SCENE){ fit(); renderContrast(); } else { drawHist(); draw(); }
+  $("#scalebar").hidden = !SCENE || !SCENE.scaled;
 }
+function showMessage(m){ $("#msg").hidden = !m; $("#msg").textContent = m || ""; }
 
-/* ------------------------------------------------------------------ view: pan / zoom */
+/* ------------------------------------------------------------------ viewer: pan / zoom in scene µm */
 const view = $("#view");
-const V = {s: 1, ox: 0, oy: 0};   // screen px per loaded px; screen position of loaded pixel (0,0)
+const V = {s: 1, tx: 0, ty: 0, fitS: 1};     // screen = scene * s + t   (s: screen px per µm)
 
+const toView = p => mul(SCENE.Q, p);                    // stage µm → view µm (turned like the main image)
+const toScreen = p => { const v = toView(p); return [v[0] * V.s + V.tx, v[1] * V.s + V.ty]; };
+
+function sceneBounds(sc){
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for(const g of [...sc.layers, ...sc.outlines].map(l => l.geo))
+    for(const c of corners(g)){ const [x, y] = mul(sc.Q, c); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  return {x0, y0, x1, y1};
+}
 function fit(){
-  if(!IMG) return;
-  const W = view.clientWidth, H = view.clientHeight;
-  V.s = Math.min(W / IMG.w, H / IMG.h) * 0.96;
-  V.ox = (W - IMG.w * V.s) / 2; V.oy = (H - IMG.h * V.s) / 2;
+  if(!SCENE) return;
+  const W = view.clientWidth, H = view.clientHeight, b = sceneBounds(SCENE);
+  V.s = V.fitS = Math.min(W / (b.x1 - b.x0), H / (b.y1 - b.y0)) * 0.96;
+  V.tx = W / 2 - (b.x0 + b.x1) / 2 * V.s; V.ty = H / 2 - (b.y0 + b.y1) / 2 * V.s;
   draw();
 }
 function draw(){
@@ -557,66 +905,134 @@ function draw(){
   if(view.width !== Math.round(W * dpr) || view.height !== Math.round(H * dpr)){ view.width = Math.round(W * dpr); view.height = Math.round(H * dpr); }
   const ctx = view.getContext("2d");
   ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, view.width, view.height);
-  if(!IMG) return;
+  if(!SCENE) return;
+  for(const l of SCENE.layers){
+    if(!l.canvas) continue;
+    // canvas pixel q → screen:  s·Q·(S + ps·R·(bin·q − c)) + t
+    const g = l.geo, b = l.img.bin, QR = mmul(SCENE.Q, g.R), k = V.s * g.ps;
+    const o = toScreen(g.S), oc = mul(QR, [g.nx / 2, g.ny / 2]);
+    ctx.setTransform(dpr * k * b * QR[0][0], dpr * k * b * QR[1][0], dpr * k * b * QR[0][1], dpr * k * b * QR[1][1],
+                     dpr * (o[0] - k * oc[0]), dpr * (o[1] - k * oc[1]));
+    ctx.imageSmoothingEnabled = k * b < 2; ctx.imageSmoothingQuality = "high";
+    ctx.drawImage(l.canvas, 0, 0);
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.imageSmoothingEnabled = V.s < 2; ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(IMG.canvas, V.ox, V.oy, IMG.w * V.s, IMG.h * V.s);
-  drawScaleBar();
+  ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--tile");
+  ctx.lineWidth = 1.3;
+  for(const o of SCENE.outlines){
+    const pts = corners(o.geo).map(toScreen);
+    ctx.beginPath(); pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath(); ctx.stroke();
+  }
+  if(SCENE.marks) drawMarks(ctx);
+  drawScaleBar(); syncZoom();
+}
+const MARK_COLOR = {Acquired: "#39e639", "In Progress": "#f0a030", Queued: "#f0a030"};
+function markShape(m){       // screen polygon of a marker
+  if(m.geo) return corners(m.geo).map(toScreen);
+  const [x, y] = toScreen(m.point), r = 6;
+  return [[x - r, y - r], [x + r, y - r], [x + r, y + r], [x - r, y + r]];
+}
+function drawMarks(ctx){
+  ctx.font = "600 11px " + getComputedStyle(document.body).fontFamily;
+  for(const pass of [0, 1]) for(const m of SCENE.marks){        // selected one last, on top
+    const sel = m.i === STATE.sel;
+    if(sel !== !!pass) continue;
+    const pts = markShape(m), col = MARK_COLOR[m.map.status] || "#39e639";
+    ctx.beginPath(); pts.forEach(([x, y], k) => k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)); ctx.closePath();
+    // filled while small (like Tomo5), outline only once zoomed in so the image stays visible
+    const size = Math.hypot(pts[0][0] - pts[2][0], pts[0][1] - pts[2][1]);
+    const fill = (sel ? 0.45 : 0.3) * Math.max(0, Math.min(1, (120 - size) / 80));
+    if(fill > 0){ ctx.globalAlpha = fill; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1; }
+    ctx.lineWidth = sel ? 2.5 : 1.3; ctx.strokeStyle = sel ? "#ffffff" : col; ctx.stroke();
+    const x = Math.max(...pts.map(p => p[0])), y = Math.min(...pts.map(p => p[1]));
+    ctx.fillStyle = sel ? "#ffffff" : col; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
+    ctx.fillText(String(m.map.id), x + 3, y + 9); ctx.shadowBlur = 0;
+  }
+}
+function markAt(sx, sy){      // marker under a screen point
+  if(!SCENE?.marks) return null;
+  const inside = (pts, x, y) => { let c = false; for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const [xi, yi] = pts[i], [xj, yj] = pts[j]; if((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
+  for(const m of SCENE.marks){
+    let pts = markShape(m);
+    const cx = pts.reduce((a, p) => a + p[0], 0) / 4, cy = pts.reduce((a, p) => a + p[1], 0) / 4;
+    pts = pts.map(([x, y]) => [cx + Math.max(1, 8 / Math.hypot(x - cx, y - cy)) * (x - cx), cy + Math.max(1, 8 / Math.hypot(x - cx, y - cy)) * (y - cy)]);  // at least ~8 px to hit
+    if(inside(pts, sx, sy)) return m;
+  }
+  return null;
 }
 function drawScaleBar(){
-  const px = pixelM(), el = $("#scalebar");
-  if(!Number.isFinite(px)){ el.hidden = true; return; }
-  el.hidden = false;
-  const umPerScreen = px * 1e6 * IMG.bin / V.s, target = 140 * umPerScreen;
+  const el = $("#scalebar");
+  if(!SCENE?.scaled) return;
+  const umPerPx = 1 / V.s, target = 110 * umPerPx;
   const p = Math.pow(10, Math.floor(Math.log10(target))), nice = [1, 2, 5, 10].map(m => m * p).filter(v => v <= target).pop() || p;
-  el.querySelector(".bar").style.width = `${nice / umPerScreen}px`;
-  el.querySelector("span").textContent = nice >= 1000 ? `${nice / 1000} mm` : nice >= 1 ? `${nice} µm` : `${nice * 1000} nm`;
+  el.querySelector(".bar").style.width = `${nice / umPerPx}px`;
+  el.querySelector("span").textContent = fmtLen(nice);
 }
-function zoomAt(f, sx, sy){
-  const s = Math.min(64, Math.max(0.01, V.s * f)); f = s / V.s;
-  V.ox = sx - (sx - V.ox) * f; V.oy = sy - (sy - V.oy) * f; V.s = s; draw();
+/* zoom slider: logarithmic, from half the "fit" zoom to 256× it */
+const Z_MIN = -1, Z_SPAN = 9;
+function syncZoom(){ $("#zoom").value = Math.round((Math.log2(V.s / V.fitS) - Z_MIN) / Z_SPAN * 1000); }
+function zoomTo(s, sx = view.clientWidth / 2, sy = view.clientHeight / 2){
+  if(!SCENE) return;
+  s = Math.min(V.fitS * 2 ** (Z_MIN + Z_SPAN), Math.max(V.fitS * 2 ** Z_MIN, s));
+  const f = s / V.s; V.tx = sx - (sx - V.tx) * f; V.ty = sy - (sy - V.ty) * f; V.s = s; draw();
 }
+$("#zoomIn").addEventListener("click", () => zoomTo(V.s * 1.5));
+$("#zoomOut").addEventListener("click", () => zoomTo(V.s / 1.5));
+$("#zoom").addEventListener("input", e => zoomTo(V.fitS * 2 ** (Z_MIN + e.target.value / 1000 * Z_SPAN)));
 
 let drag = null;
-view.addEventListener("pointerdown", e => { if(!IMG) return; drag = {x: e.clientX, y: e.clientY, ox: V.ox, oy: V.oy}; view.setPointerCapture(e.pointerId); view.classList.add("drag"); });
+view.addEventListener("pointerdown", e => { if(!SCENE) return; drag = {x: e.clientX, y: e.clientY, tx: V.tx, ty: V.ty}; view.setPointerCapture(e.pointerId); view.classList.add("drag"); });
+view.addEventListener("click", e => {
+  if(!SCENE?.marks || (drag0 && Math.hypot(e.clientX - drag0.x, e.clientY - drag0.y) > 4)) return;
+  const r = view.getBoundingClientRect(), m = markAt(e.clientX - r.left, e.clientY - r.top);
+  if(m) select(m.i);
+});
 view.addEventListener("pointermove", e => {
-  if(drag){ V.ox = drag.ox + e.clientX - drag.x; V.oy = drag.oy + e.clientY - drag.y; draw(); }
-  readout(e);
+  if(drag){ V.tx = drag.tx + e.clientX - drag.x; V.ty = drag.ty + e.clientY - drag.y; draw(); }
+  if(!SCENE) return;
+  const r = view.getBoundingClientRect();
+  const over = !drag && SCENE.marks && markAt(e.clientX - r.left, e.clientY - r.top);
+  view.style.cursor = over ? "pointer" : "";
+  view.title = over ? `${over.map.name} (${over.map.status}): click to select, double-click to open its overview` : "";
+  const st = mul(transpose(SCENE.Q), [(e.clientX - r.left - V.tx) / V.s, (e.clientY - r.top - V.ty) / V.s]);
+  $("#readout").textContent = SCENE.scaled ? `stage X ${fmtNum(st[0], 2)}  Y ${fmtNum(st[1], 2)} µm` : "";
 });
-const endDrag = () => { drag = null; view.classList.remove("drag"); };
+let drag0 = null;       // where the last drag started, to tell a click from a pan
+const endDrag = () => { drag0 = drag; drag = null; view.classList.remove("drag"); };
 view.addEventListener("pointerup", endDrag); view.addEventListener("pointercancel", endDrag);
-view.addEventListener("pointerleave", () => { $("#readout").hidden = true; });
-view.addEventListener("wheel", e => { if(!IMG) return; e.preventDefault(); const r = view.getBoundingClientRect(); zoomAt(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015)), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
-view.addEventListener("dblclick", fit);
-addEventListener("resize", () => { draw(); });
-addEventListener("keydown", e => {
-  if(!IMG || e.target.closest("input,select,dialog")) return;
-  const W = view.clientWidth / 2, H = view.clientHeight / 2;
-  if(e.key === "f" || e.key === "F") fit();
-  else if(e.key === "+" || e.key === "=") zoomAt(1.25, W, H);
-  else if(e.key === "-" || e.key === "_") zoomAt(0.8, W, H);
+view.addEventListener("pointerleave", () => { $("#readout").textContent = ""; });
+view.addEventListener("wheel", e => { if(!SCENE) return; e.preventDefault(); const r = view.getBoundingClientRect(); zoomTo(V.s * Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015)), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+view.addEventListener("dblclick", e => {
+  const r = view.getBoundingClientRect(), m = SCENE?.marks && markAt(e.clientX - r.left, e.clientY - r.top);
+  if(m){ select(m.i).then(() => setTab("overview")); return; }
+  fit();
 });
-
-function readout(e){
-  const el = $("#readout");
-  if(!IMG){ el.hidden = true; return; }
-  const r = view.getBoundingClientRect(), lx = (e.clientX - r.left - V.ox) / V.s, ly = (e.clientY - r.top - V.oy) / V.s;
-  if(lx < 0 || ly < 0 || lx >= IMG.w || ly >= IMG.h){ el.hidden = true; return; }
-  const [nx, ny] = fullSize(), X = lx * IMG.bin, Y = ly * IMG.bin, px = pixelM();
-  const lines = [`pixel   ${Math.floor(X)}, ${Math.floor(Y)}`];
-  if(Number.isFinite(px)) lines.push(`offset  ${fmtNum((X - nx / 2) * px * 1e6, 1)}, ${fmtNum((Y - ny / 2) * px * 1e6, 1)} µm`);
-  if(IMG.kind === "mrc"){ const v = ATLAS.mrc.data[Math.floor(ly) * ATLAS.mrc.w + Math.floor(lx)]; lines.push(`value   ${fmtVal(v)}`); }
-  lines.push(`zoom    ${fmtNum(V.s / IMG.bin * 100, V.s / IMG.bin < 0.1 ? 1 : 0)} %`);
-  el.textContent = lines.join("\n"); el.hidden = false;
-}
+new ResizeObserver(() => draw()).observe(view);
 
 /* ------------------------------------------------------------------ controls */
-for(const id of ["#lo", "#hi"]) $(id).addEventListener("input", () => { if(+$("#lo").value >= +$("#hi").value) $(id === "#lo" ? "#hi" : "#lo").value = id === "#lo" ? +$("#lo").value + 1 : +$("#hi").value - 1; renderMrc(); });
-$("#invert").addEventListener("change", renderMrc);
-$("#autoContrast").addEventListener("click", () => { $("#lo").value = 5; $("#hi").value = 995; renderMrc(); });
-$("#source").addEventListener("change", e => setSource(e.target.value).catch(err => status(err.message, true)));
-$("#fit").addEventListener("click", fit);
+$$(".tab").forEach(b => b.addEventListener("click", () => { if(!b.disabled && b.dataset.tab !== STATE.tab) setTab(b.dataset.tab); }));
+$("#mapTable tbody").addEventListener("click", e => { const tr = e.target.closest("tr[data-i]"); if(tr) select(+tr.dataset.i); });
+$("#prevMap").addEventListener("click", () => select(STATE.sel - 1));
+$("#nextMap").addEventListener("click", () => select(STATE.sel + 1));
+$("#smMode").addEventListener("change", e => { STATE.smMode = e.target.value; loadScene(); });
+$("#tasksHead").addEventListener("click", e => { const b = e.currentTarget, open = b.getAttribute("aria-expanded") !== "true"; b.setAttribute("aria-expanded", open); $("#taskList").hidden = !open; });
+$$(".task.soon").forEach(b => b.addEventListener("click", () => status(`${b.firstChild.textContent.trim()}: coming later.`)));
+for(const id of ["#lo", "#hi"]) $(id).addEventListener("input", () => {
+  $("#auto").checked = false;
+  if(+$("#lo").value >= +$("#hi").value) $(id === "#lo" ? "#hi" : "#lo").value = id === "#lo" ? +$("#lo").value + 1 : +$("#hi").value - 1;
+  renderContrast();
+});
+$("#auto").addEventListener("change", renderContrast);
+$("#invert").addEventListener("change", renderContrast);
 $("#metaFilter").addEventListener("input", renderMeta);
+addEventListener("keydown", e => {
+  if(e.target.closest("input,select,dialog,textarea")) return;
+  if(e.key === "+" || e.key === "=") zoomTo(V.s * 1.5);
+  else if(e.key === "-" || e.key === "_") zoomTo(V.s / 1.5);
+  else if(e.key === "f" || e.key === "F") fit();
+  else if(e.key === "ArrowDown" || e.key === "ArrowRight"){ if(SESSION){ e.preventDefault(); select(STATE.sel + 1); } }
+  else if(e.key === "ArrowUp" || e.key === "ArrowLeft"){ if(SESSION){ e.preventDefault(); select(STATE.sel - 1); } }
+});
 
 $("#openLocal").addEventListener("click", () => $("#localDir").click());
 $("#localDir").addEventListener("change", e => {
@@ -641,7 +1057,7 @@ async function fpGo(path){
     const files = l.files.slice(0, 200).map(f => `<div class="fp-item file"><span class="ic">·</span>${esc(f.name)}<span class="sz">${fmtBytes(f.size)}</span></div>`);
     list.innerHTML = dirs.join("") + files.join("") + (l.files.length > 200 ? `<div class="fp-note" style="padding:6px 8px">… and ${l.files.length - 200} more files</div>` : "") ||
       '<div class="fp-note" style="padding:8px">Empty folder.</div>';
-    const looks = l.dirs.some(d => d.name === "Atlas") || l.files.some(f => f.name === "Session.dm");
+    const looks = l.dirs.some(d => d.name === "Atlas" || d.name === "SearchMaps") || l.files.some(f => f.name === "Session.dm");
     note.textContent = !path ? "Pick a shared folder." : looks ? "Looks like a Tomo5 session." : "";
     note.classList.toggle("ok", looks);
     $("#fpUse").disabled = !path;
@@ -655,6 +1071,7 @@ $("#openServer").addEventListener("click", () => { $("#picker").showModal(); fpG
 
 /* ------------------------------------------------------------------ start */
 (async function start(){
+  updateChrome();
   try{
     const r = await fetch("api/info");
     if(r.ok){
@@ -662,8 +1079,8 @@ $("#openServer").addEventListener("click", () => { $("#picker").showModal(); fpG
       $("#openServer").hidden = false; $("#welcomeServer").hidden = false;
       $("#openLocal").textContent = "From this computer…";
       $("#welcomeLocal").hidden = true;
-      const m = location.hash.match(/session=([^&]+)/);
-      if(m) openSession(ServerSource, decodeURIComponent(m[1]));
+      const q = new URLSearchParams(location.hash.slice(1));
+      if(q.get("session")) openSession(ServerSource, q.get("session"), {map: q.get("map"), tab: q.get("tab")});
     }
   }catch{ /* opened as a plain file: local folders only */ }
   draw();

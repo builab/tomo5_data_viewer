@@ -6,8 +6,8 @@ A web-based interface to view Thermo Scientific Tomography 5 (Tomo5) data, in th
 It is one HTML page (`index.html`) plus a small Python server (`tomo5_viewer.py`) that serves your
 session folders to the browser, read-only.
 
-**Status: v0.1, atlas only. Tested with Tomo5 5.26.** The viewer opens a Tomo5 session, reads the atlas XML and shows the
-stitched atlas image. Search maps, batch positions and tilt series come next.
+**Status: v0.2, atlas and search maps. Tested with Tomo5 5.26.** Batch positions and tilt series
+come next.
 The session layout is described in [tomo5_data_struct.md](tomo5_data_struct.md).
 
 ## Quick start
@@ -27,24 +27,56 @@ If the data is on a remote workstation, see
 [Running on a remote workstation](#running-on-a-remote-workstation-port-forwarding).
 
 Without the server, you can also open `index.html` directly in the browser and use
-**Open folder from this computer…**. Only the atlas files are read.
+**Open folder from this computer…**. Only the files being shown are read.
 
-## Atlas
+## Interface
 
-- The viewer finds `Atlas/Atlas_<date>_<time>.xml` and the `.mrc` with the same name.
-  The atlas `.mrc` is a single stitched image (like EPU), not a stack of tiles.
-- **Atlas panel:** image size, pixel size, field of view, stage position, magnification, camera
-  and acquisition time, read from the XML. If the XML has no pixel size, the MRC header is used.
-  A warning shows when the two differ.
-- **Display:** black and white levels (as percentiles, with a histogram), invert, and a switch
-  to the `.jpg` preview.
-- **Atlas XML:** every field of the XML, flattened into `path = value`, with a filter.
-- **Map:** scroll to zoom, drag to pan, double-click or **F** to fit, **+** / **−** to zoom.
-  The scale bar and the cursor readout (pixel, offset from the centre in µm, value) use the
-  pixel size.
+The layout follows Tomo5:
 
-Atlases larger than 4096 pixels are binned when they load. With numpy on the server, the server
-does the binning; otherwise the browser reads the full file and bins it.
+- **Left, Tasks:** *Search Maps* (acquired / total). *Batch Positions*, *Data Acquisition* and
+  *Movie Player* are placeholders for now.
+- **Centre, viewer:** tabs **Atlas › Overview › Search Map › Search** (*Search* comes later).
+  The bar above the image shows the selected search map, with ‹ › to step through them.
+  Below the image: **−** / **+** and a zoom slider. Scroll to zoom, drag to pan, double-click
+  or **F** to fit. A scale bar is drawn on the image, and the stage X/Y under the cursor is shown
+  at the bottom right.
+- **Right:** the search-map table (Id, tilt, status, name). Click a row, or use the arrow keys, to
+  select a map. Below it, the **Histogram** (Auto Filter, black/white levels, invert) and
+  **Image Information** (size, pixel size, field of view, defocus, dose, exposure, magnification,
+  stage, tilt, camera, date, min/mean/max). *All XML fields* lists every field of the XML,
+  with a filter.
+
+### Tabs (with Search Maps selected)
+
+| Tab | Shows |
+|---|---|
+| Atlas | `Atlas/Atlas_<date>_<time>.mrc`, the stitched atlas, with every search map marked: green = acquired, orange = in progress / queued, white outline = selected. Click a marker to select that map; double-click to open its overview. |
+| Overview | `SearchMaps/SearchMap_<N>_<date>_<time>/Overview.mrc`, with the outline of every `Tile_*` drawn in green |
+| Search Map | The `Tile_*.mrc` images placed and stitched in the browser. The drop-down switches to `SearchMap.mrc`, the map as stitched by Tomo5. |
+
+Large images are binned when they load (atlas and stitched map to about 4096 px, overview to
+2048 px). With numpy on the server, the server does the binning.
+
+### How tiles are placed
+
+Every Tomo5 image XML (`Overview.xml`, `Tile_*.xml`, …) has:
+
+- `microscopeData/stage/Position/X, Y`: the stage position of the image centre. For tiles,
+  Tomo5 folds the image shift into it, so each tile has its own position.
+- `SpatialScale/pixelSize/x`: the pixel size of the image.
+- `ReferenceTransformation/matrix`: a 2 × 2 matrix from image pixels to stage metres. It holds
+  the camera rotation and a flip, and differs slightly between magnifications (about 3° between
+  the overview and the tiles). It is given per unbinned camera pixel, so the viewer uses only its
+  direction and takes the size from the pixel size.
+
+So `stage = S + pixelSize · R · (pixel − centre)`. The pixel size always refers to the saved
+image, also for stitched images (the atlas, `SearchMap.mrc`) whose size differs from the camera
+readout. A search map is marked on the atlas with the footprint of `SearchMap.mrc`
+(`SearchMap.xml` position, pixel size and direction); a map without `SearchMap.mrc` yet is shown
+as a point at its overview centre. The view is turned so the main image (atlas,
+overview, or the first tile) looks as it does in Tomo5. If the tile XML files have no positions,
+the tiles are laid out as a grid in file order (grid size from `TileSetAcquisitionOptions.xml`),
+and a note says so.
 
 ## Running on a remote workstation (port forwarding)
 
