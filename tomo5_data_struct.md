@@ -180,9 +180,20 @@ Search map folder:
   `CustomData` has `NumberOfTilesPlanned` / `NumberOfTilesAcquired` and `AppliedDefocus`.
 
 - `TileSetAcquisitionOptions.xml`: tile grid size (`GridSize/width`, `GridSize/height`), e.g. 3 × 3.
-- `SearchMap.dm`: the tile set (`TileSetXml`), including `AcquiredWithImageBeamShift`.
+- `SearchMap.dm`: the tile set (`TileSetXml`), including `AcquiredWithImageBeamShift` and the
+  user's rating, `StarRating` (0 = not rated, 1–5 stars).
 - Tiles are numbered from the centre outward in a spiral: `Tile_<ID>_1` is the centre tile, at
   the same position as the overview.
 - `Overview.mrc` has a FEI extended header (`FEI2`, about 0.9 MB) before the image data.
 - `SearchMaps/QueuedSearchMapList.xml` lists queued search maps (`QueuedTileSets`).
+
+Batch positions (`Batch/`):
+
+- `Position_<N>` is one position (the anchoring position, area N.1). Its other exposure areas are
+  `Position_<N>_2`, `Position_<N>_3`, …
+- Status from the files present: **Initialized** = only `Position_<N>_Search.mrc/.xml`;
+  **Refined** = also `Position_<N>_Exposure.mrc`, `Position_<N>_Tracking.mrc` and
+  `Position_<N>_<k>_Exposure.mrc`; **Acquired** = tilt series `Position_<N>[_<k>].mrc` + `.mdoc`
+  in the session folder.
+- `Position_<N>_Search.xml`: stage position of the Search image centre, which is area N.1.
 

@@ -6,8 +6,7 @@ A web-based interface to view Thermo Scientific Tomography 5 (Tomo5) data, in th
 It is one HTML page (`index.html`) plus a small Python server (`tomo5_viewer.py`) that serves your
 session folders to the browser, read-only.
 
-**Status: v0.2, atlas and search maps. Tested with Tomo5 5.26.** Batch positions and tilt series
-come next.
+**Status: v0.4, atlas, search maps and batch positions. Tested with Tomo5 5.26.**
 The session layout is described in [tomo5_data_struct.md](tomo5_data_struct.md).
 
 ## Quick start
@@ -33,15 +32,17 @@ Without the server, you can also open `index.html` directly in the browser and u
 
 The layout follows Tomo5:
 
-- **Left, Tasks:** *Search Maps* (acquired / total). *Batch Positions*, *Data Acquisition* and
-  *Movie Player* are placeholders for now.
+- **Left, Tasks:** *Search Maps* and *Batch Positions* (acquired / total) switch the table on
+  the right. *Data Acquisition* and *Movie Player* are placeholders for now.
 - **Centre, viewer:** tabs **Atlas › Overview › Search Map › Search** (*Search* comes later).
   The bar above the image shows the selected search map, with ‹ › to step through them.
   Below the image: **−** / **+** and a zoom slider. Scroll to zoom, drag to pan, double-click
   or **F** to fit. A scale bar is drawn on the image, and the stage X/Y under the cursor is shown
   at the bottom right.
-- **Right:** the search-map table (Id, tilt, status, name). Click a row, or use the arrow keys, to
-  select a map. Below it, the **Histogram** (Auto Filter, black/white levels, invert) and
+- **Right:** the search-map table (Id, tilt, status, name, rating) or the batch-position table
+  (Id, tilt, status, name, exposure areas acquired / planned). Click a row, or use the arrow keys,
+  to select. The search-map rating (`StarRating` in `SearchMap.dm`) is shown as 5 stars, yellow for
+  the rating, also in the bar above the image. Below it, the **Histogram** (Auto Filter, black/white levels, invert) and
   **Image Information** (size, pixel size, field of view, defocus, dose, exposure, magnification,
   stage, tilt, camera, date, min/mean/max). *All XML fields* lists every field of the XML,
   with a filter.
@@ -91,6 +92,28 @@ about 10 s (67 MB); the overview opens at once.
 The Image Information panel reports how many overlaps matched, the largest position correction,
 the range of tile gains and the fade width. On a 3 × 3 map of 2048 px tiles this takes about
 2 seconds in the browser.
+
+### Batch positions
+
+Read from `Batch/` (and the tilt series in the session folder). `Position_<N>` is one position;
+its exposure areas are N.1 (`Position_<N>_…`), N.2 (`Position_<N>_2_…`), and so on. The status
+comes from the files present:
+
+| Status | Files |
+|---|---|
+| Initialized | `Position_<N>_Search.mrc`, `Position_<N>_Search.xml` only |
+| Refined | also `Position_<N>_Exposure.mrc`, `Position_<N>_Tracking.mrc`, `Position_<N>_<k>_Exposure.mrc` |
+| Acquired | tilt series `Position_<N>[_<k>].mrc` and `.mdoc` in the session folder (*Acquired 1/3* when only some areas are done) |
+
+With *Batch Positions* selected, the **Search** tab shows `Position_<N>_Search.mrc` with area N.1
+marked at its centre, and the Image Information panel lists the files of each area. Positions are
+drawn as dots on the Atlas, Overview and Search Map tabs (blue = refined, orange = initialized,
+green = acquired); click one to select it, double-click to open its Search image. The Overview and
+Search Map tabs show the search map that holds the selected position.
+
+*Coming next:* the exposure squares (camera area), beam circles, ±60° ellipses and the yellow
+tracking/focus circle on the Search image, once their positions and sizes are read from the
+Tomo5 files.
 
 ### How tiles are placed
 
