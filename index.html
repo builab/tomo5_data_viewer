@@ -158,6 +158,16 @@ details.xml>summary{cursor:pointer;color:var(--t-muted);font-size:12px}
 .meta td{padding:3px 6px;border-bottom:1px solid var(--t-line);vertical-align:top;overflow-wrap:anywhere}
 .meta td:first-child{color:var(--t-muted);width:58%}
 
+/* ---------- right-click zoom menu */
+.ctx{position:fixed;z-index:50;min-width:230px;max-width:320px;padding:4px 0;background:#22323f;border:1px solid #121b23;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:12.5px;color:var(--t-ink)}
+.ctx .hd{padding:6px 12px 2px;color:var(--t-muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.ctx .it{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:5px 12px 5px 20px;border:none;background:none;cursor:pointer}
+.ctx .it:hover:not(:disabled),.ctx .it:focus-visible{background:var(--t-sel);color:#fff;outline:none}
+.ctx .it:disabled{opacity:.42;cursor:default}
+.ctx .it small{margin-left:auto;color:var(--t-muted);font-size:11px}
+.ctx .it:hover:not(:disabled) small{color:#d8ecfa}
+.ctx .sep{height:1px;margin:4px 0;background:#3a4e61}
+
 /* ---------- folder picker */
 dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:0;width:min(640px,92vw);font-size:14px}
 dialog::backdrop{background:rgba(0,0,0,.55)}
@@ -293,6 +303,8 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     </details>
   </section>
 </div>
+
+<div class="ctx" id="ctxMenu" hidden role="menu"></div>
 
 <dialog id="picker">
   <div class="fp-head"><h3>Open a Tomo5 session</h3><div class="fp-crumbs" id="fpCrumbs"></div></div>
@@ -721,6 +733,7 @@ async function fillTilts(){
       if(x && Number.isFinite(x.info.stage.a)) p.tilt = x.info.stage.a * 180 / Math.PI;
     }),
     overlaySizes(s),
+    ...s.positions.map(p => mapOfPosition(p).catch(() => -1)),      // for the zoom menu
   ]);
   if(SESSION === s){ renderTable(); updateChrome(); }
 }
@@ -934,6 +947,7 @@ async function loadScene(){
     const first = await addPositionMarks(await build("preview"));
     if(id !== SCENE_ID) return;            // a newer request took over
     showScene(first);
+    if(STATE.pendingCentre){ const c = STATE.pendingCentre; STATE.pendingCentre = null; centreOn(c.pt, c.zoom); }
     if(first && !first.final){
       if(first.kind === "tiles"){          // tiles: alignment needs the full size, load it now
         status(`${$("#status").textContent} Loading full resolution…`);
@@ -1556,6 +1570,15 @@ function sceneBounds(sc){
     for(const c of corners(g)){ const [x, y] = mul(sc.Q, c); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
   return {x0, y0, x1, y1};
 }
+// centre the view on a stage point, at `zoom` × the fit-to-window scale
+function centreOn(pt, zoom = 1){
+  if(!SCENE || !pt) return;
+  fit();
+  V.s = V.fitS * zoom;
+  const v = toView(pt);
+  V.tx = view.clientWidth / 2 - v[0] * V.s; V.ty = view.clientHeight / 2 - v[1] * V.s;
+  draw();
+}
 function fit(){
   if(!SCENE) return;
   const W = view.clientWidth, H = view.clientHeight, b = sceneBounds(SCENE);
@@ -1709,11 +1732,11 @@ function drawMarks(ctx){
     ctx.fillText(m.kind === "pos" ? `P${m.pos.id}` : String(m.map.id), x + 3, y + 9); ctx.shadowBlur = 0;
   }
 }
-function markAt(sx, sy){      // marker under a screen point
+function markAt(sx, sy, kind){      // marker under a screen point (optionally only of one kind)
   if(!SCENE?.marks) return null;
   const inside = (pts, x, y) => { let c = false; for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const [xi, yi] = pts[i], [xj, yj] = pts[j]; if((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
   // positions (small dots) first, so one inside a search-map outline can still be picked
-  for(const m of [...SCENE.marks].sort((a, b) => (b.kind === "pos") - (a.kind === "pos"))){
+  for(const m of [...SCENE.marks].filter(m => !kind || m.kind === kind).sort((a, b) => (b.kind === "pos") - (a.kind === "pos"))){
     let pts = markShape(m);
     const cx = pts.reduce((a, p) => a + p[0], 0) / 4, cy = pts.reduce((a, p) => a + p[1], 0) / 4;
     pts = pts.map(([x, y]) => [cx + Math.max(1, 8 / Math.hypot(x - cx, y - cy)) * (x - cx), cy + Math.max(1, 8 / Math.hypot(x - cx, y - cy)) * (y - cy)]);  // at least ~8 px to hit
@@ -1742,7 +1765,7 @@ $("#zoomOut").addEventListener("click", () => zoomTo(V.s / 1.5));
 $("#zoom").addEventListener("input", e => zoomTo(V.fitS * 2 ** (Z_MIN + e.target.value / 1000 * Z_SPAN)));
 
 let drag = null;
-view.addEventListener("pointerdown", e => { if(!SCENE) return; drag = {x: e.clientX, y: e.clientY, tx: V.tx, ty: V.ty}; view.setPointerCapture(e.pointerId); view.classList.add("drag"); });
+view.addEventListener("pointerdown", e => { if(!SCENE || e.button === 2) return; drag = {x: e.clientX, y: e.clientY, tx: V.tx, ty: V.ty}; view.setPointerCapture(e.pointerId); view.classList.add("drag"); });
 view.addEventListener("click", e => {
   if(!SCENE?.marks || (drag0 && Math.hypot(e.clientX - drag0.x, e.clientY - drag0.y) > 4)) return;
   const r = view.getBoundingClientRect(), m = markAt(e.clientX - r.left, e.clientY - r.top);
@@ -1769,6 +1792,166 @@ const endDrag = () => { drag0 = drag; drag = null; view.classList.remove("drag")
 view.addEventListener("pointerup", endDrag); view.addEventListener("pointercancel", endDrag);
 view.addEventListener("pointerleave", () => { $("#readout").textContent = ""; });
 view.addEventListener("wheel", e => { if(!SCENE) return; e.preventDefault(); const r = view.getBoundingClientRect(); zoomTo(V.s * Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015)), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+/* ------------------------------------------------------------------ right-click zoom menu
+   Levels: Atlas › Overview › Search Map › Search › Exposure. Zoom in can jump to any deeper level
+   for the item under the cursor; zoom out goes exactly one level up (like the previous tab).
+   The item is selected first, so the table always matches, and the next view opens centred on it. */
+const LEVELS = ["atlas", "overview", "searchmap", "search", "exposure"];
+const LEVEL_NAME = {atlas: "Atlas", overview: "Overview", searchmap: "Search Map", search: "Search", exposure: "Exposure"};
+
+async function navigate({tab, map, pos, area, centre, zoom = 1}){
+  closeMenu();
+  if(pos != null){
+    if(STATE.task !== "batch"){ STATE.task = "batch"; renderTasks(); }
+    STATE.pos = pos; STATE.area = area || 1;
+    if(map == null){ const mi = await mapOfPosition(SESSION.positions[pos]); if(mi >= 0) STATE.sel = mi; }
+  }
+  if(map != null){
+    STATE.sel = map;
+    if(pos == null && STATE.task !== "searchMaps" && !["search", "exposure"].includes(tab)){ STATE.task = "searchMaps"; renderTasks(); }
+  }
+  renderTable();
+  STATE.pendingCentre = centre ? {pt: centre, zoom} : null;
+  await setTab(tab);
+}
+
+// what is under the cursor: a position (and which of its areas), or a search map
+function positionAt(sx, sy){
+  if(!SCENE) return null;
+  const list = SCENE.kind === "search" ? [{i: STATE.pos, pos: SCENE.overlay.pos}] : (SCENE.marks || []).filter(m => m.kind === "pos");
+  const beam = overlay().beam * V.s;
+  let best = null;
+  for(const m of list){
+    const p = m.pos;
+    if(p.plan && beam >= 6 && SCENE.kind !== "atlas"){
+      for(const a of p.areas){
+        if(!a.off) continue;
+        const [x, y] = toScreen(areaStage(p, a.off)), d = Math.hypot(sx - x, sy - y);
+        if(d <= Math.max(beam / 2, 8) && (!best || d < best.d)) best = {i: m.i, pos: p, k: a.k, d, pt: areaStage(p, a.off)};
+      }
+    } else if(m.point){
+      const [x, y] = toScreen(m.point), d = Math.hypot(sx - x, sy - y);
+      if(d <= 9 && (!best || d < best.d)) best = {i: m.i, pos: p, k: null, d, pt: m.point};
+    }
+  }
+  return best;
+}
+function mapAt(sx, sy){
+  if(SCENE?.kind === "atlas"){ const m = markAt(sx, sy, "map"); return m ? {i: m.i, map: m.map, pt: m.geo ? m.geo.S : m.point} : null; }
+  if(["overview", "tiles", "searchmap"].includes(SCENE?.kind) && STATE.sel >= 0){
+    const b = sceneBounds(SCENE), v = mul(transpose(SCENE.Q), [0, 0]);
+    const vx = (sx - V.tx) / V.s, vy = (sy - V.ty) / V.s;
+    if(vx >= b.x0 && vx <= b.x1 && vy >= b.y0 && vy <= b.y1) return {i: STATE.sel, map: SESSION.maps[STATE.sel], pt: null};
+  }
+  return null;
+}
+
+function menuItems(sx, sy){
+  const items = [], kind = SCENE?.kind, level = STATE.tab;
+  const stage = SCENE ? mul(transpose(SCENE.Q), [(sx - V.tx) / V.s, (sy - V.ty) / V.s]) : null;
+  const hit = positionAt(sx, sy);
+  // on the Atlas a position dot sits inside its search map's marker: offer both
+  const mp = !hit || level === "atlas" ? mapAt(sx, sy) : null;
+  const head = t => items.push({head: t});
+  const item = (label, fn, opts = {}) => items.push({label, fn, ...opts});
+  const exposures = (p, i, pt, first) => {      // one item per area, the one under the cursor first
+    const ks = (p.areas.length ? p.areas : [{k: 1}]).map(a => a.k).sort((a, b) => (a === first ? -1 : b === first ? 1 : a - b));
+    for(const k of ks){
+      const ex = exposureOf(p, k);
+      item(`Exposure ${p.id}.${k}`, () => navigate({tab: "exposure", pos: i, area: k}),
+        {disabled: !ex, hint: ex ? ex.kind : /^Initialized/i.test(p.status) ? "initialized only" : "no image"});
+    }
+  };
+  if(mp && level === "atlas"){
+    head(`Zoom in · ${mp.map.name}`);
+    item("Overview", () => navigate({tab: "overview", map: mp.i}), {disabled: !mp.map.names.has("Overview.mrc")});
+    item("Search Map", () => navigate({tab: "searchmap", map: mp.i}), {disabled: !mp.map.tiles.length && !mp.map.names.has("SearchMap.mrc")});
+  }
+  if(hit){
+    const p = hit.pos, mi = p.map ?? -1;
+    head(`Zoom in · ${p.name}${hit.k ? ` (area ${p.id}.${hit.k})` : ""}`);
+    if(level === "atlas"){
+      item("Overview", () => navigate({tab: "overview", pos: hit.i, centre: hit.pt, zoom: 2}), {disabled: mi < 0, hint: mi < 0 ? "no search map" : SESSION.maps[mi]?.name});
+      item("Search Map", () => navigate({tab: "searchmap", pos: hit.i, centre: hit.pt, zoom: 2}), {disabled: mi < 0});
+      item("Search", () => navigate({tab: "search", pos: hit.i}), {disabled: !p.search});
+    } else if(level === "overview"){
+      item("Search Map", () => navigate({tab: "searchmap", pos: hit.i, area: hit.k, centre: hit.pt, zoom: 2}), {disabled: mi < 0});
+      item("Search", () => navigate({tab: "search", pos: hit.i, area: hit.k}), {disabled: !p.search});
+      exposures(p, hit.i, hit.pt, hit.k);
+    } else if(level === "searchmap"){
+      item("Search", () => navigate({tab: "search", pos: hit.i, area: hit.k}), {disabled: !p.search});
+      exposures(p, hit.i, hit.pt, hit.k);
+    } else if(level === "search"){
+      exposures(p, hit.i, hit.pt, hit.k || STATE.area);
+    }
+  } else if(mp && level === "atlas"){
+    // already listed above
+  } else if(mp && level === "overview"){
+    head(`Zoom in · ${mp.map.name}`);
+    item("Search Map", () => navigate({tab: "searchmap", map: mp.i, centre: stage, zoom: 2}), {disabled: !mp.map.tiles.length && !mp.map.names.has("SearchMap.mrc")});
+  } else if(level === "atlas" && SCENE){
+    head("Zoom in");
+    item("Zoom in 2× here", () => { closeMenu(); zoomTo(V.s * 2, sx, sy); });
+  } else if(level === "search" && STATE.task === "batch"){
+    const p = SESSION.positions[STATE.pos];
+    if(p){ head(`Zoom in · ${p.name}`); exposures(p, STATE.pos, null, STATE.area); }
+  } else if(level === "exposure"){
+    const p = SESSION.positions[STATE.pos];
+    if(p && p.areas.length > 1){
+      head("Other area");
+      for(const a of p.areas) if(a.k !== STATE.area){
+        const ex = exposureOf(p, a.k);
+        item(`Exposure ${p.id}.${a.k}`, () => navigate({tab: "exposure", pos: STATE.pos, area: a.k}), {disabled: !ex, hint: ex ? ex.kind : "no image"});
+      }
+    }
+  }
+  // zoom out: exactly one level up
+  const up = LEVELS[LEVELS.indexOf(level) - 1];
+  if(up){
+    const p = STATE.task === "batch" ? SESSION.positions[STATE.pos] : null;
+    const upOk = !$(`.tab[data-tab=${up}]`).disabled;
+    const centre = p ? (up === "searchmap" || up === "overview" ? p.plan?.stage : null) : null;
+    head("Zoom out");
+    item(LEVEL_NAME[up], () => navigate({tab: up, centre, zoom: centre ? 2 : 1}), {disabled: !upOk, hint: p && up !== "atlas" ? `centred on ${p.name}` : ""});
+  }
+  // always
+  items.push({sep: true});
+  item("Fit to window", () => { closeMenu(); fit(); }, {disabled: !SCENE});
+  if(stage && SCENE?.scaled) item("Copy stage X, Y", () => {
+    closeMenu();
+    const t = `${stage[0].toFixed(2)}, ${stage[1].toFixed(2)}`;
+    (navigator.clipboard?.writeText(t) || Promise.reject()).then(() => status(`Copied stage position ${t} µm.`), () => status(`Stage position: ${t} µm`));
+  }, {hint: `${stage[0].toFixed(1)}, ${stage[1].toFixed(1)} µm`});
+  if(mp && level === "atlas" && mp.i !== STATE.sel) item(`Select ${mp.map.name}`, async () => { closeMenu(); if(STATE.task !== "searchMaps"){ STATE.task = "searchMaps"; renderTasks(); renderTable(); } await select(mp.i); });
+  if(hit) item(`Select ${hit.pos.name}${hit.k ? ` (area ${hit.pos.id}.${hit.k})` : ""}`, async () => {
+    closeMenu(); if(STATE.task !== "batch"){ STATE.task = "batch"; renderTasks(); }
+    STATE.area = hit.k || STATE.area; if(hit.i !== STATE.pos) await select(hit.i, hit.k || 1); renderTable(); updateChrome(); draw();
+  });
+  else if(mp && level !== "atlas" && mp.i !== STATE.sel) item(`Select ${mp.map.name}`, async () => { closeMenu(); if(STATE.task !== "searchMaps"){ STATE.task = "searchMaps"; renderTasks(); renderTable(); } await select(mp.i); });
+  return items;
+}
+function openMenu(e){
+  const r = view.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const items = menuItems(sx, sy), el = $("#ctxMenu");
+  el.innerHTML = items.map((it, n) => it.sep ? '<div class="sep"></div>' : it.head ? `<div class="hd">${esc(it.head)}</div>`
+    : `<button class="it" role="menuitem" data-n="${n}"${it.disabled ? " disabled" : ""}${it.disabled && it.hint ? ` title="${esc(it.hint)}"` : ""}>${esc(it.label)}${it.hint ? `<small>${esc(it.hint)}</small>` : ""}</button>`).join("");
+  el.onclick = ev => { const b = ev.target.closest(".it"); if(b && !b.disabled) items[+b.dataset.n].fn(); };
+  el.hidden = false;
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = `${Math.min(e.clientX, innerWidth - w - 6)}px`; el.style.top = `${Math.min(e.clientY, innerHeight - h - 6)}px`;
+  el.querySelector(".it:not(:disabled)")?.focus();
+}
+function closeMenu(){ $("#ctxMenu").hidden = true; }
+view.addEventListener("contextmenu", e => { e.preventDefault(); if(SESSION) openMenu(e); });
+addEventListener("pointerdown", e => { if(!e.target.closest("#ctxMenu")) closeMenu(); }, true);
+addEventListener("blur", closeMenu);
+$("#ctxMenu").addEventListener("keydown", e => {
+  const its = [...$("#ctxMenu").querySelectorAll(".it:not(:disabled)")], i = its.indexOf(document.activeElement);
+  if(e.key === "Escape"){ closeMenu(); view.focus(); }
+  else if(e.key === "ArrowDown"){ e.preventDefault(); its[(i + 1) % its.length]?.focus(); }
+  else if(e.key === "ArrowUp"){ e.preventDefault(); its[(i - 1 + its.length) % its.length]?.focus(); }
+});
+
 view.addEventListener("dblclick", e => {
   const r = view.getBoundingClientRect(), m = SCENE?.marks && markAt(e.clientX - r.left, e.clientY - r.top);
   if(m){ selectMark(m).then(() => setTab(m.kind === "pos" ? "search" : "overview")); return; }
