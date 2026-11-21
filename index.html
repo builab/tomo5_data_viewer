@@ -195,11 +195,9 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <h1>Tomo5 Data Viewer<small>v0.5</small></h1>
     <div class="opens">
       <button class="btn primary" id="openServer" hidden title="The session folder: Session.dm, Atlas/, SearchMaps/, Batch/, Thumbnails/">Open Session Data…</button>
-      <button class="btn" id="openLocal" title="The session folder: Session.dm, Atlas/, SearchMaps/, Batch/, Thumbnails/">Open Session Data from this computer…</button>
-      <button class="btn" id="openTilt" disabled title="The folder with the tilt series Position_N[_k].mrc and their .mdoc files">Tilt Series Folder…</button>
+      <button class="btn" id="openTilt" disabled hidden title="The folder with the tilt series Position_N[_k].mrc and their .mdoc files">Tilt Series Folder…</button>
       <span class="tiltinfo" id="tiltInfo"></span>
-      <input type="file" id="localDir" webkitdirectory directory multiple hidden>
-      <input type="file" id="localTiltDir" webkitdirectory directory multiple hidden>
+
     </div>
     <span class="spacer"></span>
     <span id="status"></span>
@@ -245,7 +243,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
           <h2>Open a Tomo5 session</h2>
           <p>Pick the session folder (the one with <code>Atlas/</code>, <code>Batch/</code> and <code>SearchMaps/</code>).</p>
           <p id="welcomeServer" hidden>Folders shared by the server are listed under <b>Open Session Data…</b>. If the tilt series are in a separate folder, add it with <b>Tilt Series Folder…</b>.</p>
-          <p id="welcomeLocal">Without the server, use <b>Open Session Data from this computer…</b>, then <b>Tilt Series Folder…</b> if the tilt series are elsewhere. Only the files being shown are read.</p>
+          <p id="welcomeLocal">This page needs the viewer server. Start it on the computer with the data, e.g. <code>python3 tomo5_viewer.py /path/to/sessions /path/to/tilt_series</code>, then open <code>http://localhost:8766</code>.</p>
         </div>
       </div>
     </div>
@@ -383,36 +381,6 @@ const ServerSource = {
     return {data, w, h};
   },
 };
-
-function LocalSource(fileList){
-  // a folder picked with <input webkitdirectory>: files are known by their relative path
-  const files = new Map();
-  for(const f of fileList) files.set(f.webkitRelativePath || f.name, f);
-  return {
-    kind: "local",
-    async list(path){
-      const pre = path ? path + "/" : "", dirs = new Set(), out = [];
-      for(const [p, f] of files){
-        if(!p.startsWith(pre)) continue;
-        const rest = p.slice(pre.length), i = rest.indexOf("/");
-        if(i < 0) out.push({name: rest, size: f.size}); else dirs.add(rest.slice(0, i));
-      }
-      return {path, dirs: [...dirs].sort().map(name => ({name})), files: out.sort((a, b) => a.name.localeCompare(b.name))};
-    },
-    file(path){ const f = files.get(path); if(!f) throw new Error(`${path} not found`); return f; },
-    async text(path){ return this.file(path).text(); },
-    async bytes(path, start, end){ return this.file(path).slice(start, end + 1).arrayBuffer(); },
-    async section(){ return null; },
-    root(){ const first = [...files.keys()].find(k => !k.startsWith("@tilt/")) || ""; return first.split("/")[0]; },
-    // add another picked folder (the tilt series) as "@tilt/<folder>/…"; returns that path
-    add(fileList){
-      for(const k of [...files.keys()]) if(k.startsWith("@tilt/")) files.delete(k);
-      let top = "";
-      for(const f of fileList){ const rel = f.webkitRelativePath || f.name; files.set(`@tilt/${rel}`, f); top = rel.split("/")[0]; }
-      return `@tilt/${top}`;
-    },
-  };
-}
 
 /* ------------------------------------------------------------------ MRC */
 function parseMrcHeader(buf){
@@ -2060,14 +2028,6 @@ addEventListener("keydown", e => {
   else if(e.key === "ArrowUp" || e.key === "ArrowLeft"){ if(SESSION){ e.preventDefault(); select((STATE.task === "batch" ? STATE.pos : STATE.sel) - 1); } }
 });
 
-$("#openLocal").addEventListener("click", () => $("#localDir").click());
-$("#localDir").addEventListener("change", e => {
-  const files = e.target.files; if(!files.length) return;
-  // File objects are only handles: picking a session with big tilt series reads nothing until needed
-  const src = LocalSource(files);
-  openSession(src, src.root());
-  e.target.value = "";
-});
 
 /* ------------------------------------------------------------------ server folder picker */
 const FP = {path: "", mode: "session", tiltPath: ""};
@@ -2107,15 +2067,7 @@ function openPicker(mode){
   fpGo(start);
 }
 $("#openServer").addEventListener("click", () => openPicker("session"));
-$("#openTilt").addEventListener("click", () => {
-  if(!SESSION) return;
-  if(SRC.kind === "local") $("#localTiltDir").click(); else openPicker("tilt");
-});
-$("#localTiltDir").addEventListener("change", e => {
-  const files = e.target.files; if(!files.length || SRC?.kind !== "local") return;
-  setTiltFolder(SRC.add(files));
-  e.target.value = "";
-});
+$("#openTilt").addEventListener("click", () => { if(SESSION) openPicker("tilt"); });
 
 /* ------------------------------------------------------------------ start */
 (async function start(){
@@ -2124,13 +2076,12 @@ $("#localTiltDir").addEventListener("change", e => {
     const r = await fetch("api/info");
     if(r.ok){
       SERVER = await r.json();
-      $("#openServer").hidden = false; $("#welcomeServer").hidden = false;
-      $("#openLocal").textContent = "From this computer…";
+      $("#openServer").hidden = false; $("#openTilt").hidden = false; $("#welcomeServer").hidden = false;
       $("#welcomeLocal").hidden = true;
       const q = new URLSearchParams(location.hash.slice(1));
       if(q.get("session")) openSession(ServerSource, q.get("session"), {map: q.get("map"), tab: q.get("tab"), task: q.get("task"), pos: q.get("pos"), area: q.get("area"), tilt: q.get("tilt")});
     }
-  }catch{ /* opened as a plain file: local folders only */ }
+  }catch{ /* opened without the server: the welcome card says how to start it */ }
   draw();
 })();
 </script>
