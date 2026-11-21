@@ -1875,9 +1875,9 @@ function menuItems(sx, sy){
       item("Search Map", () => navigate({tab: "searchmap", pos: hit.i, centre: hit.pt, zoom: 2}), {disabled: mi < 0});
       item("Search", () => navigate({tab: "search", pos: hit.i}), {disabled: !p.search});
     } else if(level === "overview"){
+      // no Exposure from here: still too small to judge; go through Search Map or Search
       item("Search Map", () => navigate({tab: "searchmap", pos: hit.i, area: hit.k, centre: hit.pt, zoom: 2}), {disabled: mi < 0});
       item("Search", () => navigate({tab: "search", pos: hit.i, area: hit.k}), {disabled: !p.search});
-      exposures(p, hit.i, hit.pt, hit.k);
     } else if(level === "searchmap"){
       item("Search", () => navigate({tab: "search", pos: hit.i, area: hit.k}), {disabled: !p.search});
       exposures(p, hit.i, hit.pt, hit.k);

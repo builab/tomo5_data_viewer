@@ -80,7 +80,7 @@ about 10 s (67 MB); the overview opens at once.
 
 Right-click on the image opens a menu for what is under the cursor. The levels are
 **Atlas › Overview › Search Map › Search › Exposure**: *Zoom in* can jump to any deeper level for that
-item, *Zoom out* goes exactly one level up (like the previous tab). The item is selected first, so the
+item (Exposure only from Search Map and Search, where the areas are big enough to pick), *Zoom out* goes exactly one level up (like the previous tab). The item is selected first, so the
 table on the right matches, and the next view opens centred on it. Greyed-out entries say why.
 
 | Right-click on | Zoom in | Zoom out |
@@ -89,8 +89,8 @@ table on the right matches, and the next view opens centred on it. Greyed-out en
 | Atlas: a position | Overview · Search Map (centred on it) · Search | |
 | Atlas: empty | Zoom in 2× here | |
 | Overview: inside the map | Search Map | Atlas |
-| Overview: a position / area | Search Map · Search · Exposure N.1, N.2, … (that area first) | Atlas |
-| Search Map: a position / area | Search · Exposure N.k | Overview (centred on the position) |
+| Overview: a position / area | Search Map · Search | Atlas |
+| Search Map: a position / area | Search · Exposure N.1, N.2, … (that area first) | Overview (centred on the position) |
 | Search: an area / elsewhere | Exposure N.k | Search Map (centred on the position) |
 | Exposure | the other areas N.k | Search |
 
