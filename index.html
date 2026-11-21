@@ -199,7 +199,8 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <div class="subbar">
       <button class="nav" id="prevMap" title="Previous search map" disabled>‹</button>
       <select id="smMode" hidden title="How to show the search map">
-        <option value="tiles">Tiles, stitched here</option>
+        <option value="tiles">Tiles, stitched here (aligned, blended)</option>
+        <option value="raw">Tiles at stage positions (no blending)</option>
         <option value="stitched">SearchMap.mrc (stitched by Tomo5)</option>
       </select>
       <span class="title" id="subTitle"></span>
@@ -608,9 +609,10 @@ function updateChrome(){
   $("#smMode").hidden = STATE.tab !== "searchmap" || !map;
   if(map){
     $("#smMode").querySelector('[value="tiles"]').disabled = !map.tiles.length;
+    $("#smMode").querySelector('[value="raw"]').disabled = !map.tiles.length;
     $("#smMode").querySelector('[value="stitched"]').disabled = !map.names.has("SearchMap.mrc");
     // keep the user's choice when this map has it; otherwise show what the map has
-    const want = STATE.smMode === "stitched" ? (map.names.has("SearchMap.mrc") ? "stitched" : "tiles") : (map.tiles.length ? "tiles" : "stitched");
+    const want = STATE.smMode === "stitched" ? (map.names.has("SearchMap.mrc") ? "stitched" : "tiles") : (map.tiles.length ? STATE.smMode : "stitched");
     $("#smMode").value = want;
   }
   $("#subTitle").innerHTML = !s ? "" : STATE.tab === "atlas"
@@ -638,7 +640,8 @@ async function loadScene(){
     else if(tab === "overview") scene = await overviewScene(map, id);
     else if(tab === "searchmap"){
       if(map && !map.tiles.length && !map.names.has("SearchMap.mrc")) throw new Error(`${map.name} has no tiles or SearchMap.mrc yet.`);
-      scene = $("#smMode").value === "stitched" ? await searchMapImageScene(map, id) : await tilesScene(map, id);
+      const mode = $("#smMode").value;
+      scene = mode === "stitched" ? await searchMapImageScene(map, id) : await tilesScene(map, id, mode === "tiles");
     }
     if(id !== SCENE_ID) return;            // a newer request took over
     showScene(scene);
@@ -732,7 +735,163 @@ async function overviewScene(map, id){
   return sc;
 }
 
-async function tilesScene(map, id){
+/* ------------------------------------------------------------------ seamless stitching (like the SerialEM Grid Viewer)
+   1. Align: correlate the overlap of each pair of neighbouring tiles (high-passed), then solve
+      least-squares tile positions; matches that disagree with the others are dropped.
+   2. Gains: match the mean brightness of the tiles in their overlaps.
+   3. Blend: one image, each tile fading out over its overlaps (weighted average, like blendmont).
+   All tiles of a search map share one magnification, so in the first tile's pixel frame they only
+   differ by a translation. */
+function boxMean(a, w, h, r){          // mean over a (2r+1)² box, edges clamped
+  const I = new Float64Array((w + 1) * (h + 1));
+  for(let y = 0; y < h; y++){ let row = 0; for(let x = 0; x < w; x++){ row += a[y * w + x]; I[(y + 1) * (w + 1) + x + 1] = I[y * (w + 1) + x + 1] + row; } }
+  const o = new Float32Array(w * h);
+  for(let y = 0; y < h; y++){ const y0 = Math.max(0, y - r), y1 = Math.min(h, y + r + 1);
+    for(let x = 0; x < w; x++){ const x0 = Math.max(0, x - r), x1 = Math.min(w, x + r + 1);
+      o[y * w + x] = (I[y1 * (w + 1) + x1] - I[y0 * (w + 1) + x1] - I[y1 * (w + 1) + x0] + I[y0 * (w + 1) + x0]) / ((x1 - x0) * (y1 - y0)); } }
+  return o;
+}
+function highPass(a, w, h, r){ const m = boxMean(a, w, h, r), o = new Float32Array(w * h); for(let i = 0; i < o.length; i++) o[i] = a[i] - m[i]; return o; }
+function half(a, w, h){              // 2× smaller, by averaging
+  const W = w >> 1, H = h >> 1, o = new Float32Array(W * H);
+  for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){ const i = 2 * y * w + 2 * x; o[y * W + x] = (a[i] + a[i + 1] + a[i + w] + a[i + w + 1]) / 4; }
+  return {a: o, w: W, h: H};
+}
+// best shift s (|s| ≤ lim) so that tile B, placed at D + s relative to tile A, matches A over region R (in A's pixels)
+function matchShift(A, B, w, h, D, R, lim, start = [0, 0]){
+  let best = -Infinity, bs = start;
+  for(let sy = start[1] - lim; sy <= start[1] + lim; sy++) for(let sx = start[0] - lim; sx <= start[0] + lim; sx++){
+    const ox = Math.round(D[0] + sx), oy = Math.round(D[1] + sy);
+    let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
+    for(let y = R.y0; y < R.y1; y++){
+      const by = y - oy; if(by < 0 || by >= h) continue;
+      for(let x = R.x0; x < R.x1; x++){
+        const bx = x - ox; if(bx < 0 || bx >= w) continue;
+        const va = A[y * w + x], vb = B[by * w + bx];
+        n++; sa += va; sb += vb; saa += va * va; sbb += vb * vb; sab += va * vb;
+      }
+    }
+    if(n < 64) continue;
+    const den = (saa - sa * sa / n) * (sbb - sb * sb / n);
+    if(den <= 1e-12) continue;
+    const v = (sab - sa * sb / n) / Math.sqrt(den);
+    if(v > best){ best = v; bs = [sx, sy]; }
+  }
+  return {s: bs, score: best};
+}
+function stitchTiles(layers){
+  const n = layers.length, {w, h, bin} = layers[0].img, g0 = layers[0].geo, Rt = transpose(g0.R);
+  // nominal tile centres in the first tile's binned pixel frame
+  const nom = layers.map(l => { const d = mul(Rt, [l.geo.S[0] - g0.S[0], l.geo.S[1] - g0.S[1]]); return [w / 2 + d[0] / (g0.ps * bin), h / 2 + d[1] / (g0.ps * bin)]; });
+  const hp = layers.map(l => highPass(l.img.data, w, h, 6));
+  const hp2 = hp.map(a => half(a, w, h));
+
+  // 1. pairwise matches of neighbouring tiles
+  const cons = [];
+  for(let i = 0; i < n; i++) for(let j = i + 1; j < n; j++){
+    const D = [nom[j][0] - nom[i][0], nom[j][1] - nom[i][1]];
+    const ow = w - Math.abs(D[0]), oh = h - Math.abs(D[1]);
+    if(ow < 16 || oh < 16 || !(ow >= 0.5 * w || oh >= 0.5 * h)) continue;     // side neighbours only
+    const narrow = Math.min(ow, oh), lim = Math.max(4, Math.min(40, Math.round(0.4 * narrow)));
+    // overlap in A's pixels, shrunk by the search range so the region stays inside B
+    const R = {x0: Math.max(0, Math.round(D[0])), x1: Math.min(w, Math.round(D[0]) + w), y0: Math.max(0, Math.round(D[1])), y1: Math.min(h, Math.round(D[1]) + h)};
+    const c = matchShift(hp2[i].a, hp2[j].a, hp2[i].w, hp2[i].h, [D[0] / 2, D[1] / 2],
+                         {x0: R.x0 >> 1, x1: R.x1 >> 1, y0: R.y0 >> 1, y1: R.y1 >> 1}, Math.ceil(lim / 2));
+    const f = matchShift(hp[i], hp[j], w, h, D, R, 2, [c.s[0] * 2, c.s[1] * 2]);
+    const atEdge = Math.abs(f.s[0]) >= lim || Math.abs(f.s[1]) >= lim;
+    cons.push({i, j, D, t: [D[0] + f.s[0], D[1] + f.s[1]], score: f.score, ok: f.score > 0.2 && !atEdge});
+  }
+  // least-squares positions (Gauss-Seidel); failed matches keep the nominal offset with a small weight
+  const solve = (skip, iters) => {
+    const q = nom.map(v => v.slice()), adj = nom.map(() => []);
+    for(const c of cons){
+      if(c === skip) continue;
+      const t = c.ok ? c.t : c.D, wt = c.ok ? 1 : 0.02;
+      adj[c.i].push({j: c.j, t: [-t[0], -t[1]], wt}); adj[c.j].push({j: c.i, t, wt});
+    }
+    for(let it = 0; it < iters; it++) for(let i = 0; i < n; i++){
+      let sx = 0, sy = 0, sw = 0;
+      for(const a of adj[i]){ sx += a.wt * (q[a.j][0] + a.t[0]); sy += a.wt * (q[a.j][1] + a.t[1]); sw += a.wt; }
+      if(sw > 0){ q[i][0] = sx / sw; q[i][1] = sy / sw; }
+    }
+    return q;
+  };
+  let pos = solve(null, 300);
+  for(let round = 0; round < 6; round++){          // drop the match that disagrees most with the others
+    const deg = nom.map(() => 0); for(const c of cons) if(c.ok){ deg[c.i]++; deg[c.j]++; }
+    let worst = null, wr = 0;
+    for(const c of cons){
+      if(!c.ok || deg[c.i] < 2 || deg[c.j] < 2) continue;
+      const q = solve(c, 120), r = Math.hypot(q[c.j][0] - q[c.i][0] - c.t[0], q[c.j][1] - q[c.i][1] - c.t[1]);
+      if(r > wr){ wr = r; worst = c; }
+    }
+    if(!worst || wr <= 3) break;
+    worst.ok = false; pos = solve(null, 300);
+  }
+  // keep the mean position where the stage positions put it
+  const ex = pos.reduce((a, p, i) => a + p[0] - nom[i][0], 0) / n, ey = pos.reduce((a, p, i) => a + p[1] - nom[i][1], 0) / n;
+  pos = pos.map(p => [p[0] - ex, p[1] - ey]);
+  const maxShift = Math.max(0, ...pos.map((p, i) => Math.hypot(p[0] - nom[i][0], p[1] - nom[i][1])));
+
+  // 2. gains from the mean brightness in each overlap
+  const off = pos.map(p => [Math.round(p[0] - w / 2), Math.round(p[1] - h / 2)]);   // top-left of each tile
+  const pairs = [];
+  for(const c of cons){
+    const dx = off[c.j][0] - off[c.i][0], dy = off[c.j][1] - off[c.i][1];
+    const x0 = Math.max(0, dx), x1 = Math.min(w, dx + w), y0 = Math.max(0, dy), y1 = Math.min(h, dy + h);
+    if(x1 - x0 < 4 || y1 - y0 < 4) continue;
+    let ma = 0, mb = 0, k = 0;
+    const A = layers[c.i].img.data, B = layers[c.j].img.data;
+    for(let y = y0; y < y1; y += 2) for(let x = x0; x < x1; x += 2){ ma += A[y * w + x]; mb += B[(y - dy) * w + (x - dx)]; k++; }
+    pairs.push({i: c.i, j: c.j, ma: ma / k, mb: mb / k});
+  }
+  const positive = pairs.length && pairs.every(p => p.ma > 0 && p.mb > 0);
+  // multiplicative when the data are positive counts, otherwise additive offsets
+  const val = pairs.map(p => positive ? Math.log(p.ma / p.mb) : p.ma - p.mb);   // want x_j − x_i = val
+  const x = new Float64Array(n);
+  for(let it = 0; it < 300; it++) for(let i = 0; i < n; i++){
+    let s = 0, k = 0;
+    pairs.forEach((p, m) => { if(p.j === i){ s += x[p.i] + val[m]; k++; } else if(p.i === i){ s += x[p.j] - val[m]; k++; } });
+    if(k) x[i] = s / k;
+  }
+  const xm = x.reduce((a, v) => a + v, 0) / n;
+  const gainOf = i => positive ? Math.exp(x[i] - xm) : 1, addOf = i => positive ? 0 : x[i] - xm;
+
+  // 3. blend: weighted average, each tile's weight ramps from its edges over the overlap width
+  let narrowest = Infinity;
+  for(const c of cons){ const ow = w - Math.abs(off[c.j][0] - off[c.i][0]), oh = h - Math.abs(off[c.j][1] - off[c.i][1]); narrowest = Math.min(narrowest, Math.min(ow, oh)); }
+  const F = Number.isFinite(narrowest) ? Math.max(2, 0.8 * narrowest) : 2;
+  const X0 = Math.min(...off.map(o => o[0])), Y0 = Math.min(...off.map(o => o[1]));
+  const W = Math.max(...off.map(o => o[0])) + w - X0, H = Math.max(...off.map(o => o[1])) + h - Y0;
+  const acc = new Float32Array(W * H), wsum = new Float32Array(W * H);
+  const rx = new Float32Array(w), ry = new Float32Array(h);
+  for(let x = 0; x < w; x++) rx[x] = Math.min(1, (x + 0.5) / F, (w - x - 0.5) / F);
+  for(let y = 0; y < h; y++) ry[y] = Math.min(1, (y + 0.5) / F, (h - y - 0.5) / F);
+  layers.forEach((l, i) => {
+    const d = l.img.data, gn = gainOf(i), ad = addOf(i), ox = off[i][0] - X0, oy = off[i][1] - Y0;
+    for(let y = 0; y < h; y++){
+      const row = (y + oy) * W + ox, wy = ry[y];
+      for(let x = 0; x < w; x++){ const wt = wy * rx[x], k = row + x; acc[k] += wt * (d[y * w + x] * gn + ad); wsum[k] += wt; }
+    }
+  });
+  let fill = Infinity;
+  for(let k = 0; k < acc.length; k++) if(wsum[k] > 0){ acc[k] /= wsum[k]; if(acc[k] < fill) fill = acc[k]; }
+  for(let k = 0; k < acc.length; k++) if(wsum[k] === 0) acc[k] = fill;          // corners not covered by any tile
+
+  // geometry of the blended image: its centre, in the first tile's frame, mapped to the stage
+  const cx = X0 + W / 2, cy = Y0 + H / 2, d = mul(g0.R, [(cx - w / 2) * g0.ps * bin, (cy - h / 2) * g0.ps * bin]);
+  const geo = {S: [g0.S[0] + d[0], g0.S[1] + d[1]], R: g0.R, ps: g0.ps, nx: W * bin, ny: H * bin};
+  const gains = layers.map((_, i) => gainOf(i));
+  return {
+    layer: {img: {data: acc, w: W, h: H, bin, header: layers[0].img.header}, geo},
+    bin, feather: F,
+    align: {good: cons.filter(c => c.ok).length, total: cons.length, maxShift,
+            shifts: pos.map((p, i) => [(p[0] - nom[i][0]) * bin, (p[1] - nom[i][1]) * bin])},   // full-size px, first tile's frame
+    gain: {kind: positive ? "multiplicative" : "additive", min: Math.min(...gains), max: Math.max(...gains)},
+  };
+}
+
+async function tilesScene(map, id, seamless = true){
   if(!map) throw new Error("No search map selected.");
   if(!map.tiles.length) throw new Error(`${map.name} has no Tile_*.mrc files.`);
   const lay = await tileLayout(map);
@@ -754,6 +913,13 @@ async function tilesScene(map, id){
   if(stale(id)) return null;
   const smXml = map.names.has("SearchMap.xml") ? await tryXml(join(map.dir, "SearchMap.xml")) : null;
   const t0 = lay.tiles[0], scaled = Number.isFinite(t0.px.m), Q = transpose(t0.geo.R);
+  let stitch = null;
+  if(seamless && layers.length > 1){
+    status(`${map.name}: aligning tile overlaps…`);
+    await new Promise(r => setTimeout(r));          // let the status show
+    stitch = stitchTiles(layers);
+    if(stale(id)) return null;
+  }
   // size of the stitched area, in the view frame
   const pts = lay.tiles.flatMap(t => corners(t.geo).map(c => mul(Q, c)));
   const W = Math.max(...pts.map(p => p[0])) - Math.min(...pts.map(p => p[0])), H = Math.max(...pts.map(p => p[1])) - Math.min(...pts.map(p => p[1]));
@@ -761,10 +927,16 @@ async function tilesScene(map, id){
   if(layers[0].img.bin > 1) rows.push(["Shown at", `bin ${layers[0].img.bin}`]);
   rows.push(["Pixel Size", scaled ? `${fmtNum(t0.px.m * 1e9, 2)} nm${t0.px.from === "mrc" ? " (MRC header)" : ""}` : '<span class="warn">unknown</span>']);
   if(scaled) rows.push(["Field Of View", `${fmtNum(W, 2)} × ${fmtNum(H, 2)} µm`]);
-  rows.push(...stageRows(smXml?.info || t0.xml?.info), ...statRows(layers.map(l => l.img)));
-  status(`${map.name}: ${lay.tiles.length} tiles stitched${lay.fromStage ? " from their stage positions" : " as a grid"}.`);
+  if(stitch){
+    const a = stitch.align;
+    rows.push(["Alignment", a.total ? `${a.good} / ${a.total} overlaps matched, largest correction ${fmtNum(a.maxShift * stitch.bin, 1)} px` : "no overlaps found"]);
+    rows.push(["Tile gains", `${fmtNum(stitch.gain.min, 3)} – ${fmtNum(stitch.gain.max, 3)} (${stitch.gain.kind})`]);
+    rows.push(["Blending", `${Math.round(stitch.feather * stitch.bin)} px fade across overlaps`]);
+  }
+  rows.push(...stageRows(smXml?.info || t0.xml?.info), ...statRows(stitch ? [stitch.layer.img] : layers.map(l => l.img)));
+  status(`${map.name}: ${lay.tiles.length} tiles ${stitch ? "aligned and blended" : "placed"}${lay.fromStage ? "" : " as a grid"}.`);
   return {
-    kind: "tiles", layers, outlines: [], Q, scaled,
+    kind: "tiles", layers: stitch ? [stitch.layer] : layers, outlines: [], Q, scaled, align: stitch?.align,
     info: {rows, notes: lay.fromStage ? [] : [GRID_NOTE]},
     xmlName: smXml ? "SearchMap.xml" : `${t0.stem}.xml`, xmlRows: (smXml || t0.xml)?.rows || [],
   };
