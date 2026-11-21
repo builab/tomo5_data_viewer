@@ -56,6 +56,14 @@ header h1 small{font:400 12px var(--font-mono);color:var(--muted);margin-left:8p
 .spacer{flex:1}
 #status{font-size:12.5px;color:var(--muted);max-width:52ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #status.err{color:var(--err)}
+.editbar{display:inline-flex;align-items:center;gap:6px;margin-left:6px;padding-left:12px;border-left:1px solid var(--line)}
+.editbadge{font:600 11px var(--font-mono);letter-spacing:.08em;color:#1a1300;background:#f0b429;border-radius:4px;padding:3px 6px}
+#saveEdits.dirty{border-color:#f0b429;color:#f0b429}
+.stars.rate span[data-r]{cursor:pointer}
+.stars.rate span[data-r]:hover{color:#ffe08a}
+th.sortable{cursor:pointer}
+th.sortable.on{color:#f5c518}
+.edithint{font-size:11.5px;color:#f0b429;white-space:nowrap}
 .tiltinfo{font-size:12px;color:var(--muted);align-self:center;max-width:28ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tiltinfo.ok{color:var(--accent)}
 .credit{font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap;border-left:1px solid var(--line);padding-left:14px}
@@ -192,10 +200,15 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 <body>
 <div class="app">
   <header>
-    <h1>Tomo5 Data Viewer<small>v0.5</small></h1>
+    <h1>Tomo5 Data Viewer<small>v0.6</small></h1>
     <div class="opens">
       <button class="btn primary" id="openServer" hidden title="The session folder: Session.dm, Atlas/, SearchMaps/, Batch/, Thumbnails/">Open Session Data…</button>
       <button class="btn" id="openTilt" disabled hidden title="The folder with the tilt series Position_N[_k].mrc and their .mdoc files">Tilt Series Folder…</button>
+      <span class="editbar" id="editBar" hidden>
+        <span class="editbadge" title="Started with --edit (experimental). Edits are saved to the session's Batch/Edit folder; Tomo5's files are never changed.">EDIT</span>
+        <button class="btn" id="loadEdits" disabled title="Load the edits saved in Batch/Edit">Load Session</button>
+        <button class="btn" id="saveEdits" disabled title="Save edits to Batch/Edit (the previous save is kept in Batch/Edit/history)">Save Session</button>
+      </span>
       <span class="tiltinfo" id="tiltInfo"></span>
 
     </div>
@@ -231,6 +244,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
         <option value="stitched">SearchMap.mrc (stitched by Tomo5)</option>
       </select>
       <select id="secSel" hidden title="Tilt-series section"></select>
+      <span class="edithint" id="editHint" hidden>Edit: drag sub-positions 2+ · right-click to add</span>
       <span class="title" id="subTitle"></span>
       <button class="nav" id="nextMap" title="Next" disabled>›</button>
     </div>
@@ -544,6 +558,8 @@ const STATE = {task: "searchMaps", tab: "atlas", sel: -1, pos: -1, area: 1, z: {
 const MAP_RE = /^SearchMap_(\d+)_(\d{8}_\d{6})$/i;
 
 async function openSession(src, path, want = {}){
+  if(EDIT_STATE.dirty && !confirm("Discard unsaved edits?")) return;
+  setDirty(false); EDIT_STATE.loaded = false;
   SRC = src; SESSION = null; CACHE.clear();
   $("#tiltInfo").textContent = ""; $("#openTilt").disabled = true;
   STATE.tab = "atlas"; STATE.sel = -1; STATE.pos = -1; STATE.task = want.task === "batch" ? "batch" : "searchMaps";
@@ -588,7 +604,11 @@ async function openSession(src, path, want = {}){
         const bl = await src.list(join(path, "Batch"));
         const lf = bl.files.find(f => /^BatchPositions?List\.xml$/i.test(f.name));
         let list = null;
-        if(lf){ try{ list = parseBatchList(await src.text(join(path, `Batch/${lf.name}`))); }catch(e){ console.warn("BatchPositionsList", e); } }
+        if(lf){ try{ s.batchListText = await src.text(join(path, `Batch/${lf.name}`)); s.batchListName = lf.name; list = parseBatchList(s.batchListText); }catch(e){ console.warn("BatchPositionsList", e); } }
+        // edits saved by the viewer (--edit): <session>/<editDir>/edit_session.json
+        if(SERVER?.edit){
+          try{ const t = await src.text(join(path, `${SERVER.editDir}/edit_session.json`)); s.editSaved = JSON.parse(t); }catch{ s.editSaved = null; }
+        }
         const names = fl => fl.filter(f => f.size !== 0).map(f => f.name);      // an empty file is not data
         s.positions = findPositions(names(bl.files), names(top.files), join(path, "Batch"), path, list);
         s.batchList = !!list;
@@ -610,6 +630,10 @@ async function openSession(src, path, want = {}){
     if(!s.atlas && !s.maps.length && !s.positions.length){ status("No Atlas_*.xml, SearchMaps/ or Batch/ found in this folder.", true); return; }
     status(`${s.info?.name ? `${s.info.name}: ` : ""}${s.maps.length} search map${s.maps.length === 1 ? "" : "s"}, ${s.positions.length} batch position${s.positions.length === 1 ? "" : "s"}${s.atlas ? ", atlas" : ""} found.`);
     $("#openTilt").disabled = false;
+    if(SERVER?.edit){
+      $("#saveEdits").disabled = false; $("#loadEdits").disabled = !s.editSaved;
+      if(s.editSaved) setTimeout(() => status(`Saved edits found (${(s.editSaved.saved || "").replace("T", " ").slice(0, 16)}). Click Load Session to continue them.`), 1500);
+    }
     if(want.tilt) await setTiltFolder(want.tilt, true);
     fillTilts();
 
@@ -749,7 +773,7 @@ async function fillTilts(){
       if(m.names.has("SearchMap.dm")){
         const dm = await tryXml(join(m.dir, "SearchMap.dm"));
         const r = dm?.rows.find(([p]) => /(^|\/)StarRating$/i.test(p));
-        if(r) m.rating = Math.max(0, Math.min(5, parseInt(r[1]) || 0));
+        if(r && !m.ratingChanged){ m.rating = Math.max(0, Math.min(5, parseInt(r[1]) || 0)); m.ratingOriginal = m.rating; }
       }
     }),
     ...s.positions.map(async p => {
@@ -825,9 +849,13 @@ function areaButtons(p, selRow){
 }
 
 // 5 stars: yellow for the rating, empty for the rest (no rating = 5 empty stars)
-function stars(n){
+function stars(n, rateMap = null){
   n = Number.isFinite(n) ? n : 0;
-  return `<span class="stars" title="${n ? `Rated ${n} of 5` : "Not rated"}">${"★".repeat(n)}<span class="off">${"☆".repeat(5 - n)}</span></span>`;
+  if(rateMap == null)
+    return `<span class="stars" title="${n ? `Rated ${n} of 5` : "Not rated"}">${"★".repeat(n)}<span class="off">${"☆".repeat(5 - n)}</span></span>`;
+  // edit mode: each star sets the rating; clicking the current rating clears it
+  return `<span class="stars rate" data-map="${rateMap}" title="Click to rate (click the same star again to clear)">` +
+    [1, 2, 3, 4, 5].map(r => `<span data-r="${r}"${r > n ? ' class="off"' : ""}>${r <= n ? "★" : "☆"}</span>`).join("") + "</span>";
 }
 // the search map whose footprint holds a position (for the Overview / Search Map tabs)
 async function positionStage(p){
@@ -880,16 +908,22 @@ function renderTable(){
   const tb = $("#mapTable tbody"), s = SESSION, batch = STATE.task === "batch";
   const list = s ? (batch ? s.positions : s.maps) : [];
   const tilt = v => Number.isFinite(v) ? Math.round(v) : "–";
+  const so = STATE.sortRating ? " on" : "";
   $("#tableHead").innerHTML = batch
-    ? '<tr><th>Id</th><th title="Tilt angle">∠</th><th>Status</th><th>Name</th><th title="Exposure areas (acquired / planned)">Areas</th></tr>'
-    : '<tr><th>Id</th><th title="Tilt angle">∠</th><th>Status</th><th>Name</th><th>Rating</th></tr>';
+    ? `<tr><th>Id</th><th title="Tilt angle">∠</th><th>Status</th><th>Name</th><th class="sortable${so}" id="sortRating" title="Rating of the search map holding the position; click to sort highest first">★</th><th title="Exposure areas (acquired / planned)">Areas</th></tr>`
+    : `<tr><th>Id</th><th title="Tilt angle">∠</th><th>Status</th><th>Name</th><th class="sortable${so}" id="sortRating" title="Click to sort highest rated first">Rating</th></tr>`;
   $("#mapEmpty").hidden = list.length > 0;
   $("#mapEmpty").textContent = !s ? "No session open." : batch ? "No batch positions in this session." : "No search maps in this session.";
   const sel = batch ? STATE.pos : STATE.sel;
-  tb.innerHTML = list.map((m, i) => `<tr data-i="${i}" class="${i === sel ? "sel" : ""}">
+  // optional order: highest rating first (positions: by the rating of their search map)
+  const rating = m => batch ? (m.map >= 0 ? s.maps[m.map]?.rating || 0 : 0) : m.rating || 0;
+  const order = list.map((m, i) => i);
+  if(STATE.sortRating) order.sort((a, b) => rating(list[b]) - rating(list[a]) || a - b);
+  const rate = canRate() && !batch;
+  tb.innerHTML = order.map(i => { const m = list[i]; return `<tr data-i="${i}" class="${i === sel ? "sel" : ""}">
     <td>${m.id}</td><td>${tilt(m.tilt)}</td>
-    <td class="${m.status.startsWith("Acquired") ? "st-ok" : ""}">${m.status}</td><td>${esc(m.name)}</td>
-    <td>${batch ? areaButtons(m, i === sel) : stars(m.rating)}</td></tr>`).join("");
+    <td class="${m.status.startsWith("Acquired") ? "st-ok" : ""}">${m.status}</td><td>${esc(m.name)}${m.edited ? ' <span class="edithint" title="Edited">✎</span>' : ""}</td>
+    ${batch ? `<td>${rating(m) ? `<span class="stars">${rating(m)}★</span>` : "–"}</td><td>${areaButtons(m, i === sel)}</td>` : `<td>${stars(m.rating, rate ? i : null)}</td>`}</tr>`; }).join("");
   const row = tb.querySelector("tr.sel"); if(row) row.scrollIntoView({block: "nearest"});
 }
 
@@ -942,7 +976,8 @@ function updateChrome(){
   $("#subTitle").innerHTML = !s ? "" : STATE.tab === "atlas" ? (s.atlas ? `<b>${esc(s.atlas.stem)}</b>` : "")
     : STATE.tab === "search" ? (pos ? posTitle(pos) : "")
     : STATE.tab === "exposure" ? (pos ? `<b>${pos.id}.${STATE.area} : ${esc(ex ? ex.path.split("/").pop() : pos.name)}</b><small>${ex ? ex.kind : ""}</small>` : "")
-    : map ? `${pos ? `<small>${esc(pos.name)} ·</small>` : ""}<b>${map.id} : ${esc(map.name)}</b>${stars(map.rating)}` : "";
+    : map ? `${pos ? `<small>${esc(pos.name)} ·</small>` : ""}<b>${map.id} : ${esc(map.name)}</b>${stars(map.rating, canRate() && STATE.tab !== "atlas" ? STATE.sel : null)}` : "";
+  $("#editHint").hidden = !canEditAreas();
   if(s && s.path && SRC.kind === "server")
     history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}${batch && pos ? `&task=batch&pos=${pos.id}&area=${STATE.area}` : ""}${s.tilt ? `&tilt=${encodeURIComponent(s.tilt.path)}` : ""}&tab=${STATE.tab}`);
 }
@@ -1436,6 +1471,7 @@ function renderInfo(){
     $("#info").insertAdjacentHTML("beforeend", `<dt>Camera Field</dt><dd>${fmtNum(o.cam, 2)} µm <span class="ovsrc">(${esc(o.camFrom)})</span></dd>` +
       `<dt>Beam (drawn)</dt><dd>${fmtNum(o.beam, 2)} µm <span class="ovsrc">(${fmtNum(o.beamX, 1)} × camera; not stored by Tomo5)</span></dd>`);
   }
+  $("#editHint").hidden = !canEditAreas();
   $("#ovSet").hidden = !(SESSION?.positions.length && ["search", "overview", "tiles", "searchmap"].includes(sc.kind));
   renderMeta();
 }
@@ -1706,8 +1742,8 @@ function drawPositionAreas(ctx, p, selected, axisLine){
     const c = toScreen(areaStage(p, a.off)), first = a.k === 1;
     const chosen = selected && STATE.task === "batch" && a.k === STATE.area;
     ring(c, AREA.exp, a.mrc ? 0.32 : 0.18, chosen ? 2.8 : first && selected ? 2.2 : 1.4);
-    ctx.fillStyle = chosen ? "#ffffff" : AREA.exp; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
-    ctx.fillText(`${p.id}.${a.k}`, c[0] + beam * 0.55, c[1] - beam * 0.3); ctx.shadowBlur = 0;
+    ctx.fillStyle = a.added || a.moved ? "#f0b429" : chosen ? "#ffffff" : AREA.exp; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
+    ctx.fillText(`${p.id}.${a.k}${a.added ? " +" : a.moved ? " *" : ""}`, c[0] + beam * 0.55, c[1] - beam * 0.3); ctx.shadowBlur = 0;
   }
   if(selected){                                   // red cross on N.1
     const r = Math.max(6, cam * 0.5);
@@ -1790,7 +1826,17 @@ $("#zoomOut").addEventListener("click", () => zoomTo(V.s / 1.5));
 $("#zoom").addEventListener("input", e => zoomTo(V.fitS * 2 ** (Z_MIN + e.target.value / 1000 * Z_SPAN)));
 
 let drag = null;
-view.addEventListener("pointerdown", e => { if(!SCENE || e.button === 2) return; drag = {x: e.clientX, y: e.clientY, tx: V.tx, ty: V.ty}; view.setPointerCapture(e.pointerId); view.classList.add("drag"); });
+view.addEventListener("pointerdown", e => {
+  if(!SCENE || e.button === 2) return;
+  const r = view.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const grab = editableAreaAt(sx, sy);
+  if(grab){                                       // edit mode: move a sub-position (2 and up)
+    const st = screenToStage(sx, sy), c = areaStage(grab.p, grab.a.off);
+    areaDrag = {p: grab.p, a: grab.a, d: [c[0] - st[0], c[1] - st[1]], moved: false};
+    view.setPointerCapture(e.pointerId); return;
+  }
+  drag = {x: e.clientX, y: e.clientY, tx: V.tx, ty: V.ty}; view.setPointerCapture(e.pointerId); view.classList.add("drag");
+});
 view.addEventListener("click", e => {
   if(!SCENE?.marks || (drag0 && Math.hypot(e.clientX - drag0.x, e.clientY - drag0.y) > 4)) return;
   const r = view.getBoundingClientRect(), m = markAt(e.clientX - r.left, e.clientY - r.top);
@@ -1802,21 +1848,195 @@ async function selectMark(m){
   await select(m.i); renderTable(); updateChrome(); draw();
 }
 view.addEventListener("pointermove", e => {
+  if(areaDrag){
+    const r = view.getBoundingClientRect(), st = screenToStage(e.clientX - r.left, e.clientY - r.top), p = areaDrag.p;
+    const c = [st[0] + areaDrag.d[0], st[1] + areaDrag.d[1]];
+    areaDrag.a.off = [p.plan.stage[0] - c[0], p.plan.stage[1] - c[1]];      // area = StagePosition − offset
+    if(!areaDrag.a.added) areaDrag.a.moved = true;
+    areaDrag.moved = true; draw(); return;
+  }
   if(drag){ V.tx = drag.tx + e.clientX - drag.x; V.ty = drag.ty + e.clientY - drag.y; draw(); }
   if(!SCENE) return;
   const r = view.getBoundingClientRect();
-  const over = !drag && SCENE.marks && markAt(e.clientX - r.left, e.clientY - r.top);
-  view.style.cursor = over ? "pointer" : "";
-  view.title = !over ? "" : over.kind === "pos" ? `${over.pos.name} (${over.pos.status}): click to select, double-click to open its Search image`
-    : `${over.map.name} (${over.map.status}): click to select, double-click to open its overview`;
+  if(!drag && editableAreaAt(e.clientX - r.left, e.clientY - r.top)){ view.style.cursor = "move"; view.title = "Drag to move this sub-position"; }
+  else{
+    const over = !drag && SCENE.marks && markAt(e.clientX - r.left, e.clientY - r.top);
+    view.style.cursor = over ? "pointer" : "";
+    view.title = !over ? "" : over.kind === "pos" ? `${over.pos.name} (${over.pos.status}): click to select, double-click to open its Search image`
+      : `${over.map.name} (${over.map.status}): click to select, double-click to open its overview`;
+  }
   const st = mul(transpose(SCENE.Q), [(e.clientX - r.left - V.tx) / V.s, (e.clientY - r.top - V.ty) / V.s]);
   $("#readout").textContent = SCENE.scaled ? `stage X ${fmtNum(st[0], 2)}  Y ${fmtNum(st[1], 2)} µm` : "";
 });
 let drag0 = null;       // where the last drag started, to tell a click from a pan
-const endDrag = () => { drag0 = drag; drag = null; view.classList.remove("drag"); };
+let areaDrag = null;
+const endDrag = () => {
+  if(areaDrag){ if(areaDrag.moved){ markEdited(areaDrag.p); renderInfo(); } areaDrag = null; drag0 = {x: -1e9, y: -1e9}; return; }
+  drag0 = drag; drag = null; view.classList.remove("drag");
+};
 view.addEventListener("pointerup", endDrag); view.addEventListener("pointercancel", endDrag);
 view.addEventListener("pointerleave", () => { $("#readout").textContent = ""; });
 view.addEventListener("wheel", e => { if(!SCENE) return; e.preventDefault(); const r = view.getBoundingClientRect(); zoomTo(V.s * Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015)), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+/* ------------------------------------------------------------------ edit mode (--edit, experimental)
+   Sub-positions: only in Batch Positions › Search, for the selected position; N.1 is fixed.
+   Ratings: Search Maps, or Batch Positions › Search Map. Saved to <session>/Batch/Edit by the server;
+   Tomo5's own files are never changed. */
+const EDIT_STATE = {dirty: false, loaded: false};
+const canEditAreas = () => !!(SERVER?.edit && SESSION && STATE.task === "batch" && STATE.tab === "search" && SCENE?.kind === "search" && SESSION.positions[STATE.pos]?.plan);
+const canRate = () => !!(SERVER?.edit && SESSION && (STATE.task === "searchMaps" || (STATE.task === "batch" && STATE.tab === "searchmap")));
+const screenToStage = (sx, sy) => mul(transpose(SCENE.Q), [(sx - V.tx) / V.s, (sy - V.ty) / V.s]);
+function editableAreaAt(sx, sy){
+  if(!canEditAreas()) return null;
+  const hit = positionAt(sx, sy);
+  if(!hit || hit.i !== STATE.pos || !(hit.k >= 2)) return null;
+  const p = SESSION.positions[STATE.pos], a = p.areas.find(a => a.k === hit.k);
+  if(!a?.off) return null;
+  if(!a.offOriginal && !a.added) a.offOriginal = a.off.slice();
+  return {p, a};
+}
+function markEdited(p){
+  if(p) p.edited = p.areas.some(a => a.added || a.moved) || !!p.deleted?.length;
+  setDirty(true); renderTable(); updateChrome();
+}
+function setDirty(d){
+  EDIT_STATE.dirty = d;
+  $("#saveEdits").classList.toggle("dirty", d);
+  $("#saveEdits").textContent = d ? "Save Session •" : "Save Session";
+}
+addEventListener("beforeunload", e => { if(EDIT_STATE.dirty){ e.preventDefault(); e.returnValue = ""; } });
+function addArea(p, stage){
+  const k = Math.max(1, ...p.areas.map(a => a.k)) + 1;
+  p.areas.push({k, off: [p.plan.stage[0] - stage[0], p.plan.stage[1] - stage[1]], defocus: p.plan.defocus, exposure: null, mrc: null, mdoc: null, added: true});
+  p.areas.sort((a, b) => a.k - b.k);
+  status(`Added sub-position ${p.id}.${k}. Save Session to keep it.`);
+  markEdited(p); draw();
+}
+function deleteArea(p, a){
+  p.areas = p.areas.filter(x => x !== a);
+  if(STATE.area === a.k) STATE.area = 1;
+  status(`Deleted sub-position ${p.id}.${a.k}.`);
+  markEdited(p); draw();
+}
+function setRating(mi, r){
+  const m = SESSION.maps[mi]; if(!m) return;
+  m.rating = m.rating === r ? 0 : r;
+  m.ratingChanged = m.rating !== (m.ratingOriginal ?? 0);
+  setDirty(true); renderTable(); updateChrome();
+  status(`${m.name}: ${m.rating ? `${m.rating} star${m.rating > 1 ? "s" : ""}` : "not rated"}. Save Session to keep it.`);
+}
+document.addEventListener("click", e => {
+  const st = e.target.closest(".stars.rate span[data-r]"); if(!st || !canRate()) return;
+  e.stopPropagation(); setRating(+st.parentElement.dataset.map, +st.dataset.r);
+}, true);
+document.addEventListener("click", e => {
+  if(!e.target.closest("#sortRating")) return;
+  STATE.sortRating = !STATE.sortRating; renderTable();
+});
+
+// Tomo5-style number, e.g. 2.0356256413833762E-07
+const tomoNum = v => { const t = (+v).toExponential(16).replace(/0+e/, "e").replace(/\.e/, ".0e"); return t.replace(/e([+-])(\d)$/, "E$10$2").replace(/e([+-])(\d\d+)$/, "E$1$2"); };
+/* BatchPositionsList.xml with the edited sub-positions. Text-level edits only: everything else stays
+   byte-for-byte as Tomo5 wrote it. New areas copy the layout of Tomo5's own entries:
+     <ExposureTemplateAreaParameters><Comment /><Defocus>…</Defocus><Name>Position_N_k</Name>
+       <PositionX>…</PositionX><PositionY>…</PositionY></ExposureTemplateAreaParameters>       */
+function editedBatchList(){
+  const s = SESSION, base = s.batchListEditedText || s.batchListText;
+  const setVal = (el, tag, v) => el.replace(new RegExp(`(<${tag}>)[^<]*(</${tag}>)`), `$1${v}$2`);
+  const nl = base.includes("\r\n") ? "\r\n" : "\n";          // keep Tomo5's line endings (CRLF)
+  return base.replace(/<BatchPositionParameters>[\s\S]*?<\/BatchPositionParameters>/g, blk => {
+    const nm = blk.match(/<Name>Position_(\d+)<\/Name>/);
+    const p = nm && s.positions.find(p => p.id === +nm[1]);
+    if(!p || !p.plan || !(p.edited || p.fromEdit)) return blk;
+    const box = blk.match(/([ \t]*)<AdditionalExposureTemplateAreas\s*\/>|([ \t]*)<AdditionalExposureTemplateAreas>([\s\S]*?)<\/AdditionalExposureTemplateAreas>/);
+    const ind = box ? (box[1] ?? box[2] ?? "") : "      ";
+    const existing = new Map();
+    for(const el of (box?.[3] || "").match(/<ExposureTemplateAreaParameters>[\s\S]*?<\/ExposureTemplateAreaParameters>/g) || []){
+      const n = el.match(/<Name>([^<]*)<\/Name>/); if(n) existing.set(n[1], el);
+    }
+    const items = p.areas.filter(a => a.k >= 2 && a.off).map(a => {
+      const name = `Position_${p.id}_${a.k}`, x = tomoNum(a.off[0] * 1e-6), y = tomoNum(a.off[1] * 1e-6);
+      const el = existing.get(name);
+      if(el) return setVal(setVal(el, "PositionX", x), "PositionY", y);
+      const i2 = ind + "    ";
+      return `<ExposureTemplateAreaParameters>${nl}${i2}<Comment />${nl}${i2}<Defocus>${a.defocus ?? p.plan.defocus}</Defocus>${nl}${i2}<Name>${name}</Name>${nl}` +
+             `${i2}<PositionX>${x}</PositionX>${nl}${i2}<PositionY>${y}</PositionY>${nl}${ind}  </ExposureTemplateAreaParameters>`;
+    });
+    const out = items.length ? `${ind}<AdditionalExposureTemplateAreas>${items.map(e => `${nl}${ind}  ${e}`).join("")}${nl}${ind}</AdditionalExposureTemplateAreas>`
+                             : `${ind}<AdditionalExposureTemplateAreas />`;
+    return box ? blk.replace(box[0], out) : blk.replace(/(<BatchPositionParameters>\r?\n)/, `$1${out}${nl}`);
+  });
+}
+// SearchMap.dm with the new rating: only the StarRating value changes
+async function editedDm(m){
+  const base = m.dmEditedText || await SRC.text(join(m.dir, "SearchMap.dm"));
+  const re = /(<(?:[\w.-]+:)?StarRating>)\s*\d*\s*(<\/(?:[\w.-]+:)?StarRating>)/;
+  if(!re.test(base)) throw new Error(`${m.name}: no StarRating in SearchMap.dm`);
+  return base.replace(re, `$1${m.rating || 0}$2`);
+}
+async function saveEdits(){
+  const s = SESSION; if(!s) return;
+  const files = [], changed = s.positions.filter(p => p.edited || p.fromEdit);
+  try{
+    if(changed.length && s.batchListText) files.push({path: "BatchPositionsList.xml", content: editedBatchList()});
+    const rated = s.maps.filter(m => m.ratingChanged && m.names.has("SearchMap.dm"));
+    for(const m of rated) files.push({path: `SearchMaps/${m.dir.split("/").pop()}/SearchMap.dm`, content: await editedDm(m)});
+    const manifest = {
+      tool: "tomo5_data_viewer", version: SERVER.version, saved: new Date().toISOString(), session: s.path,
+      source: {batchList: s.batchListName ? `Batch/${s.batchListName}` : null},
+      positionsEdited: changed.filter(p => p.edited).map(p => p.name),
+      subPositions: Object.fromEntries(changed.filter(p => p.edited).map(p => [p.name, p.areas.filter(a => a.k >= 2).map(a => ({k: a.k, added: !!a.added, moved: !!a.moved, offsetUm: a.off}))])),
+      ratings: Object.fromEntries(rated.map(m => [m.name, m.rating])),
+    };
+    files.push({path: "edit_session.json", content: JSON.stringify(manifest, null, 2)});
+    const r = await fetch("api/save", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({session: s.path, files})});
+    const j = await r.json(); if(!r.ok) throw new Error(j.error || r.statusText);
+    s.editSaved = manifest; setDirty(false); $("#loadEdits").disabled = false;
+    status(`Saved ${j.saved.length} file(s) to ${j.editDir}${j.history ? ` (previous save kept in ${j.history})` : ""}.`);
+  }catch(e){ console.error(e); status(`Save failed: ${e.message}`, true); }
+}
+async function loadEdits(){
+  const s = SESSION; if(!s) return;
+  if(EDIT_STATE.dirty && !confirm("Discard unsaved edits and load the saved session?")) return;
+  const dir = join(s.path, SERVER.editDir);
+  try{
+    const listing = await SRC.list(dir);
+    let n = 0;
+    if(listing.files.some(f => f.name === "BatchPositionsList.xml")){
+      const text = await SRC.text(join(dir, "BatchPositionsList.xml")), list = parseBatchList(text);
+      s.batchListEditedText = text;
+      for(const [id, plan] of list || []){
+        const p = s.positions.find(p => p.id === id); if(!p || !p.plan) continue;
+        const files = new Map(p.areas.map(a => [a.k, a]));
+        const orig = new Map((p.planOriginal || p.plan).areas.map(a => [a.k, a.off]));
+        p.planOriginal = p.planOriginal || p.plan;
+        p.areas = plan.areas.map(a => {
+          const f = files.get(a.k) || {k: a.k, exposure: null, mrc: null, mdoc: null};
+          const o = orig.get(a.k);
+          return {...f, off: a.off, defocus: a.defocus, added: !o, moved: !!o && Math.hypot(o[0] - a.off[0], o[1] - a.off[1]) > 1e-4, offOriginal: o ? o.slice() : undefined};
+        });
+        p.plan = {...p.plan, areas: plan.areas};
+        p.fromEdit = true; p.edited = p.areas.some(a => a.added || a.moved);
+        positionStatus(p); if(p.edited) n++;
+      }
+    }
+    let r = 0;
+    const sm = listing.dirs.some(d => d.name === "SearchMaps") ? await SRC.list(join(dir, "SearchMaps")) : {dirs: []};
+    for(const d of sm.dirs){
+      const m = s.maps.find(m => m.dir.split("/").pop() === d.name); if(!m) continue;
+      try{
+        const text = await SRC.text(join(dir, `SearchMaps/${d.name}/SearchMap.dm`));
+        const v = flattenXml(text).find(([p]) => /(^|\/)StarRating$/i.test(p));
+        if(v){ m.dmEditedText = text; m.rating = Math.max(0, Math.min(5, parseInt(v[1]) || 0)); m.ratingChanged = m.rating !== (m.ratingOriginal ?? 0); r++; }
+      }catch{}
+    }
+    EDIT_STATE.loaded = true; setDirty(false);
+    renderTasks(); renderTable(); updateChrome(); await loadScene();
+    status(`Loaded saved edits${s.editSaved?.saved ? ` from ${s.editSaved.saved.replace("T", " ").slice(0, 16)}` : ""}: ${n} position(s), ${r} rating(s).`);
+  }catch(e){ console.error(e); status(`Load failed: ${e.message}`, true); }
+}
+$("#saveEdits").addEventListener("click", saveEdits);
+$("#loadEdits").addEventListener("click", loadEdits);
+
 /* ------------------------------------------------------------------ right-click zoom menu
    Levels: Atlas › Overview › Search Map › Search › Exposure. Zoom in can jump to any deeper level
    for the item under the cursor; zoom out goes exactly one level up (like the previous tab).
@@ -1928,6 +2148,17 @@ function menuItems(sx, sy){
         const ex = exposureOf(p, a.k);
         item(`Exposure ${p.id}.${a.k}`, () => navigate({tab: "exposure", pos: STATE.pos, area: a.k}), {disabled: !ex, hint: ex ? ex.kind : "no image"});
       }
+    }
+  }
+  // edit mode (Batch Positions › Search, selected position): add / delete sub-positions
+  if(canEditAreas() && stage){
+    const p = SESSION.positions[STATE.pos], next = Math.max(1, ...p.areas.map(a => a.k)) + 1;
+    head("Edit");
+    item(`Add sub-position ${p.id}.${next} here`, () => { closeMenu(); addArea(p, stage); });
+    if(hit && hit.k >= 2){
+      const a = p.areas.find(a => a.k === hit.k);
+      if(a?.added) item(`Delete sub-position ${p.id}.${hit.k}`, () => { closeMenu(); deleteArea(p, a); });
+      else if(a?.moved) item(`Undo move of ${p.id}.${hit.k}`, () => { closeMenu(); a.off = a.offOriginal.slice(); a.moved = false; markEdited(p); draw(); });
     }
   }
   // zoom out: exactly one level up
@@ -2077,6 +2308,7 @@ $("#openTilt").addEventListener("click", () => { if(SESSION) openPicker("tilt");
     if(r.ok){
       SERVER = await r.json();
       $("#openServer").hidden = false; $("#openTilt").hidden = false; $("#welcomeServer").hidden = false;
+      $("#editBar").hidden = !SERVER.edit;
       $("#welcomeLocal").hidden = true;
       const q = new URLSearchParams(location.hash.slice(1));
       if(q.get("session")) openSession(ServerSource, q.get("session"), {map: q.get("map"), tab: q.get("tab"), task: q.get("task"), pos: q.get("pos"), area: q.get("area"), tilt: q.get("tilt")});

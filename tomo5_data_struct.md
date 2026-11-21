@@ -143,6 +143,31 @@ to `Tile_24587947_9`.
 |---|---|
 | `Position_<N>.mrc` | Thumbnail for each position |
 
+## Batch/Edit/ (written by the viewer in `--edit` mode)
+
+Not part of Tomo5. The viewer saves edits here so Tomo5's files are never overwritten.
+
+| File | Description |
+|---|---|
+| `BatchPositionsList.xml` | Copy of `Batch/BatchPositionsList.xml`; only `AdditionalExposureTemplateAreas` of edited positions change |
+| `SearchMaps/<map>/SearchMap.dm` | Copy of the map's `SearchMap.dm`; only `<StarRating>` (0–5) changes |
+| `edit_session.json` | Manifest: tool, version, save time, source list, edited positions, sub-position offsets (µm), ratings |
+| `history/<YYYYmmdd_HHMMSS>/` | The previous save, moved here before each new save |
+
+A sub-position as Tomo5 writes it (offset from the anchoring position, in metres):
+
+```xml
+<ExposureTemplateAreaParameters>
+  <Comment />
+  <Defocus>-5</Defocus>
+  <Name>Position_1_2</Name>
+  <PositionX>2.0356256413833762E-07</PositionX>
+  <PositionY>-2.9610159799631219E-06</PositionY>
+</ExposureTemplateAreaParameters>
+```
+
+The area is at `StagePosition − (PositionX, PositionY)` of `Position_1`.
+
 ## Metadata used by the viewer (Tomo5 5.26)
 
 Image XML files (`Atlas_*.xml`, `Overview.xml`, `Tile_*.xml`, `SearchMap.xml`) are

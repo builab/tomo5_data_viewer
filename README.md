@@ -197,6 +197,48 @@ overview, or the first tile) looks as it does in Tomo5. If the tile XML files ha
 the tiles are laid out as a grid in file order (grid size from `TileSetAcquisitionOptions.xml`),
 and a note says so.
 
+### Edit mode (experimental)
+
+Edit mode is hidden unless the server is started with `--edit`:
+
+```bash
+python3 tomo5_viewer.py /data/tomo5 --port 8766 --edit
+```
+
+An amber **EDIT** badge then appears in the top bar with **Load Session** and **Save Session**.
+Without `--edit` the viewer is read-only and the server refuses to save.
+
+**Sub-positions.** These can be edited in one place only: **Batch Positions** (left) ›
+**Search** tab › a position chosen in the table (right). Everywhere else areas are display-only.
+
+- Drag sub-position **1.2 and up** to move it. **1.1** is the anchoring position and stays fixed.
+- Right-click empty space and choose **Add sub-position N.k here**. Right-click a sub-position
+  to **Delete** it (added ones only) or **Undo move**.
+- Edited areas are labelled in amber (`*` moved, `+` added), and the position gets ✎ in the table.
+
+**Star ratings** (search maps only) can be set from **Search Maps** or from
+**Batch Positions › Search Map** tab. Click a star to set it; click the same star again to clear
+it. Click the **★** column header to sort the highest-rated maps (or positions, by their map's rating) first.
+
+**Saving.** **Save Session** writes into `<session>/Batch/Edit/` (change it with `--edit-dir`).
+Tomo5's own files are never overwritten:
+
+```text
+Batch/Edit/
+├── BatchPositionsList.xml          # the original with only the edited areas changed
+├── SearchMaps/SearchMap_<…>/SearchMap.dm   # only <StarRating> changed
+├── edit_session.json               # what was edited, when, and from which source
+└── history/<YYYYmmdd_HHMMSS>/      # the previous save, moved here on each new save
+```
+
+The edited `BatchPositionsList.xml` is a text-level edit of Tomo5's file: namespaces, layout and
+line endings are kept, and new areas copy the layout of Tomo5's own
+`ExposureTemplateAreaParameters` (`Position_N_k`, offsets in metres). Loading it back into Tomo5
+has **not been tested yet**, so keep the original.
+
+When a session with saved edits is opened, the viewer shows Tomo5's originals and says
+*Saved edits found*. Click **Load Session** to continue from the saved edits.
+
 ## Running on a remote workstation (port forwarding)
 
 This works the same way as running a Jupyter notebook on a remote machine. The viewer runs on
@@ -317,9 +359,13 @@ workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
 
 ```text
 python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--host 127.0.0.1] [--html index.html] [--verbose]
+                      [--edit] [--edit-dir Batch/Edit]
 ```
 
-- Only the listed folders are reachable, and nothing is ever written.
+- Only the listed folders are reachable. Without `--edit` nothing is ever written.
+- `--edit` (experimental) enables sub-position editing and star ratings, saved only into
+  `<session>/<edit-dir>/` (default `Batch/Edit`). The server accepts only
+  `BatchPositionsList.xml`, `edit_session.json` and `SearchMaps/<map>/SearchMap.dm` there.
 - `--host 0.0.0.0` makes the server reachable from other machines. The default, `127.0.0.1`,
   with an SSH tunnel is safer.
 

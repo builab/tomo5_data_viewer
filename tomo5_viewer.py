@@ -26,7 +26,9 @@ import os
 import re
 import socket
 import struct
+import shutil
 import sys
+import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -36,13 +38,18 @@ except ImportError:
     np = None
 
 APP = "tomo5-data-viewer"
-VERSION = "0.5"
+VERSION = "0.6"
 TESTED_WITH = "Tomo5 5.26"
 CHUNK = 1 << 20          # 1 MiB per write when streaming a file
 
 ROOTS = {}               # name -> absolute path
 HTML_PATH = None
 VERBOSE = False
+EDIT = False                    # --edit: allow saving edits (experimental)
+EDIT_DIR = "Batch/Edit"         # where edits go, relative to the session folder
+MAX_SAVE = 32 << 20             # largest save request accepted
+# files a save may write, relative to the edit folder
+SAVE_OK = re.compile(r"^(BatchPositionsList\.xml|edit_session\.json|SearchMaps/SearchMap_\d+_\d{8}_\d{6}/SearchMap\.dm)$")
 
 
 def norm(p):
@@ -168,6 +175,25 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(buf)
                 left -= len(buf)
 
+    def do_POST(self):
+        url = urllib.parse.urlparse(self.path)
+        try:
+            if url.path != "/api/save":
+                return self.send_err(404, "Unknown address.")
+            if not EDIT:
+                return self.send_err(403, "Saving is off. Start the server with --edit to save edits.")
+            n = int(self.headers.get("Content-Length") or 0)
+            if n <= 0 or n > MAX_SAVE:
+                return self.send_err(413, "Save request is empty or too large.")
+            req = json.loads(self.rfile.read(n).decode("utf-8"))
+            return self.send_json(save_edits(req))
+        except PermissionError as e:
+            return self.send_err(403, str(e))
+        except (ValueError, KeyError, TypeError) as e:
+            return self.send_err(400, f"Bad save request: {e}")
+        except Exception as e:
+            return self.send_err(500, f"{type(e).__name__}: {e}")
+
     def do_HEAD(self):
         self.do_GET()
 
@@ -182,7 +208,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_path(HTML_PATH, "text/html; charset=utf-8")
             if url.path == "/api/info":
                 return self.send_json({"app": APP, "version": VERSION, "numpy": np is not None,
-                                       "roots": [{"name": n, "path": r} for n, r in ROOTS.items()]})
+                                       "roots": [{"name": n, "path": r} for n, r in ROOTS.items()],
+                                       "edit": EDIT, "editDir": EDIT_DIR})
             if url.path == "/api/list":
                 return self.api_list(arg("path"))
             if url.path == "/api/section":
@@ -259,14 +286,64 @@ class Handler(BaseHTTPRequestHandler):
         return self.send_json({"path": api, "dirs": sorted(dirs, key=key), "files": sorted(files, key=key)})
 
 
+def save_edits(req):
+    """Write edited files into <session>/<EDIT_DIR>/. The previous save there is moved into
+    <EDIT_DIR>/history/<time>/ first. Tomo5's own files are never written."""
+    session, _ = resolve(req["session"])
+    if not session or not os.path.isdir(session):
+        raise ValueError("unknown session folder")
+    edit_root = os.path.normpath(os.path.join(session, *EDIT_DIR.split("/")))
+    if not inside(edit_root, session):
+        raise PermissionError("edit folder must be inside the session folder")
+    files = req["files"]
+    if not isinstance(files, list) or not files:
+        raise ValueError("no files to save")
+    for f in files:
+        rel = str(f["path"]).replace("\\", "/")
+        if not SAVE_OK.match(rel):
+            raise PermissionError(f"not allowed to write {rel!r}")
+        f["path"] = rel
+        if not isinstance(f["content"], str):
+            raise ValueError(f"content of {rel} must be text")
+    os.makedirs(edit_root, exist_ok=True)
+    # keep the previous save
+    previous = [e for e in os.listdir(edit_root) if e != "history"]
+    history = None
+    if previous:
+        base = os.path.join(edit_root, "history", time.strftime("%Y%m%d_%H%M%S"))
+        history, k = base, 2
+        while os.path.exists(history):
+            history = f"{base}_{k}"; k += 1
+        os.makedirs(history)
+        for e in previous:
+            shutil.move(os.path.join(edit_root, e), os.path.join(history, e))
+    saved = []
+    for f in files:
+        dest = os.path.normpath(os.path.join(edit_root, *f["path"].split("/")))
+        if not inside(dest, edit_root):
+            raise PermissionError("path outside the edit folder")
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        tmp = dest + ".tmp"
+        with open(tmp, "w", encoding="utf-8", newline="") as fh:
+            fh.write(f["content"])
+        os.replace(tmp, dest)            # atomic: a half-written file never replaces a good one
+        saved.append(f["path"])
+    print(f"  saved {len(saved)} file(s) to {edit_root}" + (f" (previous save -> {history})" if history else ""))
+    return {"saved": saved, "editDir": EDIT_DIR, "history": os.path.relpath(history, edit_root).replace(os.sep, "/") if history else None}
+
+
 def main():
-    global HTML_PATH, VERBOSE
+    global HTML_PATH, VERBOSE, EDIT, EDIT_DIR
     ap = argparse.ArgumentParser(description="Serve Tomo5 session folders to the Tomo5 Data Viewer.")
     ap.add_argument("roots", nargs="+", help="folders to share (read-only)")
     ap.add_argument("--port", type=int, default=8766)
     ap.add_argument("--host", default="127.0.0.1", help="127.0.0.1 (default, this computer only) or 0.0.0.0")
     ap.add_argument("--html", help="path to index.html (default: next to this script)")
     ap.add_argument("--verbose", action="store_true", help="log every request")
+    ap.add_argument("--edit", action="store_true",
+                    help="experimental: allow editing batch positions and star ratings; edits are saved to "
+                         "<session>/Batch/Edit, Tomo5's files are never changed")
+    ap.add_argument("--edit-dir", default="Batch/Edit", help="edit folder, relative to the session folder (default Batch/Edit)")
     a = ap.parse_args()
 
     for r in a.roots:
@@ -280,10 +357,16 @@ def main():
         ROOTS[name] = full
     HTML_PATH = os.path.abspath(a.html) if a.html else os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
     VERBOSE = a.verbose
+    EDIT = a.edit
+    EDIT_DIR = a.edit_dir.strip("/").replace("\\", "/") or "Batch/Edit"
+    if ".." in EDIT_DIR.split("/"):
+        sys.exit("--edit-dir must stay inside the session folder")
 
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
     print(f"Tomo5 Data Viewer {VERSION} on http://{'localhost' if a.host in ('127.0.0.1', '0.0.0.0') else a.host}:{a.port}")
     print(f"  Tested with {TESTED_WITH}")
+    if EDIT:
+        print(f"  EDIT MODE (experimental): edits are saved to <session>/{EDIT_DIR}; Tomo5's files are not changed.")
     for n, r in ROOTS.items():
         print(f"  sharing  {n}  ->  {r}")
     if np is None:
