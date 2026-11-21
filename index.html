@@ -195,12 +195,36 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .fp-foot{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line)}
 .fp-note{font-size:12.5px;color:var(--muted)}
 .fp-note.ok{color:var(--accent)}
+/* acquisition movie dialog */
+dialog.mv{width:min(1240px,calc(100% - 24px));max-height:calc(100vh - 24px)}
+.mvgrid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;padding:14px;max-height:calc(100vh - 40px)}
+.mvmain{display:flex;flex-direction:column;gap:8px;min-width:0}
+.mvmain h3{margin:0;font:600 14.5px/1.3 var(--font-body)}
+#mvCanvas{width:100%;height:auto;aspect-ratio:16/9;background:#000;border-radius:6px}
+.mvbar{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font:12px var(--font-mono)}
+.mvbar input[type=range]{accent-color:var(--accent)}
+.mvmeta{font-size:12px;color:var(--muted)}
+.mvmain .msg{font-size:12.5px;min-height:18px}.mvmain .msg.err{color:var(--warn)}
+.mvmain progress{width:100%}
+.mvfoot{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.mvfoot a.btn{text-decoration:none}
+.mvside{overflow:auto;font-size:12.5px;padding-right:4px;max-height:calc(100vh - 70px)}
+.mvside h4{margin:12px 0 6px;font:600 11px/1.2 var(--font-body);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.mvside select,.mvside input[type=number],.mvside input[type=text]{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:12.5px var(--font-body);width:100%;min-width:0;color:var(--ink)}
+.mvfs{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px}
+.mvf{display:grid;gap:3px;font-size:11.5px;color:var(--muted)}
+.mvf.full,.mvc.full{grid-column:1/-1}
+.mvc{display:flex;gap:6px;align-items:center;font-size:12px}
+.mvc input{accent-color:var(--accent);margin:0}
+.mvlab{display:grid;gap:3px;margin-bottom:8px}.mvlab span{font-size:11.5px;color:var(--muted)}
+.mvnote{margin:0;color:var(--muted)}
+@media (max-width:900px){.mvgrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>Tomo5 Data Viewer<small>v0.6</small></h1>
+    <h1>Tomo5 Data Viewer<small>v0.7</small></h1>
     <div class="opens">
       <button class="btn primary" id="openServer" hidden title="The session folder: Session.dm, Atlas/, SearchMaps/, Batch/, Thumbnails/">Open Session Data…</button>
       <button class="btn" id="openTilt" disabled hidden title="The folder with the tilt series Position_N[_k].mrc and their .mdoc files">Tilt Series Folder…</button>
@@ -223,7 +247,6 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <div id="taskList">
       <button class="task active" data-task="searchMaps">Search Maps<span class="cnt" id="cntMaps">–</span></button>
       <button class="task" data-task="batch">Batch Positions<span class="cnt" id="cntBatch">–</span></button>
-      <button class="task soon" data-task="acq" title="Coming later">Data Acquisition</button>
       <button class="task soon" data-task="movie" title="Coming later">Movie Player</button>
     </div>
   </nav>
@@ -330,6 +353,22 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <span class="fp-note" id="fpNote"></span><span class="spacer"></span>
     <button class="btn" id="fpCancel">Cancel</button>
     <button class="btn primary" id="fpUse">Open this folder</button>
+  </div>
+</dialog>
+
+<dialog class="mv" id="mvDlg" aria-labelledby="mvTitle">
+  <div class="mvgrid">
+    <div class="mvmain">
+      <h3 id="mvTitle">Acquisition movie</h3>
+      <canvas id="mvCanvas" width="1920" height="1080" aria-label="Movie preview"></canvas>
+      <div class="mvbar"><button class="btn" type="button" id="mvPlay">Play</button><input type="range" id="mvTime" min="0" max="1" step="0.01" value="0" aria-label="Time"><span id="mvClock"></span></div>
+      <div class="mvmeta" id="mvInfo"></div>
+      <div class="mvmeta" id="mvEnc"></div>
+      <progress id="mvProg" max="1" value="0" hidden></progress>
+      <div class="msg" id="mvStatus" role="status"></div>
+      <div class="mvfoot"><span id="mvOut"></span><span class="spacer" style="flex:1"></span><button class="btn" type="button" id="mvClose">Close</button><button class="btn primary" type="button" id="mvRender">Make movie</button></div>
+    </div>
+    <div class="mvside" id="mvSide"></div>
   </div>
 </dialog>
 
@@ -2079,6 +2118,769 @@ async function loadEdits(){
 $("#saveEdits").addEventListener("click", saveEdits);
 $("#loadEdits").addEventListener("click", loadEdits);
 
+/* ------------------------------------------------------------------ acquisition movies (like the SerialEM Grid Viewer)
+   Acquisition movie:          Atlas › Search Map › the sub-position N.k › its tilt series.
+   Parallel acquisition movie: Atlas › Search Map › the Search image with every sub-position of
+                               Position N picked in turn › all their tilt series playing in step.
+   Everything is placed in stage µm with the same geometry as the viewer; frames are drawn on a
+   canvas and encoded by ffmpeg on the server (.mp4), or in this browser (.webm) without it. */
+const MV_KEY = "tomo5.movie";
+const MV_DEF = {size: "1920x1080", fps: 30, zoom: 0, tAtlas: 3, tToMap: 4, tMap: 2, tToTg: 4, hold: 2, tToView: 3, tPick: 0.8,
+  viewZoom: 1, tiltAxis: true, tiltFps: 10, order: "acq", schematic: true, lp: 60,
+  labels: [["Atlas", "Grid overview"], ["Search Map", ""], ["Acquisition position", ""], ["Tilt series", ""]],
+  pLabels: [["Atlas", "Grid overview"], ["Search Map", ""], ["Target selection", ""], ["Tilt series acquisition", ""]]};
+let mv = null;
+const mvEase = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+const mvFont = () => getComputedStyle(document.body).fontFamily || "sans-serif";
+const rot2 = a => [[Math.cos(a), -Math.sin(a)], [Math.sin(a), Math.cos(a)]];
+const det2 = A => A[0][0] * A[1][1] - A[0][1] * A[1][0];
+function mvCfg(){
+  let sv = {}; try{ sv = JSON.parse(localStorage.getItem(MV_KEY) || "{}") || {}; }catch{}
+  const c = {...MV_DEF, ...sv, zoom: 0};
+  const labs = key => MV_DEF[key].map((d, i) => Array.isArray(sv[key]?.[i]) ? [String(sv[key][i][0] ?? d[0]), String(sv[key][i][1] ?? d[1])] : d.slice());
+  c.labels = labs("labels"); c.pLabels = labs("pLabels");
+  return c;
+}
+function mvSaveCfg(){ const {start, low, high, zoom, ...keep} = mv.cfg; try{ localStorage.setItem(MV_KEY, JSON.stringify(keep)); }catch{} }
+const mvDeg = a => { const v = Math.round(a); return v === 0 ? "0°" : `${v > 0 ? "+" : "−"}${Math.abs(v)}°`; };
+
+// ---- images: a layer {img, geo} as a grey canvas, own contrast (0.5–99.5 %), optional low-pass and edge fade
+function mvCanvas(l, {lpA = 0, fade = 0} = {}){
+  const {w, h} = l.img, pxA = l.geo.ps * 1e4 * l.img.bin, sigma = lpA > 0 && pxA > 0 ? 0.187 * lpA / pxA : 0;
+  const data = sigma >= 0.5 ? gaussBlur(l.img.data, w, h, sigma) : l.img.data;
+  const st = Math.max(1, Math.floor(data.length / 200000)), smp = [];
+  for(let i = 0; i < data.length; i += st) if(Number.isFinite(data[i])) smp.push(data[i]);
+  const a = Float32Array.from(smp).sort(), q = f => a[Math.min(a.length - 1, Math.max(0, Math.round(f * (a.length - 1))))];
+  const lo = q(0.005), hi = Math.max(q(0.995), lo + 1e-6), k = 255 / (hi - lo);
+  const cv = Object.assign(document.createElement("canvas"), {width: w, height: h}), g = cv.getContext("2d");
+  const id = g.createImageData(w, h), px = new Uint32Array(id.data.buffer);
+  for(let i = 0; i < data.length; i++){ let v = (data[i] - lo) * k; v = v < 0 ? 0 : v > 255 ? 255 : v | 0; px[i] = 0xff000000 | (v << 16) | (v << 8) | v; }
+  g.putImageData(id, 0, 0);
+  if(fade > 0){                       // fade the edges out, so a close-up melts into the map under it
+    g.globalCompositeOperation = "destination-in";
+    for(const [x1, y1] of [[w, 0], [0, h]]){
+      const q2 = g.createLinearGradient(0, 0, x1, y1), e = Math.min(0.49, fade);
+      q2.addColorStop(0, "rgba(0,0,0,0)"); q2.addColorStop(e, "#000"); q2.addColorStop(1 - e, "#000"); q2.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = q2; g.fillRect(0, 0, w, h);
+    }
+    g.globalCompositeOperation = "source-over";
+  }
+  return {cv, geo: l.geo, bin: l.img.bin};
+}
+// ---- camera: screen = centre + s · Q · (stage − c)
+const mvPt = (cam, p) => { const v = mul(cam.Q, [p[0] - cam.c[0], p[1] - cam.c[1]]); return [cam.W / 2 + cam.s * v[0], cam.H / 2 + cam.s * v[1]]; };
+function mvDrawImg(g, cam, L, alpha = 1){
+  if(!L || alpha <= 0) return;
+  const G = L.geo, QR = mmul(cam.Q, G.R), k = cam.s * G.ps, b = L.bin, o = mvPt(cam, G.S), oc = mul(QR, [G.nx / 2, G.ny / 2]);
+  g.save(); g.globalAlpha = alpha;
+  g.setTransform(k * b * QR[0][0], k * b * QR[1][0], k * b * QR[0][1], k * b * QR[1][1], o[0] - k * oc[0], o[1] - k * oc[1]);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+  g.drawImage(L.cv, 0, 0); g.restore();
+}
+function mvFit(geos, Q, W, H, frac){
+  const v = geos.flatMap(G => corners(G)).map(p => mul(Q, p));
+  const x0 = Math.min(...v.map(p => p[0])), x1 = Math.max(...v.map(p => p[0])), y0 = Math.min(...v.map(p => p[1])), y1 = Math.max(...v.map(p => p[1]));
+  return {c: mul(transpose(Q), [(x0 + x1) / 2, (y0 + y1) / 2]), s: frac * Math.min(W / (x1 - x0), H / (y1 - y0))};
+}
+// turn from Q0 to Q1 (both orientations of the same camera family: a pure rotation between them)
+function mvTurn(Q0, Q1){
+  const D = mmul(Q1, transpose(Q0));
+  if(det2(D) < 0) return () => Q1;
+  const th = Math.atan2(D[1][0], D[0][0]);
+  return e => mmul(rot2(th * e), Q0);
+}
+function mvZoomCam(u, c0, z0, c1, z1){           // zoom whose speed feels even, and keeps the target steady
+  const e = mvEase(u), w0 = 1 / z0, w1 = 1 / z1, w = w0 * Math.pow(w1 / w0, e), kk = w0 !== w1 ? (w - w1) / (w0 - w1) : 0;
+  return {c: [c1[0] + (c0[0] - c1[0]) * kk, c1[1] + (c0[1] - c1[1]) * kk], s: 1 / w};
+}
+
+// ---- tilt series of an area: sections, angles, acquisition order
+function mvTime(v){
+  const m = String(v || "").match(/(\d{1,2})-(\w{3})-(\d{2,4})\s+(\d{1,2}):(\d{2}):(\d{2})/);
+  if(m){ const mon = "janfebmaraprmayjunjulaugsepoctnovdec".indexOf(m[2].toLowerCase()) / 3; const y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; return new Date(y, mon, +m[1], +m[4], +m[5], +m[6]).getTime(); }
+  const t = Date.parse(v); return Number.isFinite(t) ? t : NaN;
+}
+async function mvSeries(p, a){
+  const h = await getHeader(a.mrc), md = a.mdoc ? await getMdoc(a.mdoc).catch(() => null) : null;
+  let secs = (md?.secs || []).filter(s => s.z < h.nz && Number.isFinite(s.tilt)).map(s => ({z: s.z, a: s.tilt, t: mvTime(md.val(s.rows, "DateTime"))}));
+  const angles = secs.length === h.nz;
+  if(!angles) secs = Array.from({length: h.nz}, (_, z) => ({z, a: NaN, t: NaN}));
+  let pxM = md?.pixelA > 0 ? md.pixelA * 1e-10 : NaN;
+  if(!(pxM > 0)){ const fei = await feiHeader(a.mrc).catch(() => null); if(fei?.pixel > 0) pxM = fei.pixel; }
+  const ps = pxM > 0 ? pxM * 1e6 : overlay().cam / Math.max(h.nx, h.ny);
+  const sx = p.searchXml ? await tryXml(p.searchXml) : null;
+  const geo = {S: areaStage(p, a.off || [0, 0]), R: sx?.info.R || IDENT, ps, nx: h.nx, ny: h.ny};
+  return {k: a.k, path: a.mrc, nz: h.nz, secs, angles, geo, timed: secs.every(s => Number.isFinite(s.t))};
+}
+// order of playback: acquisition order (mdoc DateTime, else file order), by angle, or start → low → high → start
+function mvOrder(secs, how, start){
+  if(how === "angle") return [...secs].sort((p, q) => p.a - q.a);
+  if(how === "sweep" && secs.every(s => Number.isFinite(s.a))){
+    const A = [...secs].sort((p, q) => p.a - q.a); if(!A.length) return A;
+    let is = 0; A.forEach((x, i) => { if(Math.abs(x.a - start) < Math.abs(A[is].a - start)) is = i; });
+    return [...A.slice(0, is + 1).reverse(), ...A.slice(1), ...A.slice(is, A.length - 1).reverse()];
+  }
+  return [...secs].sort((p, q) => secs.every(s => Number.isFinite(s.t)) ? p.t - q.t : p.z - q.z);
+}
+function mvSchemeText(seq){
+  if(!seq.length || !Number.isFinite(seq[0].a)) return `${seq.length} images`;
+  const lo = Math.min(...seq.map(x => x.a)), hi = Math.max(...seq.map(x => x.a));
+  // dose-symmetric: the angle changes sign most steps
+  let flips = 0; for(let i = 2; i < seq.length; i++) if(Math.sign(seq[i].a - seq[0].a) !== Math.sign(seq[i - 1].a - seq[0].a)) flips++;
+  if(flips > seq.length / 3) return `dose-symmetric from ${mvDeg(seq[0].a)}, ${mvDeg(lo)} to ${mvDeg(hi)}`;
+  const parts = [seq[0].a];
+  for(const v of [seq[Math.floor(seq.length / 2)].a, seq[seq.length - 1].a]) if(Math.abs(v - parts[parts.length - 1]) > 0.5) parts.push(v);
+  return parts.map(mvDeg).join(" → ");
+}
+const mvKey = (path, z, px) => `${path}|${z}|${px}`;
+async function mvTiltImg(ts, z, px){
+  const self = mv, key = mvKey(ts.path, z, px);
+  if(self.timg.has(key)) return self.timg.get(key);
+  const img = await getImage(ts.path, px, z);
+  const L = mvCanvas({img, geo: ts.geo}, {lpA: self.cfg.lp});
+  self.timg.set(key, L);
+  while(self.timg.size > (self.cacheMax || 400)) self.timg.delete(self.timg.keys().next().value);
+  return L;
+}
+
+// ---- open
+async function mvOpen(pi, k, kind = "single"){
+  if(mv?.busy) return;
+  closeMenu();
+  const s = SESSION, p = s.positions[pi];
+  if(!p) return;
+  mv = {kind, pi, p, k, cfg: mvCfg(), t: 0, ready: false, timg: new Map(), loading: new Set(), canvas: $("#mvCanvas"), lastImg: new Map()};
+  mv.g = mv.canvas.getContext("2d");
+  $("#mvTitle").textContent = kind === "parallel" ? `Parallel acquisition movie · ${p.name}` : `Acquisition movie · ${p.name} area ${p.id}.${k}`;
+  mvForm(); mvEncoderNote();
+  if(!$("#mvDlg").open) $("#mvDlg").showModal();
+  const self = mv;
+  try{
+    mvSay("Reading the tilt series…");
+    const areas = kind === "parallel" ? p.areas.filter(a => a.off || a.k === 1) : p.areas.filter(a => a.k === k);
+    self.series = [];
+    for(const a of areas){ if(a.mrc) self.series.push(await mvSeries(p, a).catch(e => (console.warn(e), null))); }
+    self.series = self.series.filter(Boolean);
+    self.targets = areas.map(a => ({k: a.k, stage: areaStage(p, a.off || [0, 0]) || null, ts: self.series.find(x => x.k === a.k) || null})).filter(x => x.stage);
+    if(kind === "single" && !self.series.length) throw new Error(`area ${p.id}.${k} has no tilt series. Choose the Tilt Series Folder first.`);
+    if(!self.targets.length) throw new Error(`${p.name} has no planned areas (Batch/BatchPositionsList.xml).`);
+    mvAngles();
+    await mvPrepare(self);
+    if(mv !== self) return;
+    self.ready = true; mvPlan();
+    const notes = [];
+    if(!self.atlas) notes.push("No atlas image: the movie starts at the search map.");
+    if(!self.search) notes.push(`No Search image for ${p.name}: the close-up uses the search map.`);
+    if(kind === "parallel"){
+      const miss = self.targets.filter(x => !x.ts).map(x => `${p.id}.${x.k}`);
+      if(miss.length) notes.push(`No tilt series for ${miss.join(", ")}: picked, but left out of the parallel tilt series.`);
+      if(!self.series.length) notes.push("None of the areas has a tilt series yet, so the movie ends after the areas are picked.");
+    }
+    if(self.series.some(x => !x.angles)) notes.push("No tilt angles (.mdoc) for some tilt series: they play in file order without the angle track.");
+    mvSay(notes.join(" "));
+    mvShow(kind === "parallel" ? self.plan.tP + 0.4 : self.plan.tD + self.plan.ZT + 0.9);
+  }catch(e){ console.error(e); if(mv === self) mvSay(`Cannot make the movie: ${e.message}`, true); }
+}
+function mvAngles(){
+  const c = mv.cfg, withA = mv.series.filter(x => x.angles);
+  const all = withA.flatMap(x => x.secs.map(s => s.a));
+  const first = mv.series[0];
+  const startSec = first ? (first.timed ? first.secs.reduce((p, q) => q.t < p.t ? q : p) : first.secs.reduce((p, q) => Math.abs(q.a) < Math.abs(p.a) ? q : p, first.secs[0])) : null;
+  Object.assign(c, {start: startSec && Number.isFinite(startSec.a) ? Math.round(startSec.a) : 0,
+    low: all.length ? Math.floor(Math.min(...all)) : -60, high: all.length ? Math.ceil(Math.max(...all)) : 60});
+}
+// one list of steps: single = the sections in order; parallel = merged angles, each area's section nearest each angle
+function mvSteps(){
+  const c = mv.cfg, inRange = s => !Number.isFinite(s.a) || (s.a >= c.low - 0.5 && s.a <= c.high + 0.5);
+  if(mv.kind === "single"){
+    const ts = mv.series[0];
+    mv.seq = mvOrder(ts.secs.filter(inRange), c.order, c.start).map(s => ({a: s.a, z: new Map([[ts.k, s.z]])}));
+    return;
+  }
+  const lead = mv.series.find(x => x.angles) || mv.series[0];
+  if(!lead){ mv.seq = []; return; }
+  // the angles of the first area with a tilt series, in its order; the others follow at the nearest angle (within 1°)
+  const steps = mvOrder(lead.secs.filter(inRange), c.order, c.start);
+  const last = new Map();
+  mv.seq = steps.map(st => {
+    const z = new Map();
+    for(const ts of mv.series){
+      let best = null;
+      if(ts.angles && Number.isFinite(st.a)){ for(const s of ts.secs) if(Math.abs(s.a - st.a) <= 1 && (!best || Math.abs(s.a - st.a) < Math.abs(best.a - st.a))) best = s; }
+      else best = ts.secs.find(s => s.z === st.z) || null;
+      if(best) last.set(ts.k, best.z);
+      z.set(ts.k, best ? best.z : last.get(ts.k) ?? ts.secs[0]?.z ?? 0);
+    }
+    return {a: st.a, z};
+  });
+}
+// atlas, search map and Search image, as the viewer shows them (same loaders and geometry)
+async function mvPrepare(self){
+  const s = SESSION, p = self.p, id = SCENE_ID, again = "The view changed while loading; try again.";
+  const mi = await mapOfPosition(p), map = s.maps[mi];
+  if(!map) throw new Error(`${p.name} is not on any search map with an image.`);
+  self.mapName = map.name;
+  if(s.atlas?.mrc){
+    mvSay("Loading the atlas…");
+    const sc = await atlasScene(s.atlas, id, "full").catch(() => null);
+    if(sc){ self.atlas = mvCanvas(sc.layers[0]); self.Qa = sc.Q; }
+  }
+  mvSay(`Loading ${map.name}…`);
+  let msc = null;
+  if(map.tiles.length) msc = await tilesScene(map, id, true, "full");
+  else if(map.names.has("SearchMap.mrc")) msc = await searchMapImageScene(map, id, "full");
+  if(!msc && stale(id)) throw new Error(again);
+  if(!msc) throw new Error(`${map.name} has no tiles or SearchMap.mrc.`);
+  self.maps = msc.layers.map(l => mvCanvas(l)); self.Qm = msc.Q;
+  self.mapGeos = msc.layers.map(l => l.geo);
+  if(p.search){
+    mvSay(`Loading the Search image of ${p.name}…`);
+    const ssc = await searchScene(p, id, "full").catch(() => null);
+    if(ssc){ self.search = mvCanvas(ssc.layers[0], {fade: 0.08}); self.Qs = ssc.Q; }
+  }
+  // the first tilt image of each series, so the preview has something to show
+  mvSteps();
+  for(const ts of self.series) if(mv.seq.length) await mvTiltImg(ts, mv.seq[0].z.get(ts.k) ?? ts.secs[0].z, 1024).catch(() => {});
+  status(`Movie: ${p.name} ready.`);
+}
+
+// ---- plan: camera path and timeline
+function mvPlan(){
+  const c = mv.cfg, [MW, MH] = c.size.split("x").map(Number), p = mv.p;
+  if(mv.canvas.width !== MW || mv.canvas.height !== MH){ mv.canvas.width = MW; mv.canvas.height = MH; }
+  const k = MH / 1080, Qend = mv.Qs || mv.Qm, Q0 = mv.Qa || mv.Qm;
+  const full = mv.atlas ? mvFit([mv.atlas.geo], Q0, MW, MH, 0.98) : null;
+  const fm = mvFit(mv.mapGeos, mv.Qm, MW, MH, 0.97);
+  const turnAM = mvTurn(Q0, mv.Qm), turnMS = mvTurn(mv.Qm, Qend);
+  const TB = Math.max(0.5, c.tToMap), TS = Math.max(0.5, c.tMap), hasAtlas = !!mv.atlas;
+  const tB = hasAtlas ? Math.max(0.5, c.tAtlas) : 0, tC = hasAtlas ? tB + TB : 0, tD = tC + TS;
+  mvSteps();
+  const base = {MW, MH, k, full, mapC: fm.c, zMap: fm.s, Q0, Qend, turnAM, turnMS, TB, TS, hasAtlas, tB, tC, tD};
+  if(mv.kind === "parallel") return mvPlanPar(base);
+  const ts = mv.series[0], cam = overlay().cam, footW = Math.max(ts.geo.nx, ts.geo.ny) * ts.geo.ps || cam;
+  if(!c.zoom) c.zoom = Math.max(3, Math.min(80, Math.round(MH / 6 / (footW * fm.s))));
+  const zTg = fm.s * c.zoom, ZT = Math.max(0.5, c.tToTg);
+  const camEnd = {c: ts.geo.S, s: zTg, Q: Qend, W: MW, H: MH};
+  // inset: from the footprint on the map to half the frame, turned upright (as in the Exposure tab)
+  const QR = mmul(Qend, ts.geo.R), th0 = det2(QR) > 0 ? Math.atan2(QR[1][0], QR[0][0]) : 0;
+  const ins = {p0: mvPt(camEnd, ts.geo.S), s0: zTg, th0, flip: det2(QR) < 0, s1: Math.min(0.5 * MW, 0.55 * MH) / footW, p1: [MW / 2 - (c.schematic ? 190 * k : 0), MH / 2 - 10 * k], foot: footW};
+  const tE = tD + ZT + 0.8 + Math.max(0, c.hold), tF = tE + 2;
+  const total = tF + mv.seq.length / Math.max(1, c.tiltFps) + 1.5;
+  mv.plan = {...base, zTg, ZT, camEnd, ins, tE, tF, total};
+  mv.bgEnd = null;
+  mvTimeline(total, `${mv.seq.length} tilt images (${mvSchemeText(mv.seq)})`);
+}
+function mvPlanPar(B){
+  const {MW, MH, k} = B, c = mv.cfg, ov = overlay();
+  // the View: every area's beam (and the tracking area) fits in the frame below the title
+  const pts = mv.targets.map(x => x.stage), tr = mv.p.plan?.tracking ? areaStage(mv.p, mv.p.plan.tracking) : null;
+  if(tr) pts.push(tr);
+  const r = ov.beam * 0.75, v = pts.flatMap(q => [[q[0] - r, q[1] - r], [q[0] + r, q[1] + r], [q[0] - r, q[1] + r], [q[0] + r, q[1] - r]]).map(q => mul(B.Qend, q));
+  const x0 = Math.min(...v.map(q => q[0])), x1 = Math.max(...v.map(q => q[0])), y0 = Math.min(...v.map(q => q[1])), y1 = Math.max(...v.map(q => q[1]));
+  const zV = Math.max(0.05, c.viewZoom || 1) * Math.min(0.9 * MW / (x1 - x0), 0.72 * MH / (y1 - y0));
+  const cV = mul(transpose(B.Qend), [(x0 + x1) / 2, (y0 + y1) / 2 - 30 * k / zV]);
+  const camV = {c: cV, s: zV, Q: B.Qend, W: MW, H: MH};
+  // grid of tilt-series insets, upright
+  const ts = mv.targets.filter(x => x.ts), n = ts.length;
+  let grid = null;
+  if(n){
+    const fw = Math.max(...ts.map(x => Math.max(x.ts.geo.nx, x.ts.geo.ny) * x.ts.geo.ps));
+    const L0 = 40 * k, R0 = MW - (c.schematic ? 360 * k : 40 * k), T0 = 190 * k, B0 = MH - 130 * k, AW = R0 - L0, AH = B0 - T0;
+    let best = null;
+    for(let cols = 1; cols <= n; cols++){ const rows = Math.ceil(n / cols), s = Math.min(0.92 * AW / cols / fw, 0.9 * AH / rows / fw); if(!best || s > best.s) best = {cols, rows, s}; }
+    const cw = AW / best.cols, ch = AH / best.rows, cells = new Map();
+    ts.forEach((x, j) => {
+      const rr = Math.floor(j / best.cols), inRow = Math.min(best.cols, n - rr * best.cols), col = j - rr * best.cols;
+      cells.set(x.k, [L0 + (AW - inRow * cw) / 2 + (col + 0.5) * cw, T0 + (AH - best.rows * ch) / 2 + (rr + 0.5) * ch]);
+    });
+    grid = {s: best.s, cells, right: R0, bottom: B0, px: Math.max(256, Math.min(1024, 2 ** Math.ceil(Math.log2(fw * best.s * 1.1))))};
+    mv.cacheMax = Math.max(64, n * 12);
+  }
+  const TV = Math.max(0.5, c.tToView), TP = Math.max(0.2, c.tPick), axisSlot = c.tiltAxis ? 1 : 0;
+  const tE = B.tD + TV, tF = tE + 1.0, tP = tF + (mv.targets.length + axisSlot) * TP, tG = tP + 1.0, tH = n ? tG + 1.8 : tG;
+  const total = tH + (n ? mv.seq.length / Math.max(1, c.tiltFps) + 1.5 : 0.5);
+  mv.plan = {...B, kind: "parallel", TV, TP, axisSlot, camV, zV, tE, tF, tP, tG, tH, total, grid, tr};
+  mv.bgEnd = null;
+  mvTimeline(total, `${mv.targets.length} area${mv.targets.length === 1 ? "" : "s"}, ${n} with a tilt series · ${mv.seq.length} tilt steps${mv.seq.length ? ` (${mvSchemeText(mv.seq)})` : ""}`);
+}
+function mvTimeline(total, what){
+  const c = mv.cfg, sl = $("#mvTime");
+  sl.max = total.toFixed(3); sl.step = (1 / c.fps).toFixed(4);
+  $("#mvInfo").textContent = `${total.toFixed(1)} s · ${Math.round(total * c.fps)} frames · ${what}`;
+}
+
+// ---- drawing helpers (same look as the SerialEM Grid Viewer's movies)
+function mvRound(g, x, y, w, h, r, fill){ g.fillStyle = fill; g.beginPath(); if(g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); g.fill(); }
+function mvTitle(g, k, title, sub, alpha){
+  if(alpha <= 0 || !title) return;
+  const ff = mvFont();
+  g.save(); g.globalAlpha = alpha; g.textBaseline = "middle"; g.textAlign = "left";
+  g.font = `600 ${40 * k}px ${ff}`; const tw = g.measureText(title).width;
+  mvRound(g, 40 * k, 36 * k, tw + 44 * k, 70 * k, 14 * k, "rgba(0,0,0,0.6)"); g.fillStyle = "#fff"; g.fillText(title, 62 * k, 72 * k);
+  if(sub){ g.font = `600 ${28 * k}px ${ff}`; const sw = g.measureText(sub).width; mvRound(g, 40 * k, 116 * k, sw + 44 * k, 50 * k, 12 * k, "rgba(0,0,0,0.6)"); g.fillStyle = "rgb(230,230,230)"; g.fillText(sub, 62 * k, 142 * k); }
+  g.restore();
+}
+function mvBar(g, k, nmPerPx, x1, y){
+  let Lb = 10; for(const v of [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000]){ Lb = v; if(v / nmPerPx >= 140 * k) break; }
+  const bl = Lb / nmPerPx, x0 = x1 - bl, lab = Lb >= 1000 ? `${Lb / 1000} µm` : `${Lb} nm`;
+  g.save(); mvRound(g, x0 - 20 * k, y - 52 * k, bl + 40 * k, 74 * k, 12 * k, "rgba(0,0,0,0.6)");
+  g.fillStyle = "#fff"; g.fillRect(x0, y - 4 * k, bl, 10 * k);
+  g.font = `600 ${28 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(lab, (x0 + x1) / 2, y - 26 * k); g.restore();
+}
+const mvSceneBar = (g, P, cam) => mvBar(g, P.k, 1000 / cam.s, P.MW - 60 * P.k, P.MH - 60 * P.k);
+function mvPoly(g, cam, G, alpha, k, color = "rgb(255,200,40)", lw = 5){
+  if(alpha <= 0) return;
+  const P = corners(G).map(q => mvPt(cam, q));
+  g.save(); g.globalAlpha = alpha; g.strokeStyle = color; g.lineWidth = lw * k; g.lineJoin = "round";
+  g.beginPath(); P.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.stroke();
+  const ext = Math.max(Math.max(...P.map(q => q[0])) - Math.min(...P.map(q => q[0])), Math.max(...P.map(q => q[1])) - Math.min(...P.map(q => q[1])));
+  if(ext < 40 * k){ const cx = P.reduce((a, q) => a + q[0], 0) / 4, cy = P.reduce((a, q) => a + q[1], 0) / 4; g.lineWidth = 4 * k; g.beginPath(); g.arc(cx, cy, 34 * k, 0, Math.PI * 2); g.stroke(); }
+  g.restore();
+}
+function mvSchematic(g, k, cx, cy, ang, al){            // beam coming down onto a specimen slab tilted by ang degrees
+  if(al <= 0 || !Number.isFinite(ang)) return;
+  g.save(); g.globalAlpha = al;
+  mvRound(g, cx - 150 * k, cy - 150 * k, 300 * k, 285 * k, 18 * k, "rgba(0,0,0,0.55)");
+  g.font = `600 ${28 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "rgb(230,230,230)"; g.fillText("Stage tilt", cx, cy - 122 * k);
+  g.strokeStyle = g.fillStyle = "rgba(120,190,255,0.9)"; g.lineWidth = 3 * k;
+  for(const bx of [-50, 0, 50]){
+    g.beginPath(); g.moveTo(cx + bx * k, cy - 98 * k); g.lineTo(cx + bx * k, cy - 52 * k); g.stroke();
+    g.beginPath(); g.moveTo(cx + (bx - 8) * k, cy - 60 * k); g.lineTo(cx + (bx + 8) * k, cy - 60 * k); g.lineTo(cx + bx * k, cy - 44 * k); g.fill();
+  }
+  g.strokeStyle = "rgba(255,255,255,0.35)"; g.lineWidth = 2 * k; g.beginPath(); g.moveTo(cx - 120 * k, cy + 10 * k); g.lineTo(cx + 120 * k, cy + 10 * k); g.stroke();
+  g.save(); g.translate(cx, cy + 10 * k); g.rotate(-ang * Math.PI / 180);
+  g.fillStyle = "rgba(255,200,40,0.95)"; g.strokeStyle = "#fff"; g.lineWidth = 1.5 * k; g.fillRect(-92 * k, -9 * k, 184 * k, 18 * k); g.strokeRect(-92 * k, -9 * k, 184 * k, 18 * k);
+  g.restore();
+  g.fillStyle = "rgb(30,30,30)"; g.beginPath(); g.arc(cx, cy + 10 * k, 6 * k, 0, Math.PI * 2); g.fill();
+  if(Math.abs(ang) > 0.5){
+    const a0 = Math.min(0, -ang) * Math.PI / 180, a1 = Math.max(0, -ang) * Math.PI / 180;
+    g.strokeStyle = "rgba(255,255,255,0.8)"; g.lineWidth = 3 * k;
+    g.beginPath(); g.arc(cx, cy + 10 * k, 60 * k, a0, a1); g.stroke(); g.beginPath(); g.arc(cx, cy + 10 * k, 60 * k, a0 + Math.PI, a1 + Math.PI); g.stroke();
+  }
+  g.restore();
+}
+function mvAngleBar(g, k, xs, y0, angle){             // the angle, and a dot on a track from the lowest to the highest angle
+  if(!Number.isFinite(angle)) return;
+  const c = mv.cfg, ff = mvFont();
+  g.save(); g.font = `600 ${40 * k}px ${ff}`;
+  const lw = Math.max(...["−60°", "+60°", "−00°"].map(t => g.measureText(t).width));
+  mvRound(g, xs, y0, lw + 36 * k, 62 * k, 14 * k, "rgba(0,0,0,0.67)");
+  g.fillStyle = "#fff"; g.textAlign = "right"; g.textBaseline = "middle"; g.fillText(mvDeg(angle), xs + lw + 18 * k, y0 + 33 * k);
+  const lo = Math.min(c.low, c.high), hi = Math.max(c.low, c.high), tx0 = xs + lw + 80 * k, tx1 = xs + lw + 380 * k, ty = y0 + 31 * k, X = v => tx0 + (v - lo) / Math.max(1e-6, hi - lo) * (tx1 - tx0);
+  g.strokeStyle = "rgba(255,255,255,0.55)"; g.lineWidth = 3 * k; g.beginPath(); g.moveTo(tx0, ty); g.lineTo(tx1, ty); g.stroke();
+  g.lineWidth = 2 * k; for(const v of [lo, ...(lo < 0 && hi > 0 ? [0] : []), hi]){ g.beginPath(); g.moveTo(X(v), ty - 9 * k); g.lineTo(X(v), ty + 9 * k); g.stroke(); }
+  g.fillStyle = "rgb(255,200,40)"; g.beginPath(); g.arc(X(Math.max(lo, Math.min(hi, angle))), ty, 9 * k, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+// mix: 0 = the atlas alone, 1 = the search map alone (plus the Search image as a close-up, faded in by `close`)
+function mvScene(g, cam, mix, close = 0){
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+  g.fillStyle = "#000"; g.fillRect(0, 0, cam.W, cam.H);
+  if(!mv.atlas) mix = 1;
+  if(mix < 1) mvDrawImg(g, cam, mv.atlas, 1 - mix);
+  if(mix > 0) for(const L of mv.maps) mvDrawImg(g, cam, L, mix);
+  if(close > 0 && mv.search) mvDrawImg(g, cam, mv.search, close);
+}
+// atlas → zoom → search map: the same in both movies; true if t falls in them
+function mvMapStages(g, t, P, L){
+  const k = P.k, cam = (c, s, Q) => ({c, s, Q, W: P.MW, H: P.MH});
+  const mapBox = mv.mapGeos.length === 1 ? mv.mapGeos[0] : null;
+  if(P.hasAtlas && t < P.tB){
+    const cm = cam(P.full.c, P.full.s, P.Q0);
+    mvScene(g, cm, 0);
+    for(const G of mapBox ? [mapBox] : mv.mapGeos) mvPoly(g, cm, G, mvEase((t - Math.min(1, P.tB / 3)) / 0.8), k);
+    mvTitle(g, k, L[0][0], L[0][1], 1); mvSceneBar(g, P, cm);
+  } else if(P.hasAtlas && t < P.tC){
+    const u = (t - P.tB) / P.TB, z = mvZoomCam(u, P.full.c, P.full.s, P.mapC, P.zMap), cm = cam(z.c, z.s, P.turnAM(mvEase(u)));
+    const mix = mvEase((z.s / P.zMap - 0.3) / 0.55);
+    mvScene(g, cm, mix); for(const G of mapBox ? [mapBox] : mv.mapGeos) mvPoly(g, cm, G, 1 - mix, k);
+    mvTitle(g, k, L[0][0], L[0][1], 1); mvSceneBar(g, P, cm);
+  } else if(t < P.tD){
+    const tc = (t - P.tC) * 2 / P.TS, cm = cam(P.mapC, P.zMap, P.hasAtlas ? P.turnAM(1) : P.Q0);
+    mvScene(g, cm, 1);
+    const sub = L[1][1] || mv.mapName;
+    if(P.hasAtlas && tc < 0.8) mvTitle(g, k, L[0][0], L[0][1], 1 - mvEase(tc / 0.8)); else mvTitle(g, k, L[1][0], sub, P.hasAtlas ? mvEase((tc - 0.8) / 0.8) : 1);
+    mvSceneBar(g, P, cm);
+  } else return false;
+  return true;
+}
+// footprint of a tilt series (or the camera field) at an area, as a geo for mvPoly
+function mvFoot(x){
+  if(x.ts) return x.ts.geo;
+  const cam = overlay().cam, R = mv.series[0]?.geo.R || (mv.Qs ? transpose(mv.Qs) : IDENT);
+  return {S: x.stage, R, ps: cam / 100, nx: 100, ny: 100};
+}
+// draw the frame at time t; returns [series, z, px] of a tilt image it needs that is not loaded yet
+function mvFrame(t){
+  return mv.kind === "parallel" ? mvFramePar(t) : mvFrameSingle(t);
+}
+function mvInset(u){
+  const n = mv.plan.ins, e = mvEase(u);
+  return {s: n.s0 * Math.pow(n.s1 / n.s0, e), th: n.th0 * (1 - e), p: [n.p0[0] + (n.p1[0] - n.p0[0]) * e, n.p0[1] + (n.p1[1] - n.p0[1]) * e]};
+}
+// a tilt image drawn centred at p, s screen px per µm, turned by th (0 = upright as in the Exposure tab)
+function mvTiltDraw(g, L, ts, p, s, th, k, alpha = 1, label = ""){
+  const G = ts.geo, w = G.nx * G.ps * s, h = G.ny * G.ps * s;
+  g.save(); g.globalAlpha = alpha; g.translate(p[0], p[1]); g.rotate(th);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+  if(L) g.drawImage(L.cv, -w / 2, -h / 2, w, h); else { g.fillStyle = "rgba(255,255,255,0.08)"; g.fillRect(-w / 2, -h / 2, w, h); }
+  g.strokeStyle = "rgba(255,255,255,0.86)"; g.lineWidth = 2.5 * k; g.strokeRect(-w / 2, -h / 2, w, h);
+  g.restore();
+  if(label){
+    const ca = Math.abs(Math.cos(th)), sa = Math.abs(Math.sin(th)), ew = w * ca + h * sa, eh = w * sa + h * ca;
+    g.save(); g.globalAlpha = alpha; g.font = `700 ${24 * k}px ${mvFont()}`; g.textAlign = "left"; g.textBaseline = "middle";
+    const tw = g.measureText(label).width, lx = p[0] - ew / 2 + 8 * k, ly = p[1] - eh / 2 + 22 * k;
+    mvRound(g, lx, ly - 16 * k, tw + 16 * k, 32 * k, 8 * k, "rgba(0,0,0,0.7)"); g.fillStyle = AREA.exp; g.fillText(label, lx + 8 * k, ly + 1 * k);
+    g.restore();
+  }
+  return {w, h};
+}
+function mvFrameSingle(t){
+  const P = mv.plan, c = mv.cfg, g = mv.g, k = P.k, L = c.labels, ts = mv.series[0], p = mv.p;
+  const cam = (cc, s, Q) => ({c: cc, s, Q, W: P.MW, H: P.MH});
+  const sub2 = L[2][1] || `${p.name} · area ${p.id}.${ts.k}`, sub3 = L[3][1] || mvSchemeText(mv.seq);
+  const z0 = mv.seq.length ? mv.seq[0].z.get(ts.k) : ts.secs[0].z, a0 = mv.seq.length ? mv.seq[0].a : NaN;
+  let need = null;
+  const timg = z => { const im = mv.timg.get(mvKey(ts.path, z, 1024)); if(!im) need = [ts, z, 1024]; return im || mv.timg.get(mvKey(ts.path, z0, 1024)) || null; };
+  if(mvMapStages(g, t, P, L)) return null;
+  if(t < P.tE){
+    const td = t - P.tD, ZT = P.ZT, u = Math.min(1, td / ZT), z = mvZoomCam(u, P.mapC, P.zMap, ts.geo.S, P.zTg), cm = cam(z.c, z.s, P.turnMS(mvEase(u)));
+    mvScene(g, cm, 1, mvEase((Math.log(z.s / P.zMap) / Math.log(P.zTg / P.zMap)) * 1.6 - 0.5));
+    mvPoly(g, cm, ts.geo, mvEase((td - ZT - 0.2) / 0.6), k);
+    if(td < ZT - 0.8) mvTitle(g, k, L[1][0], L[1][1] || mv.mapName, 1 - mvEase((td - ZT + 1.4) / 0.6)); else mvTitle(g, k, L[2][0], sub2, mvEase((td - ZT + 0.8) / 0.6));
+    mvSceneBar(g, P, cm);
+    return null;
+  }
+  if(!mv.bgEnd){ mv.bgEnd = document.createElement("canvas"); mv.bgEnd.width = P.MW; mv.bgEnd.height = P.MH; mvScene(mv.bgEnd.getContext("2d"), P.camEnd, 1, 1); }
+  const frame = (img, ins, dim, angle, title, sub, ta, bar, schAng, schAlpha) => {
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = "#000"; g.fillRect(0, 0, P.MW, P.MH);
+    g.globalAlpha = dim; g.drawImage(mv.bgEnd, 0, 0); g.globalAlpha = 1;
+    const {w, h} = mvTiltDraw(g, img, ts, ins.p, ins.s, ins.th, k);
+    const ca = Math.abs(Math.cos(ins.th)), sa = Math.abs(Math.sin(ins.th)), ew = w * ca + h * sa, eh = w * sa + h * ca;
+    const xs = ins.p[0] - ew / 2, xr = ins.p[0] + ew / 2, yb = ins.p[1] + eh / 2;
+    mvAngleBar(g, k, xs, yb + 22 * k, angle);
+    if(c.schematic) mvSchematic(g, k, Math.min(P.MW - 170 * k, xr + 190 * k), ins.p[1], schAng, schAlpha);
+    if(bar) mvBar(g, k, 1000 / ins.s, xr - 20 * k, yb - 24 * k);
+    mvTitle(g, k, title, sub, ta);
+  };
+  if(t < P.tF){
+    const te = t - P.tE, ins = mvInset((te - 0.2) / 1.6), first = te < 0.6;
+    frame(timg(z0), ins, 1 - 0.6 * mvEase(te / 1.2), te > 1.6 ? a0 : NaN, first ? L[2][0] : L[3][0], first ? sub2 : sub3,
+      first ? 1 - mvEase(te / 0.6) : mvEase((te - 0.6) / 0.6), te > 1.6, a0, mvEase((te - 1.4) / 0.6));
+  } else {
+    const n = mv.seq.length, x = (t - P.tF) * Math.max(1, c.tiltFps), j = Math.max(0, Math.min(Math.floor(x), n - 1)), jn = Math.min(j + 1, n - 1), fr = j < n - 1 ? x - j : 0;
+    const cur = n ? mv.seq[j] : {z: new Map([[ts.k, z0]]), a: a0}, nxt = n ? mv.seq[jn] : cur;
+    frame(timg(cur.z.get(ts.k)), mvInset(1), 0.4, cur.a, L[3][0], sub3, 1, true, cur.a + (nxt.a - cur.a) * fr, 1);
+  }
+  return need;
+}
+// the tilt axis through N.1 (Tomo5's tilt-axis angle, in stage coordinates)
+function mvAxis(g, cam, alpha, k){
+  if(!mv.cfg.tiltAxis || alpha <= 0 || !mv.targets.length) return;
+  const ta = (mv.p.plan?.tiltAxis || 0) * Math.PI / 180, o = mv.targets[0].stage;
+  const p = mvPt(cam, o), q = mvPt(cam, [o[0] + Math.cos(ta), o[1] + Math.sin(ta)]), L = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+  let ux = (q[0] - p[0]) / L, uy = (q[1] - p[1]) / L;
+  if(ux < -1e-6 || (Math.abs(ux) < 1e-6 && uy > 0)){ ux = -ux; uy = -uy; }
+  const R = Math.hypot(cam.W, cam.H);
+  g.save(); g.globalAlpha = alpha; g.strokeStyle = "rgba(120,200,255,0.95)"; g.lineWidth = 3 * k; g.setLineDash([18 * k, 12 * k]);
+  g.beginPath(); g.moveTo(p[0] - ux * R, p[1] - uy * R); g.lineTo(p[0] + ux * R, p[1] + uy * R); g.stroke(); g.setLineDash([]);
+  const d = Math.abs(ux) > 0.35 ? (cam.W * 0.8 - p[0]) / ux : (cam.H * 0.22 - p[1]) / uy;
+  g.translate(p[0] + ux * d, p[1] + uy * d); g.rotate(Math.atan2(uy, ux));
+  g.font = `600 ${24 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle";
+  const tw = g.measureText("Tilt axis").width;
+  mvRound(g, -tw / 2 - 12 * k, -46 * k, tw + 24 * k, 36 * k, 9 * k, "rgba(0,0,0,0.65)"); g.fillStyle = "rgb(120,200,255)"; g.fillText("Tilt axis", 0, -27 * k);
+  g.restore();
+}
+// a picked area: yellow camera box, a beam circle drawn around it, its number N.k
+function mvMark(g, cam, x, prog, k, alpha){
+  if(prog <= 0 || alpha <= 0) return;
+  const G = mvFoot(x), P = corners(G).map(q => mvPt(cam, q)), c0 = mvPt(cam, x.stage), r = Math.max(16 * k, overlay().beam / 2 * cam.s);
+  g.save(); g.globalAlpha = alpha * mvEase(prog / 0.35); g.strokeStyle = "rgb(255,200,40)"; g.lineWidth = 3 * k; g.lineJoin = "round";
+  g.beginPath(); P.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.stroke();
+  const sweep = mvEase((prog - 0.2) / 0.5);
+  if(sweep > 0){ g.globalAlpha = alpha; g.strokeStyle = AREA.exp; g.lineWidth = 3.5 * k; g.beginPath(); g.arc(c0[0], c0[1], r, -Math.PI / 2, -Math.PI / 2 + sweep * Math.PI * 2); g.stroke(); }
+  const na = mvEase((prog - 0.45) / 0.35);
+  if(na > 0){
+    g.globalAlpha = alpha * na; g.font = `700 ${26 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle";
+    const lab = `${mv.p.id}.${x.k}`, tw = g.measureText(lab).width, lx = c0[0] + r * 0.74 + 24 * k, ly = c0[1] - r * 0.74 - 14 * k;
+    mvRound(g, lx - tw / 2 - 9 * k, ly - 17 * k, tw + 18 * k, 34 * k, 9 * k, "rgba(0,0,0,0.7)"); g.fillStyle = AREA.exp; g.fillText(lab, lx, ly + 1 * k);
+  }
+  g.restore();
+}
+function mvTracking(g, cam, alpha, k){            // Tomo5's tracking area (yellow), shown with the tilt axis
+  const tr = mv.plan.tr; if(!tr || alpha <= 0) return;
+  const c0 = mvPt(cam, tr), r = overlay().beam / 2 * cam.s;
+  g.save(); g.globalAlpha = alpha; g.strokeStyle = AREA.track; g.lineWidth = 3 * k; g.setLineDash([10 * k, 8 * k]);
+  g.beginPath(); g.arc(c0[0], c0[1], r, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  g.font = `600 ${22 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = AREA.track; g.fillText("Tracking", c0[0], c0[1] + r + 22 * k);
+  g.restore();
+}
+function mvFramePar(t){
+  const P = mv.plan, c = mv.cfg, g = mv.g, k = P.k, L = c.pLabels, n = mv.targets.length, ts = mv.targets.filter(x => x.ts);
+  const cam = (cc, s, Q) => ({c: cc, s, Q, W: P.MW, H: P.MH});
+  if(mvMapStages(g, t, P, L)) return null;
+  let need = null;
+  const imgOf = (x, z) => {
+    const im = z == null ? null : mv.timg.get(mvKey(x.ts.path, z, P.grid.px));
+    if(im){ mv.lastImg.set(x.k, im); return im; }
+    if(z != null && !need) need = [x.ts, z, P.grid.px];
+    return mv.lastImg.get(x.k) || null;
+  };
+  const pickSub = kk => L[2][1] || `${mv.p.name} · area ${mv.p.id}.${mv.targets[kk - 1].k} (${kk} of ${n})`;
+  const allSub = L[2][1] || `${mv.p.name} · ${n} area${n === 1 ? "" : "s"}`;
+  if(t < P.tE){
+    const u = (t - P.tD) / P.TV, z = mvZoomCam(u, P.mapC, P.zMap, P.camV.c, P.zV), cm = cam(z.c, z.s, P.turnMS(mvEase(u)));
+    mvScene(g, cm, 1, mvEase((z.s / P.zV - 0.25) / 0.55));
+    if(u < 0.65) mvTitle(g, k, L[1][0], L[1][1] || mv.mapName, 1 - mvEase((u - 0.35) / 0.3)); else mvTitle(g, k, L[2][0], allSub, mvEase((u - 0.7) / 0.3));
+    mvSceneBar(g, P, cm); return null;
+  }
+  if(t < P.tG){
+    const cm = P.camV; mvScene(g, cm, 1, 1);
+    // area 1, then the tilt axis (and tracking area) in a slot of the same length, then the other areas one slot each
+    const ax = mvEase((t - P.tF - 1.0 * P.TP) / Math.max(0.3, 0.6 * P.TP));
+    mvAxis(g, cm, ax, k); if(P.axisSlot) mvTracking(g, cm, ax, k);
+    let kk = 0;
+    mv.targets.forEach((x, i) => { const pr = (t - P.tF - (i ? i + P.axisSlot : 0) * P.TP) / P.TP; if(pr > 0) kk = i + 1; mvMark(g, cm, x, Math.min(1.5, pr), k, 1); });
+    mvTitle(g, k, L[2][0], kk ? pickSub(kk) : allSub, 1);
+    mvSceneBar(g, P, cm); return null;
+  }
+  // from here on: the View with all areas marked, dimmed, and the tilt series in a grid
+  if(!mv.bgEnd){
+    mv.bgEnd = document.createElement("canvas"); mv.bgEnd.width = P.MW; mv.bgEnd.height = P.MH;
+    const bg = mv.bgEnd.getContext("2d"); mvScene(bg, P.camV, 1, 1); mvAxis(bg, P.camV, 1, k); if(P.axisSlot) mvTracking(bg, P.camV, 1, k); mv.targets.forEach(x => mvMark(bg, P.camV, x, 1.5, k, 1));
+  }
+  const G = P.grid, sub3 = L[3][1] || `${ts.length} area${ts.length === 1 ? "" : "s"} in parallel${mv.seq.length ? ` · ${mvSchemeText(mv.seq)}` : ""}`;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = "#000"; g.fillRect(0, 0, P.MW, P.MH);
+  if(!G){ g.globalAlpha = 1; g.drawImage(mv.bgEnd, 0, 0); mvTitle(g, k, L[2][0], allSub, 1); return null; }
+  const thOf = x => { const QR = mmul(P.Qend, x.ts.geo.R); return det2(QR) > 0 ? Math.atan2(QR[1][0], QR[0][0]) : 0; };
+  if(t < P.tH){
+    const u = (t - P.tG) / 1.8, e = mvEase(u);
+    g.globalAlpha = 1 - 0.65 * e; g.drawImage(mv.bgEnd, 0, 0); g.globalAlpha = 1;
+    for(const x of ts){
+      const z = mv.seq.length ? mv.seq[0].z.get(x.k) : null, p0 = mvPt(P.camV, x.ts.geo.S), p1 = G.cells.get(x.k), s = P.zV * Math.pow(G.s / P.zV, e);
+      mvTiltDraw(g, imgOf(x, z), x.ts, [p0[0] + (p1[0] - p0[0]) * e, p0[1] + (p1[1] - p0[1]) * e], s, thOf(x) * (1 - e), k, 1, e > 0.6 ? `${mv.p.id}.${x.k}` : "");
+    }
+    if(u < 0.35) mvTitle(g, k, L[2][0], allSub, 1 - mvEase(u / 0.35)); else mvTitle(g, k, L[3][0], sub3, mvEase((u - 0.35) / 0.35));
+    return need;
+  }
+  g.globalAlpha = 0.35; g.drawImage(mv.bgEnd, 0, 0); g.globalAlpha = 1;
+  const ns = mv.seq.length, x0 = (t - P.tH) * Math.max(1, c.tiltFps), j = Math.max(0, Math.min(Math.floor(x0), ns - 1)), jn = Math.min(j + 1, ns - 1), fr = j < ns - 1 ? x0 - j : 0;
+  const cur = mv.seq[j], nxt = mv.seq[jn];
+  for(const x of ts) mvTiltDraw(g, imgOf(x, cur?.z.get(x.k)), x.ts, G.cells.get(x.k), G.s, 0, k, 1, `${mv.p.id}.${x.k}`);
+  if(cur){
+    mvAngleBar(g, k, Math.max(40 * k, (G.right - 40 * k) / 2 - 200 * k), G.bottom + 20 * k, cur.a);
+    if(c.schematic) mvSchematic(g, k, P.MW - 190 * k, P.MH / 2, cur.a + (nxt.a - cur.a) * fr, 1);
+  }
+  mvBar(g, k, 1000 / G.s, P.MW - 60 * k, P.MH - 60 * k);
+  mvTitle(g, k, L[3][0], sub3, 1);
+  return need;
+}
+
+// ---- preview: show, play, scrub
+async function mvDraw(t){ let need, guard = 0; while((need = mvFrame(t)) && guard++ < 200) await mvTiltImg(...need); }
+function mvShow(t){
+  if(!mv?.ready) return;
+  mv.t = Math.max(0, Math.min(mv.plan.total, t));
+  const need = mvFrame(mv.t);
+  const sl = $("#mvTime"); if(document.activeElement !== sl) sl.value = mv.t;
+  $("#mvClock").textContent = `${mv.t.toFixed(1)} / ${mv.plan.total.toFixed(1)} s`;
+  const nk = need && mvKey(need[0].path, need[1], need[2]);
+  if(nk && !mv.loading.has(nk)){
+    const self = mv; self.loading.add(nk);
+    mvTiltImg(...need).then(() => { if(mv === self && !self.busy && !self.playing) mvShow(self.t); }).catch(() => {}).finally(() => self.loading.delete(nk));
+  }
+}
+function mvPlay(on){
+  if(!mv?.ready) return;
+  mv.playing = on; $("#mvPlay").textContent = on ? "Pause" : "Play";
+  if(!on) return;
+  if(mv.t >= mv.plan.total - 0.05) mv.t = 0;
+  const self = mv, t0 = performance.now() - mv.t * 1000;
+  const step = () => { if(mv !== self || !self.playing || self.busy) return; const t = (performance.now() - t0) / 1000; mvShow(t); if(t >= self.plan.total) return mvPlay(false); requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+function mvSay(t, err){ const el = $("#mvStatus"); el.textContent = t || ""; el.classList.toggle("err", !!err); }
+
+// ---- settings panel
+function mvForm(){
+  const c = mv.cfg, par = mv.kind === "parallel", labs = par ? c.pLabels : c.labels, p = mv.p;
+  const stage = par ? ["Atlas", "Search Map", "Target selection", "Tilt series"] : ["Atlas", "Search Map", "Acquisition position", "Tilt series"];
+  const subPh = i => i === 1 ? "Subtitle (empty = the map name)" : i === 2 ? (par ? "Subtitle (empty = position and area)" : "Subtitle (empty = position and area)") : i === 3 ? "Subtitle (empty = the angle scheme)" : "Subtitle";
+  const areaOpts = p.areas.map(a => `<option value="${a.k}" ${a.k === mv.k ? "selected" : ""} ${a.mrc ? "" : "disabled"}>${p.id}.${a.k}${a.mrc ? "" : " (no tilt series)"}</option>`).join("");
+  $("#mvSide").innerHTML = `
+    ${par ? `<p class="mvnote">${esc(p.name)}: ${p.areas.length} area${p.areas.length === 1 ? "" : "s"}, ${p.areas.filter(a => a.mrc).length} with a tilt series.</p>`
+          : `<label class="mvf full">Area<select id="mvArea">${areaOpts}</select></label>`}
+    <h4>Labels</h4>
+    ${stage.map((s, i) => `<div class="mvlab"><span>${i + 1}. ${s}</span><input type="text" data-lab="${i}:0" value="${esc(labs[i][0])}" placeholder="Title (empty = none)" aria-label="${s} title"><input type="text" data-lab="${i}:1" value="${esc(labs[i][1])}" placeholder="${subPh(i)}" aria-label="${s} subtitle"></div>`).join("")}
+    <h4>Camera</h4>
+    <div class="mvfs">
+      ${par ? `<label class="mvf" title="1 = all areas just fit. Lower shows more around them.">View zoom ×<input type="number" id="mvVZoom" min="0.2" max="5" step="0.1" value="${c.viewZoom}"></label>
+               <label class="mvc full"><input type="checkbox" id="mvAxis" ${c.tiltAxis ? "checked" : ""}> Show the tilt axis and tracking area</label>`
+            : `<label class="mvf" title="Zoom on the area relative to the whole search map">Final zoom ×<input type="number" id="mvZoom" min="1" max="200" step="1" value="${c.zoom || ""}"></label>`}
+    </div>
+    <h4>Timing (seconds)</h4>
+    <div class="mvfs">
+      <label class="mvf">Atlas<input type="number" id="mvTAtlas" min="0.5" max="30" step="0.5" value="${c.tAtlas}"></label>
+      <label class="mvf">Zoom to map<input type="number" id="mvTToMap" min="0.5" max="30" step="0.5" value="${c.tToMap}"></label>
+      <label class="mvf">Search map<input type="number" id="mvTMap" min="0.5" max="30" step="0.5" value="${c.tMap}"></label>
+      ${par ? `<label class="mvf">Zoom to areas<input type="number" id="mvTToV" min="0.5" max="30" step="0.5" value="${c.tToView}"></label>
+               <label class="mvf">Per area<input type="number" id="mvTPick" min="0.2" max="10" step="0.1" value="${c.tPick}"></label>`
+            : `<label class="mvf">Zoom to area<input type="number" id="mvTToTg" min="0.5" max="30" step="0.5" value="${c.tToTg}"></label>
+               <label class="mvf">Hold on area<input type="number" id="mvHold" min="0" max="20" step="0.5" value="${c.hold}"></label>`}
+    </div>
+    <h4>Tilt series playback</h4>
+    <div class="mvfs">
+      <label class="mvf full">Order<select id="mvOrder">
+        <option value="acq" ${c.order === "acq" ? "selected" : ""}>as acquired (.mdoc time, else file order)</option>
+        <option value="angle" ${c.order === "angle" ? "selected" : ""}>by angle, lowest → highest</option>
+        <option value="sweep" ${c.order === "sweep" ? "selected" : ""}>start → lowest → highest → start</option></select></label>
+      <label class="mvf">Images per second<input type="number" id="mvTfps" min="1" max="30" step="1" value="${c.tiltFps}"></label>
+      <label class="mvf" title="Low-pass for the tilt images (Å); 0 = off">Low-pass (Å)<input type="number" id="mvLp" min="0" max="500" step="5" value="${c.lp}"></label>
+      <label class="mvf">Lowest angle (°)<input type="number" id="mvLow" step="1" value="${c.low ?? -60}"></label>
+      <label class="mvf">Highest angle (°)<input type="number" id="mvHigh" step="1" value="${c.high ?? 60}"></label>
+      <label class="mvc full"><input type="checkbox" id="mvSchem" ${c.schematic ? "checked" : ""}> Show the stage-tilt schematic</label>
+    </div>
+    <h4>Output</h4>
+    <div class="mvfs">
+      <label class="mvf">Size<select id="mvSize">${["1920x1080", "1280x720", "3840x2160"].map(v => `<option ${c.size === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label class="mvf">Frames per second<select id="mvFps">${[24, 30, 60].map(v => `<option ${c.fps === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    </div>`;
+}
+function mvRead(){
+  const c = mv.cfg, n = (id, d) => { const el = $(id); if(!el) return d; const v = Number(el.value); return el.value !== "" && Number.isFinite(v) ? v : d; };
+  const labs = mv.kind === "parallel" ? c.pLabels : c.labels;
+  $$("#mvSide [data-lab]").forEach(el => { const [i, j] = el.dataset.lab.split(":").map(Number); labs[i][j] = el.value; });
+  const lpOld = c.lp;
+  Object.assign(c, {zoom: Math.max(1, n("#mvZoom", c.zoom)), hold: Math.max(0, n("#mvHold", c.hold)),
+    tAtlas: n("#mvTAtlas", 3), tToMap: n("#mvTToMap", 4), tMap: n("#mvTMap", 2), tToTg: n("#mvTToTg", c.tToTg), tToView: n("#mvTToV", c.tToView),
+    viewZoom: Math.max(0.2, n("#mvVZoom", c.viewZoom)), tiltAxis: $("#mvAxis") ? $("#mvAxis").checked : c.tiltAxis, tPick: Math.max(0.2, n("#mvTPick", c.tPick)),
+    tiltFps: Math.max(1, n("#mvTfps", 10)), lp: Math.max(0, n("#mvLp", 60)), low: n("#mvLow", c.low), high: n("#mvHigh", c.high), order: $("#mvOrder").value,
+    schematic: $("#mvSchem").checked, size: $("#mvSize").value, fps: Number($("#mvFps").value) || 30});
+  if(c.low > c.high) [c.low, c.high] = [c.high, c.low];
+  if(c.lp !== lpOld){ mv.timg.clear(); mv.lastImg.clear(); mv.bgEnd = null; }
+  mvSaveCfg();
+}
+$("#mvSide").addEventListener("change", e => {
+  if(!mv || mv.busy) return;
+  if(e.target.id === "mvArea"){ mvPlay(false); return void mvOpen(mv.pi, +e.target.value, "single"); }
+  mvRead(); if(!mv.ready) return;
+  const frac = mv.plan.total ? mv.t / mv.plan.total : 0, isLab = !!e.target.dataset.lab;
+  mvPlan(); mvShow(isLab ? mv.t : Math.min(mv.plan.total, frac * mv.plan.total));
+});
+$("#mvTime").addEventListener("input", e => { if(mv && !mv.busy){ mvPlay(false); mvShow(Number(e.target.value)); } });
+$("#mvPlay").addEventListener("click", () => { if(mv && !mv.busy) mvPlay(!mv.playing); });
+$("#mvClose").addEventListener("click", () => $("#mvDlg").close());
+$("#mvDlg").addEventListener("close", () => { if(mv){ mv.cancel = true; mv.playing = false; if(mv.movieId && mv.busy) fetch(`api/movie/cancel?id=${mv.movieId}`, {method: "POST"}).catch(() => {}); } });
+$("#mvDlg").addEventListener("cancel", e => { if(mv?.busy){ e.preventDefault(); mv.cancel = true; } });
+
+// ---- encoding: ffmpeg on the server (.mp4), else WebCodecs in this browser (.webm)
+function mvWebm(chunks, codecId, w, h, fps){               // minimal WebM writer, exact time stamps
+  const cat = arrs => { const n = arrs.reduce((a, x) => a + x.length, 0), o = new Uint8Array(n); let k = 0; for(const x of arrs){ o.set(x, k); k += x.length; } return o; };
+  const uint = v => { const b = []; do{ b.unshift(v % 256); v = Math.floor(v / 256); }while(v > 0); return Uint8Array.from(b); };
+  const f64 = v => { const b = new Uint8Array(8); new DataView(b.buffer).setFloat64(0, v); return b; };
+  const str = t => new TextEncoder().encode(t);
+  const size = n => { const b = new Uint8Array(8); b[0] = 1; let v = n; for(let i = 7; i > 0; i--){ b[i] = v % 256; v = Math.floor(v / 256); } return b; };
+  const el = (id, body) => { const d = body instanceof Uint8Array ? body : cat(body); return cat([Uint8Array.from(id), size(d.length), d]); };
+  const ms = us => Math.round(us / 1000), dur = chunks.length * 1000 / fps;
+  const head = el([0x1A,0x45,0xDF,0xA3], [el([0x42,0x86], uint(1)), el([0x42,0xF7], uint(1)), el([0x42,0xF2], uint(4)), el([0x42,0xF3], uint(8)), el([0x42,0x82], str("webm")), el([0x42,0x87], uint(2)), el([0x42,0x85], uint(2))]);
+  const info = el([0x15,0x49,0xA9,0x66], [el([0x2A,0xD7,0xB1], uint(1000000)), el([0x4D,0x80], str("Tomo5 Data Viewer")), el([0x57,0x41], str("Tomo5 Data Viewer")), el([0x44,0x89], f64(dur))]);
+  const tracks = el([0x16,0x54,0xAE,0x6B], el([0xAE], [el([0xD7], uint(1)), el([0x73,0xC5], uint(1)), el([0x9C], uint(0)), el([0x86], str(codecId)), el([0x83], uint(1)), el([0x23,0xE3,0x83], uint(Math.round(1e9 / fps))),
+    el([0xE0], [el([0xB0], uint(w)), el([0xBA], uint(h))])]));
+  const clusters = []; let cur = null, t0 = 0;
+  for(const c of chunks){
+    const t = ms(c.t);
+    if(!cur || c.key || t - t0 > 30000){ if(cur) clusters.push(el([0x1F,0x43,0xB6,0x75], cur)); t0 = t; cur = [el([0xE7], uint(t))]; }
+    const rel = t - t0, hd = Uint8Array.from([0x81, (rel >> 8) & 255, rel & 255, c.key ? 0x80 : 0]);
+    cur.push(el([0xA3], cat([hd, c.data])));
+  }
+  if(cur) clusters.push(el([0x1F,0x43,0xB6,0x75], cur));
+  return new Blob([head, el([0x18,0x53,0x80,0x67], [info, tracks, ...clusters])], {type: "video/webm"});
+}
+async function mvBrowserCodec(w, h, fps){
+  if(!window.VideoEncoder || !window.VideoFrame) return null;
+  for(const [codec, id] of [["vp8", "V_VP8"], ["vp09.00.40.08", "V_VP9"], ["vp09.00.51.08", "V_VP9"]]){
+    try{ const cfg = {codec, width: w, height: h, bitrate: w * h >= 3840 * 2160 ? 40e6 : 16e6, framerate: fps}; if((await VideoEncoder.isConfigSupported(cfg)).supported) return {cfg, id}; }catch{}
+  }
+  return null;
+}
+function mvEncoderNote(){
+  $("#mvEnc").textContent = SERVER?.ffmpeg ? "Encoding: ffmpeg on the server → .mp4"
+    : "Encoding: in this browser → .webm (ffmpeg was not found on the server; start it with --ffmpeg PATH for .mp4)";
+}
+const mvName = () => { const p = mv.p; return mv.kind === "parallel" ? `${p.name}_parallel_acquisition_movie` : `${p.name}${mv.k > 1 ? `_${mv.k}` : ""}_acquisition_movie`; };
+async function mvRender(){
+  if(!mv?.ready || mv.busy) return;
+  const self = mv, c = self.cfg, btn = $("#mvRender"), out = $("#mvOut");
+  mvPlay(false); self.busy = true; self.cancel = false; out.innerHTML = ""; btn.textContent = "Cancel";
+  $$("#mvSide input, #mvSide select, #mvTime, #mvPlay").forEach(el => el.disabled = true);
+  const prog = (t, f) => { mvSay(t); $("#mvProg").value = f; $("#mvProg").hidden = false; };
+  try{
+    // read every tilt image first, so no frame shows a stand-in
+    const px = self.kind === "parallel" ? self.plan.grid?.px : 1024, need = [];
+    if(px) for(const st of self.seq) for(const ts of self.series){ const z = st.z.get(ts.k); if(z != null) need.push([ts, z]); }
+    const uniq = [...new Map(need.map(([ts, z]) => [mvKey(ts.path, z, px), [ts, z]])).values()];
+    self.cacheMax = Math.max(self.cacheMax || 0, uniq.length + 8);
+    for(let i = 0; i < uniq.length; i++){ if(self.cancel) throw new Error("cancelled"); prog(`Reading tilt image ${i + 1} of ${uniq.length}…`, 0.15 * i / uniq.length); await mvTiltImg(uniq[i][0], uniq[i][1], px); }
+    const P = self.plan, n = Math.round(P.total * c.fps);
+    if(SERVER?.ffmpeg){
+      const r = await fetch("api/movie/start", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({w: P.MW, h: P.MH, fps: c.fps})});
+      const j = await r.json(); if(!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      self.movieId = j.id;
+      for(let i = 0; i < n; i++){
+        if(self.cancel) throw new Error("cancelled");
+        await mvDraw(i / c.fps);
+        const blob = await new Promise(res => self.canvas.toBlob(res, "image/jpeg", 0.93));
+        const fr = await fetch(`api/movie/frame?id=${j.id}`, {method: "POST", headers: {"Content-Type": "image/jpeg"}, body: blob});
+        if(!fr.ok) throw new Error(((await fr.json().catch(() => ({}))).error) || `HTTP ${fr.status}`);
+        if(i % 5 === 0) prog(`Rendering frame ${i + 1} of ${n}…`, 0.15 + 0.83 * i / n);
+      }
+      prog("Finishing the video…", 0.99);
+      const e = await fetch(`api/movie/end?id=${j.id}`, {method: "POST"}), ej = await e.json(); if(!e.ok) throw new Error(ej.error || `HTTP ${e.status}`);
+      const id = j.id; self.movieId = null;
+      out.innerHTML = `<a class="btn primary" href="api/movie/file?id=${id}" download="${esc(mvName())}.mp4">Download .mp4 (${(ej.size / 1e6).toFixed(1)} MB)</a>`;
+      mvSay(`Done: ${ej.frames} frames, ${P.total.toFixed(1)} s, encoded with ${j.encoder}.`);
+    } else {
+      const bc = await mvBrowserCodec(P.MW, P.MH, c.fps);
+      if(!bc) throw new Error("this browser cannot encode video, and the server has no ffmpeg. Start the server with --ffmpeg PATH, or use a current Chrome or Edge.");
+      const chunks = []; let failed = null;
+      const enc = new VideoEncoder({output: ch => { const d = new Uint8Array(ch.byteLength); ch.copyTo(d); chunks.push({t: ch.timestamp, key: ch.type === "key", data: d}); }, error: e => { failed = e; }});
+      enc.configure(bc.cfg);
+      for(let i = 0; i < n; i++){
+        if(self.cancel){ enc.close(); throw new Error("cancelled"); }
+        if(failed) throw failed;
+        await mvDraw(i / c.fps);
+        const vf = new VideoFrame(self.canvas, {timestamp: Math.round(i * 1e6 / c.fps), duration: Math.round(1e6 / c.fps)});
+        enc.encode(vf, {keyFrame: i % (c.fps * 2) === 0}); vf.close();
+        while(enc.encodeQueueSize > 4) await new Promise(res => setTimeout(res, 5));
+        if(i % 5 === 0) prog(`Encoding frame ${i + 1} of ${n} in this browser…`, 0.15 + 0.83 * i / n);
+      }
+      await enc.flush(); enc.close();
+      if(failed) throw failed;
+      const blob = mvWebm(chunks, bc.id, P.MW, P.MH, c.fps);
+      out.innerHTML = `<a class="btn primary" href="${URL.createObjectURL(blob)}" download="${esc(mvName())}.webm">Download .webm (${(blob.size / 1e6).toFixed(1)} MB)</a>`;
+      mvSay(`Done: ${n} frames, ${P.total.toFixed(1)} s, encoded in this browser (${bc.cfg.codec}).`);
+    }
+  }catch(e){
+    if(self.movieId){ fetch(`api/movie/cancel?id=${self.movieId}`, {method: "POST"}).catch(() => {}); self.movieId = null; }
+    mvSay(e.message === "cancelled" ? "Cancelled." : `Rendering failed: ${e.message}`, e.message !== "cancelled");
+  }finally{
+    self.busy = false; btn.textContent = "Make movie"; $("#mvProg").hidden = true;
+    $$("#mvSide input, #mvSide select, #mvTime, #mvPlay").forEach(el => el.disabled = false);
+    if(mv === self && $("#mvDlg").open) mvShow(self.t);
+  }
+}
+$("#mvRender").addEventListener("click", () => { if(mv?.busy) mv.cancel = true; else mvRender(); });
+// what the right-click menu offers for a position (and area)
+function movieItems(item, head, pi, k){
+  const p = SESSION.positions[pi]; if(!p) return;
+  const a = p.areas.find(x => x.k === k) || p.areas[0], withTs = p.areas.filter(x => x.mrc).length;
+  head("Movie");
+  item(`Make acquisition movie (${p.id}.${a?.k ?? 1})…`, () => mvOpen(pi, a?.k ?? 1, "single"),
+    {disabled: !a?.mrc, hint: a?.mrc ? "" : "no tilt series: choose the Tilt Series Folder"});
+  item(`Make parallel acquisition movie (${p.name})…`, () => mvOpen(pi, a?.k ?? 1, "parallel"),
+    {disabled: p.areas.length < 2 || !withTs, hint: p.areas.length < 2 ? "only one area" : !withTs ? "no tilt series" : `${withTs} of ${p.areas.length} areas with a tilt series`});
+}
+
 /* ------------------------------------------------------------------ right-click zoom menu
    Levels: Atlas › Overview › Search Map › Search › Exposure. Zoom in can jump to any deeper level
    for the item under the cursor; zoom out goes exactly one level up (like the previous tab).
@@ -2191,6 +2993,12 @@ function menuItems(sx, sy){
         item(`Exposure ${p.id}.${a.k}`, () => navigate({tab: "exposure", pos: STATE.pos, area: a.k}), {disabled: !ex, hint: ex ? ex.kind : "no image"});
       }
     }
+  }
+  // acquisition movies: a sub-position (or its tilt series) of a batch position
+  if(SESSION?.positions.length){
+    if(level === "exposure" && STATE.pos >= 0) movieItems(item, head, STATE.pos, STATE.area);
+    else if(level === "search" && STATE.task === "batch" && STATE.pos >= 0) movieItems(item, head, hit ? hit.i : STATE.pos, hit?.k || STATE.area);
+    else if(hit && (level === "searchmap" || level === "overview")) movieItems(item, head, hit.i, hit.k || 1);
   }
   // edit mode (Batch Positions › Search, selected position): add / delete sub-positions
   if(canEditAreas() && stage){
