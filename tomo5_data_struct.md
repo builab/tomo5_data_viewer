@@ -153,7 +153,7 @@ Thermo Fisher `MicroscopeImage` documents, like EPU's.
 | `microscopeData/stage/Position/X, Y, Z` | Stage position of the image centre, in metres. For tiles, it includes the image shift used to reach the tile. |
 | `microscopeData/stage/Position/A` | Tilt angle, in radians |
 | `SpatialScale/pixelSize/x/numericValue` | Pixel size of the image, in metres |
-| `ReferenceTransformation/matrix/_m11 … _m22` | Image pixels (x right, y down) ↔ stage (rotation and flip), per unbinned camera pixel. As Tomo5 displays it, `stage = S − M · (pixel − centre)`: note the minus sign. |
+| `ReferenceTransformation/matrix/_m11 … _m22` | Image pixels (x right, y down) ↔ stage (rotation and flip), often per unbinned camera pixel. See [Coordinate transforms](#coordinate-transforms-image-pixels--stage): `stage = S − ps · M̂ · (pixel − centre)`, note the minus sign. |
 | `microscopeData/optics/TemMagnification/NominalMagnification` | Magnification |
 | `microscopeData/acquisition/camera/ExposureTime` | Exposure time, in seconds |
 | `CustomData/…/AppliedDefocus` | Applied defocus, in metres |
@@ -166,6 +166,87 @@ Notes:
   4005 × 4005 px at 8.65 nm (34.64 µm) while its XML lists a 2048 × 2048 readout.
 - The `ReferenceTransformation` scale can be per unbinned pixel (tiles, `SearchMap.xml`:
   half the pixel size at binning 2), so only its direction should be used.
+
+## Coordinate transforms: image pixels ↔ stage
+
+Every Tomo5 image (atlas, overview, tiles, `SearchMap.mrc`, Search images) can be placed in one
+common frame, the **stage frame** (stage X/Y, in metres or µm), from three fields of its XML.
+This is what puts search maps on the atlas, tiles on the overview, tiles into a stitched map, and
+batch positions on all of them.
+
+### The formula
+
+For a pixel `p = (x, y)` of an image (x to the right, y down, in the row order stored in the MRC;
+the first stored row is the top of the image as Tomo5 shows it):
+
+```text
+stage(p) = S − ps · M̂ · (p − c)
+```
+
+| Symbol | Meaning | Source |
+|---|---|---|
+| `S` | Stage X/Y of the image centre | `microscopeData/stage/Position/X, Y` |
+| `ps` | Pixel size of the saved image | `SpatialScale/pixelSize/x/numericValue` |
+| `M` | 2 × 2 matrix `[[_m11, _m12], [_m21, _m22]]` | `ReferenceTransformation/matrix` |
+| `M̂` | `M` normalised: `M / sqrt(|det M|)`, a rotation plus a flip | |
+| `c` | Image centre, `(nx / 2, ny / 2)` | MRC header |
+
+Inverse, to draw a stage position on an image: `p = c − M̂ᵀ · (stage − S) / ps`. Because `M̂` is
+orthonormal, its inverse is its transpose.
+
+### Three things that matter
+
+1. **The minus sign.** `ReferenceTransformation` has the opposite sign of pixel → stage as Tomo5
+   displays the images. With `+M`, positions come out point-reflected through the image centre:
+   search maps landed off the grid on the atlas, and stitched tiles were swapped across the
+   centre tile. With `−M`, everything matches Tomo5. Each image's own orientation is the same either
+   way, which is why the sign is easy to miss.
+2. **Use only the direction of `M`.** Its scale is not always the saved pixel size: for tiles and
+   `SearchMap.xml` it is per *unbinned* camera pixel (2.91 nm, while the tiles are saved at 5.83 nm,
+   binning 2). Normalise it, and take the size from `pixelSize`.
+3. **`pixelSize` is per saved pixel**, also for stitched images: `SearchMap.mrc` is 4005 px at
+   8.65 nm = 34.64 µm, even though its XML lists a 2048 px readout. Do not rescale it by the readout.
+
+### Examples from a Glacios session (Tomo5 5.26)
+
+| Image | `M` (`_m11`, `_m12`, `_m21`, `_m22`) | `|M|` | `pixelSize` | `M̂` ≈ |
+|---|---|---|---|---|
+| `Atlas_*.xml` (110×) | 4.32e-8, −5.04e-7, −5.04e-7, −4.32e-8 | 5.05e-7 | 5.05e-7 m | `[[0.085, −0.996], [−0.996, −0.085]]` |
+| `Overview.xml` (540×) | 1.58e-9, −2.27e-8, −2.27e-8, −1.58e-9 | 2.27e-8 | 2.27e-8 m | `[[0.070, −0.998], [−0.998, −0.070]]` |
+| `Tile_*.xml`, `Position_*_Search.xml` (4100×, bin 2) | 3.66e-11, −2.91e-9, −2.91e-9, −3.66e-11 | 2.91e-9 | 5.83e-9 m | `[[0.013, −1.000], [−1.000, −0.013]]` |
+| `SearchMap.xml` | 5.44e-11, −4.32e-9, −4.32e-9, −5.44e-11 | 4.32e-9 | 8.65e-9 m | `[[0.013, −1.000], [−1.000, −0.013]]` |
+
+All four are reflections of the form `[[a, b], [b, −a]]`: image x runs roughly along −stage Y and
+image y along −stage X, turned by a few degrees that depend on the magnification (about 3.3°
+between the overview and the tiles, which is why Tomo5 draws the tile outlines slightly rotated on
+the overview).
+
+### How the viewer uses it
+
+- **Display orientation.** The view is turned by `−M̂ᵀ` of the main image (atlas, overview, first
+  tile, Search image), so that image appears unrotated and unmirrored, as in Tomo5. Everything else
+  is placed in stage coordinates and goes through the same view transform.
+- **Search maps on the atlas.** The footprint of `SearchMap.mrc` (its size × pixel size, centred on
+  `SearchMap.xml`'s stage position, turned by its `M̂`) drawn on the atlas. Example: SearchMap_1
+  at stage (−506.6, 379.2) µm lands on a grid square, as in Tomo5.
+- **Tiles on the overview, and stitching.** Each `Tile_*.xml` has its own stage position (Tomo5
+  folds the image shift into it) and its own `M̂`. Placing the tiles with the formula reproduces the
+  outlines on Tomo5's Overview and the arrangement of Tomo5's `SearchMap.mrc`. All tiles of a map
+  share one `M̂`, so within the map they differ only by a translation.
+- **Batch positions.** `StagePositionX, Y` of each position (area N.1) is already in the stage
+  frame. The other areas, tracking and focus sit at `StagePosition − (PositionX, PositionY)`, the
+  same reversed sign as the matrix.
+- **Cursor readout.** The stage X/Y under the cursor is `S + (view position turned back)`; it
+  matches the stage values in the XML files.
+
+### Checks used
+
+- Tile outlines drawn on the real `Overview.mrc` match Tomo5's Overview (position, size, ~3°
+  rotation).
+- Tiles stitched with the formula match Tomo5's `SearchMap.mrc` (ring on the right, beam edge
+  bottom-left).
+- Search maps and positions land on the same grid squares as in Tomo5's Atlas view.
+- Exposure areas, tracking and focus match Tomo5's Search and Search Map views.
 
 Atlas (`Atlas/`):
 
