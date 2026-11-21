@@ -1230,34 +1230,48 @@ function half(a, w, h){              // 2× smaller, by averaging
   for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){ const i = 2 * y * w + 2 * x; o[y * W + x] = (a[i] + a[i + 1] + a[i + w] + a[i + w + 1]) / 4; }
   return {a: o, w: W, h: H};
 }
-// best shift s (|s| ≤ lim) so that tile B, placed at D + s relative to tile A, matches A over region R (in A's pixels)
-function matchShift(A, B, w, h, D, R, lim, start = [0, 0]){
+// best shift s (|s - start| ≤ lim) so that tile B, placed at D + s relative to tile A, matches A over
+// region R (in A's pixels). Also returns the best score at least `excl` px away from the peak.
+// Shifts where the tiles overlap by fewer than minN pixels are ignored: tiny overlaps correlate
+// strongly by chance.
+function matchShift(A, B, w, h, D, R, lim, start = [0, 0], excl = 0, minN = 64){
   let best = -Infinity, bs = start;
+  const all = excl ? [] : null;
   for(let sy = start[1] - lim; sy <= start[1] + lim; sy++) for(let sx = start[0] - lim; sx <= start[0] + lim; sx++){
     const ox = Math.round(D[0] + sx), oy = Math.round(D[1] + sy);
+    // only the pixels where B actually overlaps A (within R)
+    const y0 = Math.max(R.y0, oy), y1 = Math.min(R.y1, oy + h), x0 = Math.max(R.x0, ox), x1 = Math.min(R.x1, ox + w);
+    if(x1 <= x0 || y1 <= y0 || (x1 - x0) * (y1 - y0) < Math.max(64, minN)) continue;
     let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
-    for(let y = R.y0; y < R.y1; y++){
-      const by = y - oy; if(by < 0 || by >= h) continue;
-      for(let x = R.x0; x < R.x1; x++){
-        const bx = x - ox; if(bx < 0 || bx >= w) continue;
-        const va = A[y * w + x], vb = B[by * w + bx];
-        n++; sa += va; sb += vb; saa += va * va; sbb += vb * vb; sab += va * vb;
+    for(let y = y0; y < y1; y++){
+      const ra = y * w, rb = (y - oy) * w - ox;
+      for(let x = x0; x < x1; x++){
+        const va = A[ra + x], vb = B[rb + x];
+        sa += va; sb += vb; saa += va * va; sbb += vb * vb; sab += va * vb;
       }
+      n += x1 - x0;
     }
-    if(n < 64) continue;
     const den = (saa - sa * sa / n) * (sbb - sb * sb / n);
     if(den <= 1e-12) continue;
     const v = (sab - sa * sb / n) / Math.sqrt(den);
+    if(all) all.push([sx, sy, v]);
     if(v > best){ best = v; bs = [sx, sy]; }
   }
-  return {s: bs, score: best};
+  let second = -Infinity;
+  if(all) for(const [sx, sy, v] of all) if(Math.hypot(sx - bs[0], sy - bs[1]) >= excl && v > second) second = v;
+  return {s: bs, score: best, second};
 }
 function stitchTiles(layers, opts = {align: true}){
   const n = layers.length, {w, h, bin} = layers[0].img, g0 = layers[0].geo, Rt = transpose(g0.R);
-  // nominal tile centres in the first tile's binned pixel frame
-  const nom = layers.map(l => { const d = mul(Rt, [l.geo.S[0] - g0.S[0], l.geo.S[1] - g0.S[1]]); return [w / 2 + d[0] / (g0.ps * bin), h / 2 + d[1] / (g0.ps * bin)]; });
+  /* Nominal tile centres in the first tile's binned pixel frame. Best: Tomo5's own grid from
+     SearchMap.dm (AtlasPixelPosition, axis-aligned in camera pixels, within ~50 px). Otherwise the
+     tile XML stage positions, which are off by ~100 px and slightly rotated (image-shift calibration). */
+  const L = opts.layout;
+  const nom = L ? L.map(t => { const k = g0.nx / L[0].w / bin; return [w / 2 + (t.cx - L[0].cx) * k, h / 2 + (t.cy - L[0].cy) * k]; })
+               : layers.map(l => { const d = mul(Rt, [l.geo.S[0] - g0.S[0], l.geo.S[1] - g0.S[1]]); return [w / 2 + d[0] / (g0.ps * bin), h / 2 + d[1] / (g0.ps * bin)]; });
   const hp = opts.align ? layers.map(l => highPass(l.img.data, w, h, 6)) : null;
   const hp2 = hp ? hp.map(a => half(a, w, h)) : null;
+  const LIM = Math.max(8, Math.round(120 / bin));      // search ±120 full-size px: < half the hole spacing
 
   // 1. pairwise matches of neighbouring tiles
   const cons = [];
@@ -1266,14 +1280,20 @@ function stitchTiles(layers, opts = {align: true}){
     const ow = w - Math.abs(D[0]), oh = h - Math.abs(D[1]);
     if(ow < 16 || oh < 16 || !(ow >= 0.5 * w || oh >= 0.5 * h)) continue;     // side neighbours only
     if(!opts.align){ cons.push({i, j, D, t: D, score: 0, ok: true}); continue; }
-    const narrow = Math.min(ow, oh), lim = Math.max(4, Math.min(40, Math.round(0.4 * narrow)));
-    // overlap in A's pixels, shrunk by the search range so the region stays inside B
-    const R = {x0: Math.max(0, Math.round(D[0])), x1: Math.min(w, Math.round(D[0]) + w), y0: Math.max(0, Math.round(D[1])), y1: Math.min(h, Math.round(D[1]) + h)};
-    const c = matchShift(hp2[i].a, hp2[j].a, hp2[i].w, hp2[i].h, [D[0] / 2, D[1] / 2],
-                         {x0: R.x0 >> 1, x1: R.x1 >> 1, y0: R.y0 >> 1, y1: R.y1 >> 1}, Math.ceil(lim / 2));
-    const f = matchShift(hp[i], hp[j], w, h, D, R, 2, [c.s[0] * 2, c.s[1] * 2]);
-    const atEdge = Math.abs(f.s[0]) >= lim || Math.abs(f.s[1]) >= lim;
-    cons.push({i, j, D, t: [D[0] + f.s[0], D[1] + f.s[1]], score: f.score, ok: f.score > 0.2 && !atEdge});
+    const lim = LIM;
+    // where B can overlap A within the search range (pixels outside B are skipped per shift)
+    const R = {x0: Math.max(0, Math.round(D[0]) - lim), x1: Math.min(w, Math.round(D[0]) + w + lim),
+               y0: Math.max(0, Math.round(D[1]) - lim), y1: Math.min(h, Math.round(D[1]) + h + lim)};
+    const sub = (r, k) => ({x0: r.x0 >> k, x1: r.x1 >> k, y0: r.y0 >> k, y1: r.y1 >> k});
+    // coarse at 1/2 size over the whole range (overlaps can be only ~50 px, too thin at 1/4),
+    // then the full (display) size ±2 px
+    const minN = 0.25 * ow * oh;                   // at least a quarter of the expected overlap
+    const c = matchShift(hp2[i].a, hp2[j].a, hp2[i].w, hp2[i].h, [D[0] / 2, D[1] / 2], sub(R, 1), Math.ceil(lim / 2), [0, 0], 4, minN / 4);
+    const f = matchShift(hp[i], hp[j], w, h, D, R, 2, [c.s[0] * 2, c.s[1] * 2], 0, minN);
+    const atEdge = Math.abs(f.s[0]) >= lim - 1 || Math.abs(f.s[1]) >= lim - 1;
+    // low-dose tiles correlate weakly (~0.1), so judge by how clearly the peak stands out
+    const distinct = c.score > 0 && c.second < 0.7 * c.score;
+    cons.push({i, j, D, t: [D[0] + f.s[0], D[1] + f.s[1]], score: f.score, ok: f.score > 0.02 && distinct && !atEdge});
   }
   // least-squares positions (Gauss-Seidel); failed matches keep the nominal offset with a small weight
   const solve = (skip, iters) => {
@@ -1359,10 +1379,28 @@ function stitchTiles(layers, opts = {align: true}){
   return {
     layer: {img: {data: acc, w: W, h: H, bin, header: layers[0].img.header}, geo},
     bin, feather: F,
-    align: {good: cons.filter(c => c.ok).length, total: cons.length, maxShift, skipped: !opts.align,
+    align: {good: cons.filter(c => c.ok).length, total: cons.length, maxShift, skipped: !opts.align, layout: L ? "SearchMap.dm" : "tile XML",
             shifts: pos.map((p, i) => [(p[0] - nom[i][0]) * bin, (p[1] - nom[i][1]) * bin])},   // full-size px, first tile's frame
     gain: {kind: positive ? "multiplicative" : "additive", min: Math.min(...gains), max: Math.max(...gains)},
   };
+}
+
+// Tomo5's tile grid: AtlasPixelPosition of each tile in SearchMap.dm (pixels of the stitched SearchMap.mrc)
+async function tileGrid(map, tiles){
+  if(!map.names.has("SearchMap.dm")) return null;
+  const dm = await tryXml(join(map.dir, "SearchMap.dm"));
+  if(!dm) return null;
+  const T = new Map();
+  for(const [p, v] of dm.rows){
+    const m = p.match(/TileSetTileXml(?:\[(\d+)\])?\/(?:AtlasPixelPosition\/(x|y|width|height)|TileImageReference\/(BaseFileName))$/);
+    if(!m) continue;
+    const k = m[1] || "1"; if(!T.has(k)) T.set(k, {});
+    T.get(k)[m[2] || "name"] = m[2] ? parseFloat(v) : v;
+  }
+  const byName = new Map([...T.values()].filter(t => t.name && Number.isFinite(t.x) && t.width > 0).map(t => [t.name, t]));
+  const out = tiles.map(t => byName.get(t.stem));
+  if(out.some(t => !t)) return null;
+  return out.map(t => ({cx: t.x + t.width / 2, cy: t.y + t.height / 2, w: t.width}));
 }
 
 async function tilesScene(map, id, seamless = true, q = "full"){
@@ -1393,7 +1431,8 @@ async function tilesScene(map, id, seamless = true, q = "full"){
   if(seamless && layers.length > 1){
     status(`${map.name}: aligning tile overlaps…`);
     await new Promise(r => setTimeout(r));          // let the status show
-    stitch = stitchTiles(layers, {align: final});   // the preview is blended at the stage positions
+    const layout = await tileGrid(map, lay.tiles);
+    stitch = stitchTiles(layers, {align: final, layout});   // the preview is blended without alignment
     if(stale(id)) return null;
   }
   // size of the stitched area, in the view frame
@@ -1405,6 +1444,7 @@ async function tilesScene(map, id, seamless = true, q = "full"){
   if(scaled) rows.push(["Field Of View", `${fmtNum(W, 2)} × ${fmtNum(H, 2)} µm`]);
   if(stitch){
     const a = stitch.align;
+    rows.push(["Layout", a.layout === "SearchMap.dm" ? "Tomo5's tile grid (SearchMap.dm), refined" : "tile XML positions, refined"]);
     rows.push(["Alignment", a.skipped ? "preview, not aligned yet" : a.total ? `${a.good} / ${a.total} overlaps matched, largest correction ${fmtNum(a.maxShift * stitch.bin, 1)} px` : "no overlaps found"]);
     rows.push(["Tile gains", `${fmtNum(stitch.gain.min, 3)} – ${fmtNum(stitch.gain.max, 3)} (${stitch.gain.kind})`]);
     rows.push(["Blending", `${Math.round(stitch.feather * stitch.bin)} px fade across overlaps`]);

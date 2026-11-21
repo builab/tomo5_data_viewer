@@ -112,10 +112,14 @@ one level.
 
 *Tiles, stitched here (aligned, blended)* works like the SerialEM Grid Viewer's montages:
 
-1. **Align.** The overlap of each pair of neighbouring tiles is cross-correlated (after a
-   high-pass filter, so ice gradients do not dominate), coarse at half size and then refined.
-   Least-squares tile positions are solved from all overlaps; a match that disagrees with the
-   others is dropped, and a failed match falls back to the stage positions.
+1. **Align.** The tiles start from Tomo5's own tile grid (`AtlasPixelPosition` of each tile in
+   `SearchMap.dm`, axis-aligned in camera pixels), or from the tile XML positions when that is
+   missing. The overlap of each pair of neighbouring tiles is then cross-correlated (after a high-pass
+   filter) over ±120 px, coarse at half size and refined at full display size. Shifts where the
+   tiles overlap by less than a quarter of the expected overlap are ignored, and a match is accepted
+   when its peak clearly stands out (low-dose tiles correlate weakly, ~0.1). Least-squares tile
+   positions are solved from all overlaps; inconsistent matches are dropped, and failed matches fall
+   back to the grid.
 2. **Match brightness.** Each tile gets a gain so that tiles agree in their overlaps
    (an offset instead, if the data are not positive counts).
 3. **Blend.** The tiles are merged into one image as a weighted average. Each tile fades out over
