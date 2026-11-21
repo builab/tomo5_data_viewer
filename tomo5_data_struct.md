@@ -150,10 +150,10 @@ Thermo Fisher `MicroscopeImage` documents, like EPU's.
 
 | Field | Meaning |
 |---|---|
-| `microscopeData/stage/Position/X, Y, Z` | Stage position of the image centre, in metres. For tiles, it includes the image shift used to reach the tile, with the offset from the real stage position in the **opposite** direction (the tile is really at `2·S_map − S_tile`). |
+| `microscopeData/stage/Position/X, Y, Z` | Stage position of the image centre, in metres. For tiles, it includes the image shift used to reach the tile. |
 | `microscopeData/stage/Position/A` | Tilt angle, in radians |
 | `SpatialScale/pixelSize/x/numericValue` | Pixel size of the image, in metres |
-| `ReferenceTransformation/matrix/_m11 … _m22` | Image pixels → stage metres (rotation and flip), per unbinned camera pixel |
+| `ReferenceTransformation/matrix/_m11 … _m22` | Image pixels (x right, y down) ↔ stage (rotation and flip), per unbinned camera pixel. As Tomo5 displays it, `stage = S − M · (pixel − centre)`: note the minus sign. |
 | `microscopeData/optics/TemMagnification/NominalMagnification` | Magnification |
 | `microscopeData/acquisition/camera/ExposureTime` | Exposure time, in seconds |
 | `CustomData/…/AppliedDefocus` | Applied defocus, in metres |
@@ -182,8 +182,7 @@ Search map folder:
 - `TileSetAcquisitionOptions.xml`: tile grid size (`GridSize/width`, `GridSize/height`), e.g. 3 × 3.
 - `SearchMap.dm`: the tile set (`TileSetXml`), including `AcquiredWithImageBeamShift`.
 - Tiles are numbered from the centre outward in a spiral: `Tile_<ID>_1` is the centre tile, at
-  the same position as the overview. Tile 2 is the one Tomo5 places below the centre, as seen on
-  screen (tile XML offsets mirrored, see above).
+  the same position as the overview.
 - `Overview.mrc` has a FEI extended header (`FEI2`, about 0.9 MB) before the image data.
 - `SearchMaps/QueuedSearchMapList.xml` lists queued search maps (`QueuedTileSets`).
 

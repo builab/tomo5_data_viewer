@@ -62,17 +62,16 @@ Large images are binned when they load (atlas and stitched map to about 4096 px,
 Every Tomo5 image XML (`Overview.xml`, `Tile_*.xml`, …) has:
 
 - `microscopeData/stage/Position/X, Y`: the stage position of the image centre. For tiles,
-  Tomo5 folds the image shift into it, so each tile has its own position, **but with the offset
-  from the real stage position in the opposite direction**. The viewer mirrors the tile
-  positions through the stage position of the map (`SearchMap.xml`, else `Overview.xml`).
-  This was checked against `SearchMap.mrc` stitched by Tomo5.
+  Tomo5 folds the image shift into it, so each tile has its own position.
 - `SpatialScale/pixelSize/x`: the pixel size of the image.
 - `ReferenceTransformation/matrix`: a 2 × 2 matrix from image pixels to stage metres. It holds
   the camera rotation and a flip, and differs slightly between magnifications (about 3° between
   the overview and the tiles). It is given per unbinned camera pixel, so the viewer uses only its
-  direction and takes the size from the pixel size.
+  direction and takes the size from the pixel size. **Its sign is the opposite of pixel → stage
+  as Tomo5 draws it**: the viewer uses −R. This was checked on real data (search maps on the
+  atlas, and tiles against `SearchMap.mrc`).
 
-So `stage = S + pixelSize · R · (pixel − centre)`. The pixel size always refers to the saved
+So `stage = S − pixelSize · R · (pixel − centre)`. The pixel size always refers to the saved
 image, also for stitched images (the atlas, `SearchMap.mrc`) whose size differs from the camera
 readout. A search map is marked on the atlas with the footprint of `SearchMap.mrc`
 (`SearchMap.xml` position, pixel size and direction); a map without `SearchMap.mrc` yet is shown
