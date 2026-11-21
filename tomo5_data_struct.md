@@ -191,9 +191,31 @@ Batch positions (`Batch/`):
 
 - `Position_<N>` is one position (the anchoring position, area N.1). Its other exposure areas are
   `Position_<N>_2`, `Position_<N>_3`, …
-- Status from the files present: **Initialized** = only `Position_<N>_Search.mrc/.xml`;
-  **Refined** = also `Position_<N>_Exposure.mrc`, `Position_<N>_Tracking.mrc` and
-  `Position_<N>_<k>_Exposure.mrc`; **Acquired** = tilt series `Position_<N>[_<k>].mrc` + `.mdoc`
-  in the session folder.
-- `Position_<N>_Search.xml`: stage position of the Search image centre, which is area N.1.
+- `BatchPositionsList.xml` (note the *s*) lists every position as `BatchPositionParameters`:
 
+| Field | Meaning |
+|---|---|
+| `Name` | `Position_<N>` |
+| `BatchPositionStatus` | `Initialized`, `Acquired`, `Failed`, … |
+| `StagePositionX, Y, Z, A` | Stage position of area N.1, in metres (A in radians) |
+| `TiltAxisAngleInDegrees` | Tilt-axis angle |
+| `Defocus`, `Comment`, `PercentageCompleted` | Per position |
+| `ExposureTemplateAreaParameters/PositionX, Y` | Area N.1 offset (0, 0) |
+| `AdditionalExposureTemplateAreas/ExposureTemplateAreaParameters` | Areas N.2, N.3, …: `Name` (`Position_<N>_<k>`), `PositionX, Y`, `Defocus` |
+| `TrackingTemplateAreaParameters/PositionX, Y` | Tracking area offset |
+| `FocusTemplateAreaParameters/PositionX, Y` | Focus area offset |
+| `OverviewImageName` | Sometimes: the search-map overview the position was picked on |
+
+  Offsets are in metres, and an area sits at **`StagePosition − offset`** (checked against Tomo5's
+  Search and Search Map views).
+- The camera field and beam size are not in this list. The exposure pixel size and image size are in
+  the tilt-series `.mdoc` (`PixelSpacing`, `ImageSize`) and in the FEI extended header of the MRC
+  files (FEI2: pixel size at byte 156, illuminated area at 313, readout area at 451–466); the
+  illuminated area is 0 on a Glacios.
+- Status from the files present (when the list is missing): **Initialized** = only
+  `Position_<N>_Search.mrc/.xml`; **Refined** = also `Position_<N>_Exposure.mrc`,
+  `Position_<N>_Tracking.mrc` and `Position_<N>_<k>_Exposure.mrc`; **Acquired** = tilt series
+  `Position_<N>[_<k>].mrc` + `.mdoc` in the session folder.
+- `Position_<N>_Search.xml`: the Search image (e.g. 2048 px at 5.83 nm, 4100×), centred on area N.1.
+  Its `CustomData` holds a copy of other settings (`BackwardAlignmentTransformation`, magnification 1),
+  so the image's own `microscopeData` fields must be read first.

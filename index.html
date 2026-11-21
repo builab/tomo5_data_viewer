@@ -139,6 +139,8 @@ dl.info dt{color:var(--t-ink)}
 dl.info dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 dl.info dd.warn{color:var(--warn)}
 .note{color:var(--t-muted);font-size:12px;margin:8px 0 0}
+input.ov{width:64px;background:#1b2834;border:1px solid var(--t-line);border-radius:3px;padding:1px 4px;font-size:12px}
+.ovsrc{color:var(--t-muted);font-size:11px}
 details.xml{margin-top:10px}
 details.xml>summary{cursor:pointer;color:var(--t-muted);font-size:12px}
 .meta-filter{width:100%;background:#1b2834;border:1px solid var(--t-line);border-radius:3px;padding:4px 7px;font-size:12px;margin:6px 0}
@@ -435,7 +437,9 @@ function flattenXml(text){
 }
 const UNIT = {m: 1, mm: 1e-3, "µm": 1e-6, um: 1e-6, nm: 1e-9, "Å": 1e-10, A: 1e-10};
 function xmlInfo(rows){
-  const find = re => { const r = rows.find(([p]) => re.test(p)); return r ? r[1] : undefined; };
+  // CustomData can hold copies of other settings (e.g. BackwardAlignmentTransformation), so the
+  // image's own fields come first
+  const find = re => { const r = rows.find(([p]) => re.test(p) && !p.startsWith("CustomData/")) || rows.find(([p]) => re.test(p)); return r ? r[1] : undefined; };
   const num = re => { const v = parseFloat(find(re)); return Number.isFinite(v) ? v : NaN; };
   const unit = find(/pixelSize\/x\/unit\/[^/]*symbol[^/]*$/i) || "m";
   // ReferenceTransformation: keep only its direction (rotation, flip), normalised. Its sign is
@@ -548,7 +552,11 @@ async function openSession(src, path, want = {}){
     if(dirs.has("Batch")){
       try{
         const bl = await src.list(join(path, "Batch"));
-        s.positions = findPositions(bl.files.map(f => f.name), top.files.map(f => f.name), join(path, "Batch"), path);
+        const lf = bl.files.find(f => /^BatchPositions?List\.xml$/i.test(f.name));
+        let list = null;
+        if(lf){ try{ list = parseBatchList(await src.text(join(path, `Batch/${lf.name}`))); }catch(e){ console.warn("BatchPositionsList", e); } }
+        s.positions = findPositions(bl.files.map(f => f.name), top.files.map(f => f.name), join(path, "Batch"), path, list);
+        s.batchList = !!list;
       }catch(e){ console.warn("Batch", e); }
     }
 
@@ -575,9 +583,40 @@ async function openSession(src, path, want = {}){
      Initialized: only Position_<N>_Search.mrc/.xml
      Refined:     also Position_<N>_Exposure.mrc, _Tracking.mrc, Position_<N>_<k>_Exposure.mrc
      Acquired:    tilt series Position_<N>[_<k>].mrc and .mdoc in the session folder */
-function findPositions(batchNames, topNames, batchDir, topDir){
+/* Batch/BatchPositionsList.xml: per position its stage position, status, tilt axis, and the areas
+   as offsets in metres: ExposureTemplateArea (N.1, at 0,0), AdditionalExposureTemplateAreas (N.2, …),
+   TrackingTemplateArea and FocusTemplateArea. An area sits at StagePosition − offset (checked
+   against Tomo5's Search view). */
+function parseBatchList(text){
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if(doc.querySelector("parsererror")) return null;
+  const kid = (el, name) => el && [...el.children].find(c => c.localName === name);
+  const txt = (el, name) => { const c = kid(el, name); return c ? c.textContent.trim() : undefined; };
+  const num = (el, name) => { const v = parseFloat(txt(el, name)); return Number.isFinite(v) ? v : NaN; };
+  const off = el => el && Number.isFinite(num(el, "PositionX")) ? [num(el, "PositionX") * 1e6, num(el, "PositionY") * 1e6] : null;
+  const out = new Map();
+  for(const bp of doc.getElementsByTagNameNS("*", "BatchPositionParameters")){
+    const name = txt(bp, "Name"), m = name && name.match(/^Position_(\d+)$/i);
+    if(!m) continue;
+    const extra = [...(kid(bp, "AdditionalExposureTemplateAreas")?.children || [])].map(a => {
+      const k = (txt(a, "Name") || "").match(/_(\d+)$/);
+      return {k: k ? +k[1] : NaN, off: off(a), defocus: num(a, "Defocus")};
+    }).filter(a => Number.isFinite(a.k) && a.off);
+    out.set(+m[1], {
+      status: txt(bp, "BatchPositionStatus"),
+      stage: [num(bp, "StagePositionX") * 1e6, num(bp, "StagePositionY") * 1e6],
+      tiltA: num(bp, "StagePositionA"), tiltAxis: num(bp, "TiltAxisAngleInDegrees") || 0,
+      defocus: num(bp, "Defocus"), percent: num(bp, "PercentageCompleted"), comment: txt(bp, "Comment") || "",
+      areas: [{k: 1, off: off(kid(bp, "ExposureTemplateAreaParameters")) || [0, 0], defocus: num(bp, "Defocus")}, ...extra],
+      tracking: off(kid(bp, "TrackingTemplateAreaParameters")), focus: off(kid(bp, "FocusTemplateAreaParameters")),
+    });
+  }
+  return out;
+}
+
+function findPositions(batchNames, topNames, batchDir, topDir, list){
   const P = new Map();
-  const get = n => { if(!P.has(n)) P.set(n, {id: n, name: `Position_${n}`, search: null, searchXml: null, tracking: null, areas: new Map(), tilt: NaN, map: undefined}); return P.get(n); };
+  const get = n => { if(!P.has(n)) P.set(n, {id: n, name: `Position_${n}`, search: null, searchXml: null, tracking: null, areas: new Map(), tilt: NaN, map: undefined, plan: null}); return P.get(n); };
   const area = (p, k) => { if(!p.areas.has(k)) p.areas.set(k, {k, exposure: null, mrc: null, mdoc: null}); return p.areas.get(k); };
   for(const f of batchNames){
     let m;
@@ -591,11 +630,19 @@ function findPositions(batchNames, topNames, batchDir, topDir){
     if((m = f.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i))) area(get(+m[1]), m[2] ? +m[2] : 1).mrc = join(topDir, f);
     else if((m = f.match(/^Position_(\d+)(?:_(\d+))?(?:\.mrc)?\.mdoc$/i))) area(get(+m[1]), m[2] ? +m[2] : 1).mdoc = join(topDir, f);
   }
+  // positions and areas planned in BatchPositionsList.xml
+  for(const [n, plan] of list || []){
+    const p = get(n); p.plan = plan;
+    for(const a of plan.areas) Object.assign(area(p, a.k), {off: a.off, defocus: a.defocus});
+  }
   return [...P.values()].sort((a, b) => a.id - b.id).map(p => {
     p.areas = [...p.areas.values()].sort((a, b) => a.k - b.k);
     const acq = p.areas.filter(a => a.mrc).length, refined = p.tracking || p.areas.some(a => a.exposure);
     p.acquired = acq;
-    p.status = acq ? (acq < p.areas.length ? `Acquired ${acq}/${p.areas.length}` : "Acquired") : refined ? "Refined" : "Initialized";
+    const fileStatus = acq ? (acq < p.areas.length ? `Acquired ${acq}/${p.areas.length}` : "Acquired") : refined ? "Refined" : "Initialized";
+    // Tomo5's own status when the list has it (it also knows e.g. Failed); file-based otherwise
+    p.status = p.plan?.status ? (p.plan.status === "Acquired" && acq && acq < p.areas.length ? fileStatus : p.plan.status) : fileStatus;
+    if(p.plan && Number.isFinite(p.plan.tiltA)) p.tilt = p.plan.tiltA * 180 / Math.PI;
     return p;
   });
 }
@@ -615,24 +662,70 @@ async function fillTilts(){
       }
     }),
     ...s.positions.map(async p => {
+      if(Number.isFinite(p.tilt)) return;
       const x = p.searchXml ? await tryXml(p.searchXml) : null;
       if(x && Number.isFinite(x.info.stage.a)) p.tilt = x.info.stage.a * 180 / Math.PI;
     }),
+    overlaySizes(s),
   ]);
   if(SESSION === s){ renderTable(); updateChrome(); }
 }
+/* Sizes for the area overlays: camera field (exposure pixel size × image size) from a tilt-series
+   .mdoc or the FEI extended header of an Exposure / tilt-series MRC; beam diameter from the header's
+   illuminated area when the microscope sets it. Missing values start from the proportions of a
+   Tomo5 5.26 Search view (camera 0.81 µm, beam 1.84 µm) and can be edited in the panel. */
+const OVERLAY_DEFAULT = {cam: 0.81, beam: 1.84};
+function savedOverlay(){ try{ return JSON.parse(localStorage.getItem("tomo5.overlay") || "{}"); }catch{ return {}; } }
+async function feiHeader(path){                // FEI extended header (metadata version ≥ 2), first section
+  const h = await getHeader(path);
+  if(h.nxt < 480) return null;
+  const e = new DataView(await SRC.bytes(path, 1024, 1024 + 480 - 1));
+  if(e.getInt32(4, true) < 2) return null;
+  return {pixel: e.getFloat64(156, true), illum: e.getFloat64(313, true), readout: [e.getInt32(459, true) - e.getInt32(451, true), e.getInt32(463, true) - e.getInt32(455, true)]};
+}
+async function overlaySizes(s){
+  const o = {cam: NaN, beam: NaN, camFrom: "", beamFrom: ""};
+  const areas = s.positions.flatMap(p => p.areas);
+  try{
+    for(const a of areas.filter(a => a.mdoc).slice(0, 3)){
+      const t = (await SRC.bytes(a.mdoc, 0, 4095).then(b => new TextDecoder().decode(b)));
+      const px = parseFloat(t.match(/^\s*PixelSpacing\s*=\s*([\d.eE+-]+)/m)?.[1]), sz = t.match(/^\s*ImageSize\s*=\s*(\d+)\s+(\d+)/m);
+      if(px > 0 && sz){ o.cam = Math.max(+sz[1], +sz[2]) * px * 1e-4; o.camFrom = a.mdoc.split("/").pop(); break; }
+    }
+    for(const f of [...areas.map(a => a.mrc), ...areas.map(a => a.exposure)].filter(Boolean).slice(0, 4)){
+      const h = await getHeader(f).catch(() => null);
+      if(!h || h.nx < 16) continue;
+      const fei = await feiHeader(f).catch(() => null);
+      if(!fei) continue;
+      if(!Number.isFinite(o.cam) && fei.pixel > 0){ o.cam = Math.max(h.nx, h.ny) * fei.pixel * 1e6; o.camFrom = f.split("/").pop(); }
+      if(!Number.isFinite(o.beam) && fei.illum > 0){ o.beam = 2 * Math.sqrt(fei.illum / Math.PI) * 1e6; o.beamFrom = f.split("/").pop(); }
+      if(Number.isFinite(o.cam) && Number.isFinite(o.beam)) break;
+    }
+  }catch(e){ console.warn("overlay sizes", e); }
+  const saved = savedOverlay();
+  s.overlay = {
+    cam: saved.cam || (Number.isFinite(o.cam) ? o.cam : OVERLAY_DEFAULT.cam), camFrom: saved.cam ? "set by you" : o.camFrom || "default",
+    beam: saved.beam || (Number.isFinite(o.beam) ? o.beam : OVERLAY_DEFAULT.beam), beamFrom: saved.beam ? "set by you" : o.beamFrom || "default",
+  };
+  if(SESSION === s && SCENE) draw();
+}
+
 // 5 stars: yellow for the rating, empty for the rest (no rating = 5 empty stars)
 function stars(n){
   n = Number.isFinite(n) ? n : 0;
   return `<span class="stars" title="${n ? `Rated ${n} of 5` : "Not rated"}">${"★".repeat(n)}<span class="off">${"☆".repeat(5 - n)}</span></span>`;
 }
 // the search map whose footprint holds a position (for the Overview / Search Map tabs)
+async function positionStage(p){
+  if(p.plan && Number.isFinite(p.plan.stage[0])) return p.plan.stage;
+  const x = p.searchXml ? await tryXml(p.searchXml) : null;
+  return x && Number.isFinite(x.info.stage.x) ? [x.info.stage.x * 1e6, x.info.stage.y * 1e6] : null;
+}
 async function mapOfPosition(p){
   if(p.map !== undefined) return p.map;
   p.map = -1;
-  const x = p.searchXml ? await tryXml(p.searchXml) : null;
-  if(!x || !Number.isFinite(x.info.stage.x)) return p.map;
-  const pt = [x.info.stage.x * 1e6, x.info.stage.y * 1e6];
+  const pt = await positionStage(p);
+  if(!pt) return p.map;
   // a map whose SearchMap.mrc footprint holds the position; else the nearest map centre within 60 µm
   const feet = (await Promise.all(SESSION.maps.map(mapFootprint))).filter(Boolean);
   const dist = f => { const c = f.geo ? f.geo.S : f.point; return Math.hypot(pt[0] - c[0], pt[1] - c[1]); };
@@ -808,8 +901,8 @@ async function atlasScene(a, id, q){
 async function addPositionMarks(sc){
   if(!sc || !SESSION?.positions.length || sc.kind === "search") return sc;
   const marks = await Promise.all(SESSION.positions.map(async (p, i) => {
-    const x = p.searchXml ? await tryXml(p.searchXml) : null;
-    return x && Number.isFinite(x.info.stage.x) ? {kind: "pos", i, pos: p, point: [x.info.stage.x * 1e6, x.info.stage.y * 1e6]} : null;
+    const pt = await positionStage(p);
+    return pt ? {kind: "pos", i, pos: p, point: pt} : null;
   }));
   sc.marks = [...(sc.marks || []), ...marks.filter(Boolean)];
   return sc;
@@ -822,14 +915,20 @@ async function searchScene(p, id, q){
   status(`Loading ${p.name} search image…`);
   const sc = await singleImageScene("search", p.searchXml, p.search, MAX_ATLAS, id, {}, q);
   if(!sc) return null;
-  sc.overlay = {pos: p, centre: sc.layers[0].geo.S};
+  sc.overlay = {pos: p};
   // files of this position, in the Image Information panel
   const f = v => v ? esc(v.split("/").pop()) : "–";
   sc.info.rows.unshift(["Status", esc(p.status)]);
   sc.info.rows.push(["Tracking", f(p.tracking)]);
   for(const a of p.areas)
     sc.info.rows.push([`Area ${p.id}.${a.k}`, a.mrc ? `${f(a.mrc)}${a.mdoc ? " + .mdoc" : ""}` : a.exposure ? `refined (${f(a.exposure)})` : "–"]);
-  sc.info.notes.push("Exposure squares, beam circles, the ±60° ellipse and the tracking circle need the area positions and beam size from the Tomo5 files; they will be drawn once those are known.");
+  if(p.plan){
+    if(Number.isFinite(p.plan.defocus)) sc.info.rows.unshift(["Defocus", `${fmtNum(p.plan.defocus, 2)} µm`]);
+    if(p.plan.comment) sc.info.rows.unshift(["Comment", esc(p.plan.comment)]);
+    sc.info.rows.push(["Tilt Axis", `${fmtNum(p.plan.tiltAxis, 1)}°`]);
+  } else sc.info.notes.push("Batch/BatchPositionsList.xml not found, so only area 1.1 (the image centre) can be marked.");
+  sc.info.rows.push(["Camera Field", '<input class="ov" id="ovCam" type="number" step="0.01" min="0.05"> µm <span class="ovsrc" id="ovCamFrom"></span>']);
+  sc.info.rows.push(["Beam Diameter", '<input class="ov" id="ovBeam" type="number" step="0.01" min="0.05"> µm <span class="ovsrc" id="ovBeamFrom"></span>']);
   status(`${p.name}: ${p.status}, ${p.areas.length || 1} exposure area${p.areas.length > 1 ? "s" : ""}.`);
   return sc;
 }
@@ -1141,12 +1240,28 @@ function imageInfo(xml, img, px, notes = []){
   rows.push(...stageRows(xml?.info), ...statRows([img]));
   return {rows, notes};
 }
+function bindOverlayInputs(){
+  const o = SESSION?.overlay || {...OVERLAY_DEFAULT, camFrom: "default", beamFrom: "default"};
+  const set = (id, v, from) => { const el = $(id); if(el){ el.value = (+v).toFixed(2); $(id + "From").textContent = `(${from})`; } };
+  set("#ovCam", o.cam, o.camFrom); set("#ovBeam", o.beam, o.beamFrom);
+  for(const [id, k] of [["#ovCam", "cam"], ["#ovBeam", "beam"]]){
+    const el = $(id); if(!el) continue;
+    el.onchange = () => {
+      const v = parseFloat(el.value); if(!(v > 0) || !SESSION) return;
+      SESSION.overlay = {...(SESSION.overlay || OVERLAY_DEFAULT), [k]: v, [k + "From"]: "set by you"};
+      const saved = savedOverlay(); saved[k] = v;
+      try{ localStorage.setItem("tomo5.overlay", JSON.stringify(saved)); }catch{}
+      $(id + "From").textContent = "(set by you)"; draw();
+    };
+  }
+}
 function renderInfo(){
   const sc = SCENE;
   if(!sc){ $("#info").innerHTML = '<dt style="color:var(--t-muted)">Nothing shown yet.</dt><dd></dd>'; $("#infoNote").innerHTML = ""; $("#xmlBox").hidden = true; return; }
   $("#info").innerHTML = sc.info.rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
   $("#infoNote").innerHTML = sc.info.notes.map(n => `<p class="note">${esc(n)}</p>`).join("");
   $("#xmlBox").hidden = !sc.xmlRows.length;
+  bindOverlayInputs();
   renderMeta();
 }
 function renderMeta(){
@@ -1287,17 +1402,73 @@ function maybeSharpen(){
   if(binFor(l.img.header, dim) >= l.img.bin) return;               // nothing sharper to load
   const f = SCENE.sharpen; SCENE.sharpen = null; f(dim);
 }
-// Search tab: the position target (area N.1) at the centre of the Search image
+/* Exposure areas of a position, drawn like Tomo5's Search view:
+     green square = camera field, circle = beam, ellipse = the beam at ±60° tilt (1/cos 60° = 2×
+     longer across the tilt axis), label N.k; yellow = tracking area; small blue square = focus;
+     red cross on N.1, blue line = tilt axis, thin lines from N.1 to the other areas. */
+const AREA = {exp: "#1fa01f", track: "#ffe600", focus: "#5a64ff", axis: "#2a3cff"};
+function areaStage(p, offset){ const st = p.plan?.stage; return st ? [st[0] - offset[0], st[1] - offset[1]] : null; }
+function drawPositionAreas(ctx, p, selected, axisLine){
+  const ov = SESSION.overlay || OVERLAY_DEFAULT, k = V.s;
+  if(!p.plan) return false;
+  const beam = ov.beam * k, cam = ov.cam * k;
+  if(beam < 6) return false;                       // too small: the caller draws a dot
+  const ta = (p.plan.tiltAxis || 0) * Math.PI / 180;
+  const u = mul(SCENE.Q, [Math.cos(ta), Math.sin(ta)]), ang = Math.atan2(u[1], u[0]);   // tilt axis on screen
+  const c1 = toScreen(areaStage(p, p.areas[0]?.off || [0, 0]));
+  const fam = getComputedStyle(document.body).fontFamily;
+  ctx.save();
+  if(axisLine){                                   // tilt axis through N.1, across the view
+    const L = Math.hypot(view.clientWidth, view.clientHeight);
+    ctx.strokeStyle = AREA.axis; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(c1[0] - u[0] * L, c1[1] - u[1] * L); ctx.lineTo(c1[0] + u[0] * L, c1[1] + u[1] * L); ctx.stroke();
+  }
+  const ring = (c, col, fillA, lw) => {
+    ctx.beginPath(); ctx.ellipse(c[0], c[1], beam / 2, beam, ang, 0, 2 * Math.PI);      // ±60° footprint
+    ctx.globalAlpha = fillA * 0.6; ctx.fillStyle = col; ctx.fill(); ctx.globalAlpha = 1;
+    ctx.lineWidth = lw; ctx.strokeStyle = col; ctx.stroke();
+    ctx.beginPath(); ctx.arc(c[0], c[1], beam / 2, 0, 2 * Math.PI);                   // beam
+    ctx.globalAlpha = fillA; ctx.fill(); ctx.globalAlpha = 1; ctx.lineWidth = Math.max(1, lw * 0.7); ctx.stroke();
+    ctx.lineWidth = lw; ctx.strokeRect(c[0] - cam / 2, c[1] - cam / 2, cam, cam);   // camera field
+  };
+  // lines from N.1 to the other areas
+  ctx.strokeStyle = "rgba(90,80,220,.8)"; ctx.lineWidth = 1.2;
+  for(const a of p.areas.slice(1)) if(a.off){ const c = toScreen(areaStage(p, a.off)); ctx.beginPath(); ctx.moveTo(c1[0], c1[1]); ctx.lineTo(c[0], c[1]); ctx.stroke(); }
+  if(p.plan.tracking){ const c = toScreen(areaStage(p, p.plan.tracking)); ctx.beginPath(); ctx.moveTo(c1[0], c1[1]); ctx.lineTo(c[0], c[1]); ctx.stroke(); }
+  // tracking (yellow) and focus (blue)
+  if(p.plan.tracking) ring(toScreen(areaStage(p, p.plan.tracking)), AREA.track, 0.22, 2);
+  if(p.plan.focus){ const c = toScreen(areaStage(p, p.plan.focus)); ctx.strokeStyle = AREA.focus; ctx.lineWidth = 1.5; ctx.strokeRect(c[0] - cam / 4, c[1] - cam / 4, cam / 2, cam / 2); }
+  // exposure areas
+  const fs = Math.max(11, Math.min(28, beam * 0.3));
+  ctx.font = `600 ${fs}px ${fam}`;
+  for(const a of p.areas){
+    if(!a.off) continue;
+    const c = toScreen(areaStage(p, a.off)), first = a.k === 1;
+    ring(c, AREA.exp, a.mrc ? 0.32 : 0.18, first && selected ? 2.5 : 1.4);
+    ctx.fillStyle = AREA.exp; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
+    ctx.fillText(`${p.id}.${a.k}`, c[0] + beam * 0.55, c[1] - beam * 0.3); ctx.shadowBlur = 0;
+  }
+  if(selected){                                   // red cross on N.1
+    const r = Math.max(6, cam * 0.5);
+    ctx.strokeStyle = "#ff3030"; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(c1[0] - r, c1[1]); ctx.lineTo(c1[0] + r, c1[1]); ctx.moveTo(c1[0], c1[1] - r); ctx.lineTo(c1[0], c1[1] + r); ctx.stroke();
+  }
+  ctx.restore();
+  return true;
+}
+// Search tab: the selected position's areas; without the list, a cross at the image centre (N.1)
 function drawOverlay(ctx){
-  const o = SCENE.overlay, [x, y] = toScreen(o.centre), r = 9;
+  const p = SCENE.overlay.pos;
+  if(drawPositionAreas(ctx, p, true, true)) return;
+  const [x, y] = toScreen(SCENE.layers[0].geo.S), r = 9;
   ctx.save();
   ctx.strokeStyle = "#ff4040"; ctx.lineWidth = 2; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
   ctx.beginPath(); ctx.moveTo(x - 2 * r, y); ctx.lineTo(x + 2 * r, y); ctx.moveTo(x, y - 2 * r); ctx.lineTo(x, y + 2 * r); ctx.stroke();
   ctx.font = "600 12px " + getComputedStyle(document.body).fontFamily; ctx.fillStyle = "#ff6060";
-  ctx.fillText(`${o.pos.id}.1`, x + 2 * r + 4, y - 4);
+  ctx.fillText(`${p.id}.1`, x + 2 * r + 4, y - 4);
   ctx.restore();
 }
-const MARK_COLOR = {Acquired: "#39e639", "In Progress": "#f0a030", Queued: "#f0a030", Refined: "#4fc3f7", Initialized: "#f0a030"};
+const MARK_COLOR = {Acquired: "#39e639", "In Progress": "#f0a030", Queued: "#f0a030", Refined: "#4fc3f7", Initialized: "#f0a030", Failed: "#ff5050"};
 const markColor = m => MARK_COLOR[(m.kind === "pos" ? m.pos.status : m.map.status).split(" ")[0]] || "#39e639";
 const markSelected = m => m.kind === "pos" ? STATE.task === "batch" && m.i === STATE.pos : m.i === STATE.sel;
 function markShape(m){       // screen polygon of a marker
@@ -1310,6 +1481,7 @@ function drawMarks(ctx){
   for(const pass of [0, 1]) for(const m of SCENE.marks){        // selected one last, on top
     const sel = markSelected(m);
     if(sel !== !!pass) continue;
+    if(m.kind === "pos" && SCENE.kind !== "atlas" && drawPositionAreas(ctx, m.pos, sel, false)) continue;
     const pts = markShape(m), col = markColor(m);
     ctx.beginPath();
     if(m.kind === "pos"){ const [x, y] = toScreen(m.point); ctx.arc(x, y, 5, 0, 2 * Math.PI); }   // positions: dots

@@ -95,9 +95,10 @@ the range of tile gains and the fade width. On a 3 × 3 map of 2048 px tiles thi
 
 ### Batch positions
 
-Read from `Batch/` (and the tilt series in the session folder). `Position_<N>` is one position;
-its exposure areas are N.1 (`Position_<N>_…`), N.2 (`Position_<N>_2_…`), and so on. The status
-comes from the files present:
+Read from `Batch/BatchPositionsList.xml` (Tomo5's list of positions) and the files in `Batch/` and
+the session folder. `Position_<N>` is one position; its exposure areas are N.1, N.2, … The status
+is Tomo5's own (`BatchPositionStatus`: Initialized, Acquired, Failed, …); without the list it comes
+from the files present:
 
 | Status | Files |
 |---|---|
@@ -105,15 +106,23 @@ comes from the files present:
 | Refined | also `Position_<N>_Exposure.mrc`, `Position_<N>_Tracking.mrc`, `Position_<N>_<k>_Exposure.mrc` |
 | Acquired | tilt series `Position_<N>[_<k>].mrc` and `.mdoc` in the session folder (*Acquired 1/3* when only some areas are done) |
 
-With *Batch Positions* selected, the **Search** tab shows `Position_<N>_Search.mrc` with area N.1
-marked at its centre, and the Image Information panel lists the files of each area. Positions are
-drawn as dots on the Atlas, Overview and Search Map tabs (blue = refined, orange = initialized,
-green = acquired); click one to select it, double-click to open its Search image. The Overview and
-Search Map tabs show the search map that holds the selected position.
+With *Batch Positions* selected, the **Search** tab shows `Position_<N>_Search.mrc` with the
+position's areas drawn as in Tomo5:
 
-*Coming next:* the exposure squares (camera area), beam circles, ±60° ellipses and the yellow
-tracking/focus circle on the Search image, once their positions and sizes are read from the
-Tomo5 files.
+- **green**: each exposure area N.k, with a square (camera field), a circle (beam) and an ellipse
+  (the beam at ±60° tilt: 1/cos 60° = 2× longer across the tilt axis); filled stronger once acquired;
+- **yellow**: the tracking area; **small blue square**: the focus area;
+- **red cross** on N.1, **blue line**: the tilt axis, thin lines from N.1 to the other areas.
+
+The areas are also drawn on the Overview and Search Map tabs for every position (as dots when
+zoomed out; dots on the Atlas). Click a position to select it, double-click to open its Search image.
+The Overview and Search Map tabs show the search map that holds the selected position.
+
+**Sizes.** The camera field is read from the exposure pixel size and image size (a tilt-series
+`.mdoc`, or the FEI extended header of an Exposure / tilt-series MRC). The beam diameter is read from
+the header's illuminated area when the microscope records it (not on a Glacios); otherwise it
+starts at 1.84 µm (from a Tomo5 5.26 Search view). Both can be edited under Image Information, and
+your values are remembered in the browser.
 
 ### How tiles are placed
 
