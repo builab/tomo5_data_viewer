@@ -34,9 +34,8 @@ Then open **http://localhost:8766** in Chrome, Edge or Firefox and:
 If the data is on a remote workstation, see
 [Running on a remote workstation](#running-on-a-remote-workstation-port-forwarding).
 
-Without the server, you can also open `index.html` directly in the browser and use
-**Open Session Data from this computer…**, then **Tilt Series Folder…**. Only the files being shown
-are read.
+The viewer always runs through `tomo5_viewer.py`: opening `index.html` directly only shows how to
+start the server.
 
 ## Interface
 
