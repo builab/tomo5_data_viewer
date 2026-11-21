@@ -44,7 +44,7 @@ except ImportError:
     np = None
 
 APP = "tomo5-data-viewer"
-VERSION = "0.7"
+VERSION = "0.8"
 TESTED_WITH = "Tomo5 5.26"
 CHUNK = 1 << 20          # 1 MiB per write when streaming a file
 
@@ -185,6 +185,194 @@ def read_binned_section(real, z, binf):
     bw, bh = nx // binf, ny // binf
     a = a[:bh * binf, :bw * binf].astype(np.float32).reshape(bh, binf, bw, binf).mean(axis=(1, 3))
     return a.astype("<f4").tobytes(), bw, bh
+
+
+# ---------- tilt-series previews: python3 tomo5_viewer.py --make-previews TILTDIR ----------
+PREVIEW_DIR = "tiltseries_movie"
+TS_RE = re.compile(r"^Position_(\d+)(?:_(\d+))?\.mrc$", re.I)
+
+
+def parse_mdoc(path):
+    """PixelSpacing (Å) and, per section, TiltAngle and DateTime, from a SerialEM-style .mdoc."""
+    px, secs, cur = None, {}, None
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for line in f:
+                m = re.match(r"\s*\[\s*ZValue\s*=\s*(\d+)\s*\]", line, re.I)
+                if m:
+                    cur = secs.setdefault(int(m.group(1)), {})
+                    continue
+                if line.lstrip().startswith("["):
+                    cur = None
+                    continue
+                kv = re.match(r"\s*([^=]+?)\s*=\s*(.*?)\s*$", line)
+                if not kv:
+                    continue
+                k, v = kv.group(1).lower(), kv.group(2)
+                if k == "pixelspacing" and px is None:
+                    try:
+                        px = float(v)
+                    except ValueError:
+                        pass
+                elif cur is not None and k == "tiltangle":
+                    try:
+                        cur["a"] = float(v)
+                    except ValueError:
+                        pass
+                elif cur is not None and k == "datetime":
+                    cur["t"] = v
+    except OSError:
+        pass
+    return px, secs
+
+
+def find_tilt_series(tiltdir, skip):
+    """Position_N[_k].mrc in the folder and one level of subfolders (like the viewer), with their .mdoc."""
+    out = []
+    dirs = [tiltdir] + sorted(os.path.join(tiltdir, d) for d in os.listdir(tiltdir)
+                              if os.path.isdir(os.path.join(tiltdir, d)) and norm(os.path.join(tiltdir, d)) != norm(skip))
+    for d in dirs:
+        for name in sorted(os.listdir(d)):
+            m = TS_RE.match(name)
+            p = os.path.join(d, name)
+            if not m or not os.path.isfile(p) or os.path.getsize(p) == 0:
+                continue
+            stem = name[:-4]
+            mdoc = next((os.path.join(d, c) for c in (stem + ".mdoc", name + ".mdoc") if os.path.isfile(os.path.join(d, c))), None)
+            out.append({"path": p, "stem": stem, "mdoc": mdoc})
+    return out
+
+
+def write_mrc_u8(path, stack, pixel_a):
+    """An 8-bit (mode 0, unsigned) MRC stack with the pixel size in the header."""
+    nz, ny, nx = stack.shape
+    h = bytearray(1024)
+    struct.pack_into("<10i", h, 0, nx, ny, nz, 0, 0, 0, 0, nx, ny, nz)
+    struct.pack_into("<3f", h, 40, nx * pixel_a, ny * pixel_a, nz * pixel_a)
+    struct.pack_into("<3f3i", h, 52, 90.0, 90.0, 90.0, 1, 2, 3)
+    struct.pack_into("<3f", h, 76, 0.0, 255.0, float(stack.mean()))
+    h[208:212] = b"MAP "
+    h[212:216] = bytes([0x44, 0x44, 0, 0])
+    struct.pack_into("<i", h, 220, 1)
+    lab = b"tomo5_viewer.py preview of a Tomo5 tilt series"
+    h[224:224 + len(lab)] = lab
+    tmp = path + ".tmp"
+    with open(tmp, "wb") as f:
+        f.write(bytes(h))
+        f.write(np.ascontiguousarray(stack, dtype=np.uint8).tobytes())
+    os.replace(tmp, path)
+
+
+def make_preview(ts, out, size, mp4, lp, fps, exe):
+    """Bin one tilt series to about `size` px, scale to 8 bits (0.5–99.5 % of the whole stack), save
+    <stem>.mrc + <stem>.json (angles, times, pixel size, source) and optionally <stem>.mp4."""
+    t0 = time.time()
+    src = ts["path"]
+    st = os.stat(src)
+    nx, ny, nz, mode, nxt, signed = mrc_header(src)
+    dt = np.dtype(np.int8 if signed else np.uint8) if mode == 0 else np.dtype(MRC_DTYPES[mode]) if mode in MRC_DTYPES else None
+    if dt is None:
+        raise ValueError(f"MRC mode {mode} is not supported")
+    b = max(1, -(-max(nx, ny) // size))
+    bw, bh = nx // b, ny // b
+    acc = np.int64 if dt.kind in "iu" else np.float64
+    stack = np.empty((nz, bh, bw), np.float32)
+    with open(src, "rb") as f:
+        f.seek(1024 + nxt)
+        for z in range(nz):
+            a = np.frombuffer(f.read(nx * ny * dt.itemsize), dt)
+            if a.size < nx * ny:
+                raise ValueError(f"file is shorter than its header says (section {z})")
+            a = a.reshape(ny, nx)[:bh * b, :bw * b]
+            s = a.reshape(bh, b, bw * b).sum(axis=1, dtype=acc).reshape(bh, bw, b).sum(axis=2)
+            stack[z] = s / (b * b)
+    smp = stack[:, ::4, ::4].ravel()
+    smp = smp[np.isfinite(smp)]
+    lo, hi = (np.percentile(smp, [0.5, 99.5]) if smp.size else (0.0, 1.0))
+    hi = hi if hi > lo else lo + 1
+    u8 = np.clip((np.nan_to_num(stack, nan=lo) - lo) * (255.0 / (hi - lo)), 0, 255).round().astype(np.uint8)
+    px_src, secs = parse_mdoc(ts["mdoc"]) if ts["mdoc"] else (None, {})
+    px = (px_src or 0) * b
+    angles = [secs.get(z, {}).get("a") for z in range(nz)]
+    times = [secs.get(z, {}).get("t") for z in range(nz)]
+    write_mrc_u8(os.path.join(out, ts["stem"] + ".mrc"), u8, px or 1.0)
+    meta = {"tool": f"tomo5_viewer.py {VERSION}", "made": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "source": os.path.basename(src), "sourceSize": st.st_size, "sourceMtime": int(st.st_mtime),
+            "sourceShape": [nx, ny, nz], "bin": b, "shape": [bw, bh, nz], "pixelA": px or None,
+            "sourcePixelA": px_src, "angles": angles, "times": times, "range": [float(lo), float(hi)]}
+    if mp4 and exe:
+        order = sorted(range(nz), key=lambda z: angles[z]) if all(a is not None for a in angles) else list(range(nz))
+        vf = ["pad=ceil(iw/2)*2:ceil(ih/2)*2"]
+        sigma = 0.187 * lp / px if lp and px else 0
+        if sigma >= 0.5:
+            vf.insert(0, f"gblur=sigma={sigma:.2f}")
+        enc, args = ffmpeg_encoder(exe)
+        dest = os.path.join(out, ts["stem"] + ".mp4")
+        tmp = dest[:-4] + ".tmp.mp4"
+        p = subprocess.Popen([exe, "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "gray", "-s", f"{bw}x{bh}", "-r", str(fps), "-i", "-",
+                              "-vf", ",".join(vf)] + args + ["-pix_fmt", "yuv420p", "-movflags", "+faststart", tmp],
+                             stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        _, err = p.communicate(b"".join(u8[z].tobytes() for z in order))
+        if p.returncode != 0:
+            raise RuntimeError("ffmpeg: " + err.decode("utf-8", "replace")[-300:])
+        os.replace(tmp, dest)
+        meta["mp4"] = {"file": ts["stem"] + ".mp4", "order": "angle" if order != list(range(nz)) else "file", "fps": fps, "lowpassA": lp if sigma >= 0.5 else None}
+    tmp = os.path.join(out, ts["stem"] + ".json.tmp")
+    with open(tmp, "w") as f:
+        json.dump(meta, f, indent=1)
+    os.replace(tmp, os.path.join(out, ts["stem"] + ".json"))
+    return time.time() - t0, st.st_size
+
+
+def make_previews(a):
+    if np is None:
+        sys.exit("--make-previews needs numpy (pip install numpy).")
+    tiltdir = os.path.abspath(os.path.expanduser(a.make_previews))
+    if not os.path.isdir(tiltdir):
+        sys.exit(f"Not a folder: {a.make_previews}")
+    out = os.path.abspath(os.path.expanduser(a.preview_out)) if a.preview_out else os.path.join(tiltdir, PREVIEW_DIR)
+    os.makedirs(out, exist_ok=True)
+    series = find_tilt_series(tiltdir, out)
+    exe = ffmpeg_path() if a.mp4 else None
+    if a.mp4 and not exe:
+        print("ffmpeg not found: making the previews without .mp4 (pass --ffmpeg PATH).")
+    todo = []
+    for ts in series:
+        jp = os.path.join(out, ts["stem"] + ".json")
+        fresh = False
+        if not a.force and os.path.isfile(jp) and os.path.isfile(os.path.join(out, ts["stem"] + ".mrc")):
+            try:
+                m = json.load(open(jp))
+                st = os.stat(ts["path"])
+                fresh = m.get("sourceSize") == st.st_size and m.get("sourceMtime") == int(st.st_mtime) and (not (a.mp4 and exe) or "mp4" in m)
+            except Exception:
+                fresh = False
+        if not fresh:
+            todo.append(ts)
+    print(f"Tilt series in {tiltdir}: {len(series)}; previews to make: {len(todo)} (up to date: {len(series) - len(todo)})")
+    print(f"Previews go to {out}")
+    if not todo:
+        return
+    import concurrent.futures as cf
+    t0, done, nbytes, fails = time.time(), 0, 0, []
+    with cf.ThreadPoolExecutor(max_workers=max(1, a.workers)) as pool:
+        futs = {pool.submit(make_preview, ts, out, a.preview_size, a.mp4, a.preview_lowpass, a.preview_fps, exe): ts for ts in todo}
+        for fu in cf.as_completed(futs):
+            ts = futs[fu]
+            done += 1
+            try:
+                took, size = fu.result()
+                nbytes += size
+                el = time.time() - t0
+                eta = el / done * (len(todo) - done)
+                print(f"  [{done}/{len(todo)}] {ts['stem']}: {took:.1f} s ({size / 1e9:.2f} GB, {size / 1e6 / max(took, 1e-3):.0f} MB/s)"
+                      f"  · elapsed {el / 60:.1f} min, about {eta / 60:.1f} min left", flush=True)
+            except Exception as e:
+                fails.append(ts["stem"])
+                print(f"  [{done}/{len(todo)}] {ts['stem']}: FAILED: {e}", flush=True)
+    el = time.time() - t0
+    print(f"Done: {done - len(fails)} previews in {el / 60:.1f} min ({nbytes / 1e9:.1f} GB read, {nbytes / 1e6 / max(el, 1e-3):.0f} MB/s)"
+          + (f"; failed: {', '.join(fails)}" if fails else ""))
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -509,11 +697,20 @@ def save_edits(req):
 def main():
     global HTML_PATH, VERBOSE, EDIT, FFMPEG
     ap = argparse.ArgumentParser(description="Serve Tomo5 session folders to the Tomo5 Data Viewer.")
-    ap.add_argument("roots", nargs="+", help="folders to share (read-only)")
+    ap.add_argument("roots", nargs="*", help="folders to share (read-only)")
     ap.add_argument("--port", type=int, default=8766)
     ap.add_argument("--host", default="127.0.0.1", help="127.0.0.1 (default, this computer only) or 0.0.0.0")
     ap.add_argument("--html", help="path to index.html (default: next to this script)")
     ap.add_argument("--verbose", action="store_true", help="log every request")
+    pv = ap.add_argument_group("tilt-series previews (run once, then the Movie Player starts instantly)")
+    pv.add_argument("--make-previews", metavar="TILTDIR", help=f"make 8-bit previews of every Position_N[_k].mrc in TILTDIR into TILTDIR/{PREVIEW_DIR}, then exit")
+    pv.add_argument("--preview-out", metavar="DIR", help=f"where the previews go (default: TILTDIR/{PREVIEW_DIR})")
+    pv.add_argument("--preview-size", type=int, default=512, help="largest preview side in px (default 512)")
+    pv.add_argument("--mp4", action="store_true", help="also write a <stem>.mp4 movie per tilt series (by angle, needs ffmpeg)")
+    pv.add_argument("--preview-fps", type=int, default=10, help="frames per second of the .mp4 (default 10)")
+    pv.add_argument("--preview-lowpass", type=float, default=60, help="low-pass of the .mp4 in Å, 0 = off (default 60)")
+    pv.add_argument("--workers", type=int, default=2, help="tilt series processed at once (default 2; use 1 on a slow network share)")
+    pv.add_argument("--force", action="store_true", help="remake previews that are up to date")
     ap.add_argument("--ffmpeg", default="auto", help="ffmpeg used to encode acquisition movies: a path, 'auto' (default: look on PATH) or 'none'")
     # experimental edit mode: not listed in --help yet
     ap.add_argument("--edit", action="store_true", help=argparse.SUPPRESS)
@@ -534,6 +731,10 @@ def main():
     VERBOSE = a.verbose
     EDIT = a.edit
     FFMPEG = a.ffmpeg
+    if a.make_previews:
+        return make_previews(a)
+    if not a.roots:
+        ap.error("give at least one folder to share (or --make-previews TILTDIR)")
     import atexit
     atexit.register(lambda: [movie_drop(k) for k in list(MOVIES)])     # no temporary movie folders left behind
     for t, v in (("batch", a.edit_dir), ("maps", a.edit_maps_dir)):

@@ -42,7 +42,7 @@ start the server.
 The layout follows Tomo5:
 
 - **Left, Tasks:** *Search Maps* and *Batch Positions* (acquired / total) switch the table on
-  the right. *Movie Player* is a placeholder for now.
+  the right. *Movie Player* lists the tilt series to play (see below).
 - **Centre, viewer:** tabs **Atlas › Overview › Search Map › Search › Exposure** (*Search* and *Exposure* with Batch Positions selected).
   The bar above the image shows the selected search map, with ‹ › to step through them.
   Below the image: **−** / **+** and a zoom slider. Scroll to zoom, drag to pan, double-click
@@ -198,6 +198,77 @@ server (`.mp4`, H.264) and offers it for download; nothing is written into the d
 Without ffmpeg the browser encodes a `.webm` (current Chrome or Edge). As a guide, a 12 s 720p
 parallel movie of three 41-image tilt series took about 16 s to render.
 
+### Movie Player (tilt series)
+
+**Movie Player** on the left lists every tilt series of the session (each area N.k with a
+`Position_N[_k].mrc`), with its status, the rating of its search map (click ★ to sort) and
+whether it has a preview. Select one and it opens in the **Exposure** tab with a play bar under
+the image (the same bar appears in the Exposure tab of Batch Positions):
+
+- **▶ Play / ❚❚ Pause** (or the Space bar). Paused, the full-resolution section where it stopped
+  is shown again; the slider scrubs through the frames.
+- **fps** (5–30) and **Order**: *as acquired* (the `.mdoc` DateTime, else file order) or *by angle*.
+- **next series at end** (Movie Player only): when a series ends, go on with the next one in the
+  list, for going through a whole session. Arrow keys step through the list.
+- Contrast and the low-pass filter (right panel) apply while it plays; one contrast is used for
+  the whole series.
+- **Export movie** saves the series as it plays (order, contrast, low-pass, angle label) as an
+  `.mp4` (ffmpeg on the server) or `.webm` (in the browser), downloaded to your computer.
+
+Frames come from the **preview cache** when there is one, and start at once. Without it they are
+read **live**: each section is read from the full-size tilt series and shrunk to 512 px on the
+server, so the first play of a series takes as long as reading the stack (see below); later
+plays are instant until the page is reloaded.
+
+### Preview cache: `tiltseries_movie/` (recommended)
+
+Make the previews once, on the machine with the data (needs numpy; `--mp4` needs ffmpeg):
+
+```bash
+python3 tomo5_viewer.py --make-previews /data/tomo5/TiltSeries_folder --mp4
+```
+
+For every `Position_N[_k].mrc` in the folder (and one level of subfolders) this writes, into
+**`TiltSeries_folder/tiltseries_movie/`**:
+
+| File | What it is |
+|---|---|
+| `Position_N[_k].mrc` | the tilt series binned to ≤ 512 px, 8-bit (0.5–99.5 % of the whole stack), pixel size in the header, sections in the original order (≈ 10 MB for 41 images) |
+| `Position_N[_k].json` | tilt angles and times (from the `.mdoc`), pixel size, binning, and the size and date of the source, to tell when it is out of date |
+| `Position_N[_k].mp4` | with `--mp4`: a movie of the series by angle, 60 Å low-pass, 10 fps (≈ 1–4 MB), to share or play anywhere |
+
+Run it again after more tilt series are acquired: previews that are up to date are skipped
+(`--force` remakes them). The viewer finds the folder by itself when you choose the **Tilt
+Series Folder…** (it also looks in `<session>/tiltseries_movie`); the top bar shows
+*N previews* and the table a ✓. A preview whose tilt series changed is ignored (played live).
+
+Options: `--preview-out DIR` (another place, e.g. when the tilt-series folder is read-only; then
+put or link it as `tiltseries_movie` next to the tilt series or in the session folder),
+`--preview-size 512`, `--preview-fps 10`, `--preview-lowpass 60` (Å, 0 = off), `--workers 2`.
+
+**How long it takes.** Reading the full-size stacks dominates; shrinking and writing take about
+1–2 s per series. A 41-image 4096 × 4096 16-bit series is 1.4 GB (2.8 GB as 32-bit), so per
+series and for a session of 100–200 series:
+
+| Storage | Per series | 100–200 series |
+|---|---|---|
+| Local disk / RAID (~500 MB/s) | ~4 s | ~7–15 min |
+| 10 GbE share (~1 GB/s) | ~2–3 s | ~4–10 min |
+| 1 GbE share (~110 MB/s) | ~13–15 s | ~25–50 min |
+
+It prints progress with the time left. More `--workers` help on fast local storage, not on a
+1 GbE share (use `--workers 1` there). Playing *live* in the viewer costs the same reading time,
+per series, each time the page is loaded.
+
+### Making movies: summary
+
+| You want | Use |
+|---|---|
+| A quick look at many tilt series | **Movie Player**, with the preview cache |
+| One tilt series as a movie file | **Export movie** in the play bar, or `--make-previews … --mp4` for all of them at once (in `tiltseries_movie/`) |
+| A presentation movie: atlas → search map → area → tilt series | right-click › **Make acquisition movie (N.k)…** |
+| The same for all areas of a position, in parallel | right-click › **Make parallel acquisition movie (Position_N)…** |
+
 ### How tiles are placed
 
 Every Tomo5 image XML (`Overview.xml`, `Tile_*.xml`, …) has:
@@ -341,9 +412,13 @@ workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
 
 ```text
 python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--host 127.0.0.1] [--html index.html] [--verbose] [--ffmpeg auto]
+python3 tomo5_viewer.py --make-previews TILTDIR [--mp4] [--preview-out DIR] [--preview-size 512]
+                        [--preview-fps 10] [--preview-lowpass 60] [--workers 2] [--force]
 ```
 
-- Only the listed folders are reachable, and nothing is ever written into them.
+- Only the listed folders are reachable, and the server never writes into them.
+  (`--make-previews` is a separate command you run yourself; it writes only into
+  `TILTDIR/tiltseries_movie/` or `--preview-out`, and then exits.)
 - `--ffmpeg` sets the ffmpeg used for acquisition movies: a path, `auto` (default: look on the
   PATH, or the `imageio-ffmpeg` Python package) or `none` (the browser encodes them). Movies are
   encoded in a temporary folder that is deleted after an hour or when the server stops.
@@ -353,5 +428,6 @@ python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--host 127.0.0.1] [--html
 ## Requirements
 
 - Python 3.7+ (numpy optional, recommended).
-- ffmpeg (optional) for `.mp4` acquisition movies.
+- ffmpeg (optional) for `.mp4` movies.
+- numpy for `--make-previews`.
 - A current Chrome, Edge or Firefox.
