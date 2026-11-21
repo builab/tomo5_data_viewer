@@ -36,7 +36,7 @@ except ImportError:
     np = None
 
 APP = "tomo5-data-viewer"
-VERSION = "0.2"
+VERSION = "0.3"
 TESTED_WITH = "Tomo5 5.26"
 CHUNK = 1 << 20          # 1 MiB per write when streaming a file
 
@@ -192,11 +192,22 @@ class Handler(BaseHTTPRequestHandler):
                 if not real or not os.path.isfile(real):
                     return self.send_err(404, "Not found.")
                 body, bw, bh = read_binned_section(real, int(arg("z", "0")), max(1, int(arg("bin", "1"))))
+                extra = {}
+                if arg("fmt") == "u16":
+                    # half the bytes of float32: 65536 levels between the min and max, plenty for display
+                    a = np.frombuffer(body, dtype="<f4")
+                    fin = a[np.isfinite(a)]
+                    lo, hi = (float(fin.min()), float(fin.max())) if fin.size else (0.0, 1.0)
+                    span = hi - lo if hi > lo else 1.0
+                    body = np.clip(np.nan_to_num((a - lo) * (65535.0 / span), nan=0.0), 0, 65535).round().astype("<u2").tobytes()
+                    extra = {"X-Lo": repr(lo), "X-Hi": repr(lo + span)}
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("X-Bw", str(bw))
                 self.send_header("X-Bh", str(bh))
+                for k, v in extra.items():
+                    self.send_header(k, v)
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
                 if self.command != "HEAD":

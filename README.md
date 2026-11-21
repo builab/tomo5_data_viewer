@@ -52,10 +52,45 @@ The layout follows Tomo5:
 |---|---|
 | Atlas | `Atlas/Atlas_<date>_<time>.mrc`, the stitched atlas, with every search map marked: green = acquired, orange = in progress / queued, white outline = selected. Click a marker to select that map; double-click to open its overview. |
 | Overview | `SearchMaps/SearchMap_<N>_<date>_<time>/Overview.mrc`, with the outline of every `Tile_*` drawn in green |
-| Search Map | The `Tile_*.mrc` images placed and stitched in the browser. The drop-down switches to `SearchMap.mrc`, the map as stitched by Tomo5. |
+| Search Map | The `Tile_*.mrc` images stitched in the browser (see below). The drop-down switches to the tiles at their stage positions without blending, or to `SearchMap.mrc`, the map as stitched by Tomo5. |
 
-Large images are binned when they load (atlas and stitched map to about 4096 px, overview to
-2048 px). With numpy on the server, the server does the binning.
+### Loading speed
+
+Like the SerialEM Grid Viewer, the viewer shows something small first and loads detail only
+when it is needed:
+
+- Every image appears first as a **preview** of about 1024 px (stitched tiles: 384 px per tile,
+  blended at their stage positions), usually in well under a second.
+- The atlas, the overview and `SearchMap.mrc` load **more resolution only when you zoom in**
+  far enough to see the difference, and only as much as that zoom needs (2×, then full size;
+  at most about 4096 px for the atlas and `SearchMap.mrc`, 2048 px for the overview). On a
+  high-DPI screen this happens straight away.
+- The stitched tiles load at full display size right after the preview, because the overlap
+  alignment needs them.
+- While you look at one view, the **previews of the selected search map** (overview and tiles)
+  load in the background, so the next tab opens at once.
+- With numpy, the server bins images and sends **16-bit data** (half the bytes of float32).
+  Without numpy, the browser reads the full files and bins them itself, which is slower.
+
+Measured on a 5 MB/s link (a slow VPN): the atlas appears in about 1.5 s (2 MB) instead of
+about 10 s (67 MB); the overview opens at once.
+
+### Seamless stitching
+
+*Tiles, stitched here (aligned, blended)* works like the SerialEM Grid Viewer's montages:
+
+1. **Align.** The overlap of each pair of neighbouring tiles is cross-correlated (after a
+   high-pass filter, so ice gradients do not dominate), coarse at half size and then refined.
+   Least-squares tile positions are solved from all overlaps; a match that disagrees with the
+   others is dropped, and a failed match falls back to the stage positions.
+2. **Match brightness.** Each tile gets a gain so that tiles agree in their overlaps
+   (an offset instead, if the data are not positive counts).
+3. **Blend.** The tiles are merged into one image as a weighted average. Each tile fades out over
+   the overlap width, like IMOD's `blendmont`.
+
+The Image Information panel reports how many overlaps matched, the largest position correction,
+the range of tile gains and the fade width. On a 3 × 3 map of 2048 px tiles this takes about
+2 seconds in the browser.
 
 ### How tiles are placed
 
