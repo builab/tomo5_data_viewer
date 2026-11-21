@@ -16,17 +16,27 @@ On the computer that has the data:
 ```bash
 git clone https://github.com/builab/tomo5_data_viewer.git
 cd tomo5_data_viewer
-python3 tomo5_viewer.py /path/to/Tomo5/sessions --port 8766
+python3 tomo5_viewer.py /path/to/Tomo5/sessions /path/to/tilt_series --port 8766
 ```
 
-Then open **http://localhost:8766** in Chrome, Edge or Firefox, click **Open session…** and pick
-a session folder (the one that contains `Atlas/`, `Batch/` and `SearchMaps/`).
+List every folder you want to open: the Tomo5 session data and, if they are kept elsewhere, the
+tilt series. Only listed folders are reachable.
+
+Then open **http://localhost:8766** in Chrome, Edge or Firefox and:
+
+1. **Open Session Data…**: pick the session folder, the one with `Session.dm`, `Atlas/`,
+   `SearchMaps/`, `Batch/` and `Thumbnails/`.
+2. **Tilt Series Folder…**: pick the folder with the tilt series `Position_<N>[_<k>].mrc` and their
+   `.mdoc` files (also found one level of subfolders down). They are used for the Exposure tab, the
+   *Acquired* status and the camera field. Tilt series that sit in the session folder itself are
+   used too. The choice is kept in the page address, so a reload keeps it.
 
 If the data is on a remote workstation, see
 [Running on a remote workstation](#running-on-a-remote-workstation-port-forwarding).
 
 Without the server, you can also open `index.html` directly in the browser and use
-**Open folder from this computer…**. Only the files being shown are read.
+**Open Session Data from this computer…**, then **Tilt Series Folder…**. Only the files being shown
+are read.
 
 ## Interface
 
@@ -76,6 +86,28 @@ when it is needed:
 Measured on a 5 MB/s link (a slow VPN): the atlas appears in about 1.5 s (2 MB) instead of
 about 10 s (67 MB); the overview opens at once.
 
+### Right-click: zoom in / zoom out
+
+Right-click on the image opens a menu for what is under the cursor. The levels are
+**Atlas › Overview › Search Map › Search › Exposure**: *Zoom in* can jump to any deeper level for that
+item (Exposure only from Search Map and Search, where the areas are big enough to pick), *Zoom out* goes exactly one level up (like the previous tab). The item is selected first, so the
+table on the right matches, and the next view opens centred on it. Greyed-out entries say why.
+
+| Right-click on | Zoom in | Zoom out |
+|---|---|---|
+| Atlas: a search map | Overview · Search Map | |
+| Atlas: a position | Overview · Search Map (centred on it) · Search | |
+| Atlas: empty | Zoom in 2× here | |
+| Overview: inside the map | Search Map | Atlas |
+| Overview: a position / area | Search Map · Search | Atlas |
+| Search Map: a position / area | Search · Exposure N.1, N.2, … (that area first) | Overview (centred on the position) |
+| Search: an area / elsewhere | Exposure N.k | Search Map (centred on the position) |
+| Exposure | the other areas N.k | Search |
+
+Every menu also has *Fit to window*, *Copy stage X, Y* (the stage position under the cursor, in µm)
+and *Select* for the item under the cursor. Left-click still selects and double-click still zooms in
+one level.
+
 ### Seamless stitching
 
 *Tiles, stitched here (aligned, blended)* works like the SerialEM Grid Viewer's montages:
@@ -104,7 +136,7 @@ from the files present:
 |---|---|
 | Initialized | `Position_<N>_Search.mrc`, `Position_<N>_Search.xml` only |
 | Refined | also `Position_<N>_Exposure.mrc`, `Position_<N>_Tracking.mrc`, `Position_<N>_<k>_Exposure.mrc` |
-| Acquired | tilt series `Position_<N>[_<k>].mrc` and `.mdoc` in the session folder (*Acquired 1/3* when only some areas are done) |
+| Acquired | tilt series `Position_<N>[_<k>].mrc` and `.mdoc` in the tilt series folder or the session folder (*Acquired 1/3* when only some areas are done) |
 
 With *Batch Positions* selected, the **Search** tab shows `Position_<N>_Search.mrc` with the
 position's areas drawn as in Tomo5:
@@ -280,7 +312,7 @@ workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
 | `OSError: [Errno 98] Address already in use` on the workstation | The viewer is already running there, or another program uses the port. Use `--port 8770`. |
 | The browser says "connection refused" | The viewer is not running on the workstation, or the tunnel points to the wrong port. Check both terminals. |
 | `channel 2: open failed: connect failed` in the tunnel terminal | The tunnel works but nothing listens on that port on the workstation. Check the viewer's port. |
-| The page loads but **Open session…** is missing | The page was opened as a file, not through `http://localhost:…`. |
+| The page loads but **Open Session Data…** is missing | The page was opened as a file, not through `http://localhost:…`. |
 
 ## Server options
 
