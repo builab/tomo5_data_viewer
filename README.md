@@ -54,8 +54,26 @@ The layout follows Tomo5:
 | Overview | `SearchMaps/SearchMap_<N>_<date>_<time>/Overview.mrc`, with the outline of every `Tile_*` drawn in green |
 | Search Map | The `Tile_*.mrc` images stitched in the browser (see below). The drop-down switches to the tiles at their stage positions without blending, or to `SearchMap.mrc`, the map as stitched by Tomo5. |
 
-Large images are binned when they load (atlas and stitched map to about 4096 px, overview to
-2048 px). With numpy on the server, the server does the binning.
+### Loading speed
+
+Like the SerialEM Grid Viewer, the viewer shows something small first and loads detail only
+when it is needed:
+
+- Every image appears first as a **preview** of about 1024 px (stitched tiles: 384 px per tile,
+  blended at their stage positions), usually in well under a second.
+- The atlas, the overview and `SearchMap.mrc` load **more resolution only when you zoom in**
+  far enough to see the difference, and only as much as that zoom needs (2×, then full size;
+  at most about 4096 px for the atlas and `SearchMap.mrc`, 2048 px for the overview). On a
+  high-DPI screen this happens straight away.
+- The stitched tiles load at full display size right after the preview, because the overlap
+  alignment needs them.
+- While you look at one view, the **previews of the selected search map** (overview and tiles)
+  load in the background, so the next tab opens at once.
+- With numpy, the server bins images and sends **16-bit data** (half the bytes of float32).
+  Without numpy, the browser reads the full files and bins them itself, which is slower.
+
+Measured on a 5 MB/s link (a slow VPN): the atlas appears in about 1.5 s (2 MB) instead of
+about 10 s (67 MB); the overview opens at once.
 
 ### Seamless stitching
 
