@@ -700,7 +700,19 @@ async function tileLayout(map, refR){
   const S = tiles.map(t => t.xml && Number.isFinite(t.xml.info.stage.x) ? t.geo.S : null);
   const ok = S.every(Boolean), w = tiles[0].geo.nx * tiles[0].geo.ps;
   const spread = ok ? Math.max(...S.map(p => p[0])) - Math.min(...S.map(p => p[0])) + Math.max(...S.map(p => p[1])) - Math.min(...S.map(p => p[1])) : 0;
-  if(ok && spread > 0.05 * w) return {tiles, fromStage: true};
+  if(ok && spread > 0.05 * w){
+    // Tomo5 5.26 writes each tile's offset from the real stage position with the opposite sign
+    // (checked against SearchMap.mrc): mirror the positions through the stage position of the map.
+    let ref = null;
+    for(const f of ["SearchMap.xml", "Overview.xml"]){
+      if(!map.names.has(f)) continue;
+      const x = await tryXml(join(map.dir, f));
+      if(x && Number.isFinite(x.info.stage.x)){ ref = [x.info.stage.x * 1e6, x.info.stage.y * 1e6]; break; }
+    }
+    if(!ref) ref = [S.reduce((a, p) => a + p[0], 0) / S.length, S.reduce((a, p) => a + p[1], 0) / S.length];
+    for(const t of tiles) t.geo.S = [2 * ref[0] - t.geo.S[0], 2 * ref[1] - t.geo.S[1]];
+    return {tiles, fromStage: true};
+  }
   // fallback: a grid (size from TileSetAcquisitionOptions.xml if there), row by row, no overlap
   const opt = map.names.has("TileSetAcquisitionOptions.xml") ? await tryXml(join(map.dir, "TileSetAcquisitionOptions.xml")) : null;
   const gw = parseInt(opt?.rows.find(([p]) => /GridSize\/width$/i.test(p))?.[1]);

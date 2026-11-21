@@ -62,7 +62,10 @@ Large images are binned when they load (atlas and stitched map to about 4096 px,
 Every Tomo5 image XML (`Overview.xml`, `Tile_*.xml`, …) has:
 
 - `microscopeData/stage/Position/X, Y`: the stage position of the image centre. For tiles,
-  Tomo5 folds the image shift into it, so each tile has its own position.
+  Tomo5 folds the image shift into it, so each tile has its own position, **but with the offset
+  from the real stage position in the opposite direction**. The viewer mirrors the tile
+  positions through the stage position of the map (`SearchMap.xml`, else `Overview.xml`).
+  This was checked against `SearchMap.mrc` stitched by Tomo5.
 - `SpatialScale/pixelSize/x`: the pixel size of the image.
 - `ReferenceTransformation/matrix`: a 2 × 2 matrix from image pixels to stage metres. It holds
   the camera rotation and a flip, and differs slightly between magnifications (about 3° between
