@@ -16,17 +16,27 @@ On the computer that has the data:
 ```bash
 git clone https://github.com/builab/tomo5_data_viewer.git
 cd tomo5_data_viewer
-python3 tomo5_viewer.py /path/to/Tomo5/sessions --port 8766
+python3 tomo5_viewer.py /path/to/Tomo5/sessions /path/to/tilt_series --port 8766
 ```
 
-Then open **http://localhost:8766** in Chrome, Edge or Firefox, click **Open session…** and pick
-a session folder (the one that contains `Atlas/`, `Batch/` and `SearchMaps/`).
+List every folder you want to open: the Tomo5 session data and, if they are kept elsewhere, the
+tilt series. Only listed folders are reachable.
+
+Then open **http://localhost:8766** in Chrome, Edge or Firefox and:
+
+1. **Open Session Data…**: pick the session folder, the one with `Session.dm`, `Atlas/`,
+   `SearchMaps/`, `Batch/` and `Thumbnails/`.
+2. **Tilt Series Folder…**: pick the folder with the tilt series `Position_<N>[_<k>].mrc` and their
+   `.mdoc` files (also found one level of subfolders down). They are used for the Exposure tab, the
+   *Acquired* status and the camera field. Tilt series that sit in the session folder itself are
+   used too. The choice is kept in the page address, so a reload keeps it.
 
 If the data is on a remote workstation, see
 [Running on a remote workstation](#running-on-a-remote-workstation-port-forwarding).
 
 Without the server, you can also open `index.html` directly in the browser and use
-**Open folder from this computer…**. Only the files being shown are read.
+**Open Session Data from this computer…**, then **Tilt Series Folder…**. Only the files being shown
+are read.
 
 ## Interface
 
@@ -126,7 +136,7 @@ from the files present:
 |---|---|
 | Initialized | `Position_<N>_Search.mrc`, `Position_<N>_Search.xml` only |
 | Refined | also `Position_<N>_Exposure.mrc`, `Position_<N>_Tracking.mrc`, `Position_<N>_<k>_Exposure.mrc` |
-| Acquired | tilt series `Position_<N>[_<k>].mrc` and `.mdoc` in the session folder (*Acquired 1/3* when only some areas are done) |
+| Acquired | tilt series `Position_<N>[_<k>].mrc` and `.mdoc` in the tilt series folder or the session folder (*Acquired 1/3* when only some areas are done) |
 
 With *Batch Positions* selected, the **Search** tab shows `Position_<N>_Search.mrc` with the
 position's areas drawn as in Tomo5:
@@ -302,7 +312,7 @@ workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
 | `OSError: [Errno 98] Address already in use` on the workstation | The viewer is already running there, or another program uses the port. Use `--port 8770`. |
 | The browser says "connection refused" | The viewer is not running on the workstation, or the tunnel points to the wrong port. Check both terminals. |
 | `channel 2: open failed: connect failed` in the tunnel terminal | The tunnel works but nothing listens on that port on the workstation. Check the viewer's port. |
-| The page loads but **Open session…** is missing | The page was opened as a file, not through `http://localhost:…`. |
+| The page loads but **Open Session Data…** is missing | The page was opened as a file, not through `http://localhost:…`. |
 
 ## Server options
 

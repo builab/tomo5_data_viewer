@@ -56,6 +56,8 @@ header h1 small{font:400 12px var(--font-mono);color:var(--muted);margin-left:8p
 .spacer{flex:1}
 #status{font-size:12.5px;color:var(--muted);max-width:52ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #status.err{color:var(--err)}
+.tiltinfo{font-size:12px;color:var(--muted);align-self:center;max-width:28ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tiltinfo.ok{color:var(--accent)}
 .credit{font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap;border-left:1px solid var(--line);padding-left:14px}
 .credit:hover{color:var(--accent);text-decoration:underline}
 
@@ -192,9 +194,12 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
   <header>
     <h1>Tomo5 Data Viewer<small>v0.5</small></h1>
     <div class="opens">
-      <button class="btn primary" id="openServer" hidden>Open session…</button>
-      <button class="btn" id="openLocal">Open folder from this computer…</button>
+      <button class="btn primary" id="openServer" hidden title="The session folder: Session.dm, Atlas/, SearchMaps/, Batch/, Thumbnails/">Open Session Data…</button>
+      <button class="btn" id="openLocal" title="The session folder: Session.dm, Atlas/, SearchMaps/, Batch/, Thumbnails/">Open Session Data from this computer…</button>
+      <button class="btn" id="openTilt" disabled title="The folder with the tilt series Position_N[_k].mrc and their .mdoc files">Tilt Series Folder…</button>
+      <span class="tiltinfo" id="tiltInfo"></span>
       <input type="file" id="localDir" webkitdirectory directory multiple hidden>
+      <input type="file" id="localTiltDir" webkitdirectory directory multiple hidden>
     </div>
     <span class="spacer"></span>
     <span id="status"></span>
@@ -239,8 +244,8 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
         <div class="card">
           <h2>Open a Tomo5 session</h2>
           <p>Pick the session folder (the one with <code>Atlas/</code>, <code>Batch/</code> and <code>SearchMaps/</code>).</p>
-          <p id="welcomeServer" hidden>Folders shared by the server are listed under <b>Open session…</b>.</p>
-          <p id="welcomeLocal">Without the server, use <b>Open folder from this computer…</b>. Only the files being shown are read.</p>
+          <p id="welcomeServer" hidden>Folders shared by the server are listed under <b>Open Session Data…</b>. If the tilt series are in a separate folder, add it with <b>Tilt Series Folder…</b>.</p>
+          <p id="welcomeLocal">Without the server, use <b>Open Session Data from this computer…</b>, then <b>Tilt Series Folder…</b> if the tilt series are elsewhere. Only the files being shown are read.</p>
         </div>
       </div>
     </div>
@@ -307,7 +312,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 <div class="ctx" id="ctxMenu" hidden role="menu"></div>
 
 <dialog id="picker">
-  <div class="fp-head"><h3>Open a Tomo5 session</h3><div class="fp-crumbs" id="fpCrumbs"></div></div>
+  <div class="fp-head"><h3 id="fpTitle">Open Session Data</h3><div class="fp-crumbs" id="fpCrumbs"></div></div>
   <div class="fp-list" id="fpList"></div>
   <div class="fp-foot">
     <span class="fp-note" id="fpNote"></span><span class="spacer"></span>
@@ -398,7 +403,14 @@ function LocalSource(fileList){
     async text(path){ return this.file(path).text(); },
     async bytes(path, start, end){ return this.file(path).slice(start, end + 1).arrayBuffer(); },
     async section(){ return null; },
-    root(){ const first = files.keys().next().value || ""; return first.split("/")[0]; },
+    root(){ const first = [...files.keys()].find(k => !k.startsWith("@tilt/")) || ""; return first.split("/")[0]; },
+    // add another picked folder (the tilt series) as "@tilt/<folder>/…"; returns that path
+    add(fileList){
+      for(const k of [...files.keys()]) if(k.startsWith("@tilt/")) files.delete(k);
+      let top = "";
+      for(const f of fileList){ const rel = f.webkitRelativePath || f.name; files.set(`@tilt/${rel}`, f); top = rel.split("/")[0]; }
+      return `@tilt/${top}`;
+    },
   };
 }
 
@@ -565,6 +577,7 @@ const MAP_RE = /^SearchMap_(\d+)_(\d{8}_\d{6})$/i;
 
 async function openSession(src, path, want = {}){
   SRC = src; SESSION = null; CACHE.clear();
+  $("#tiltInfo").textContent = ""; $("#openTilt").disabled = true;
   STATE.tab = "atlas"; STATE.sel = -1; STATE.pos = -1; STATE.task = want.task === "batch" ? "batch" : "searchMaps";
   showScene(null);
   status(`Opening ${path || "folder"}…`);
@@ -628,6 +641,8 @@ async function openSession(src, path, want = {}){
     renderTasks(); renderTable();
     if(!s.atlas && !s.maps.length && !s.positions.length){ status("No Atlas_*.xml, SearchMaps/ or Batch/ found in this folder.", true); return; }
     status(`${s.info?.name ? `${s.info.name}: ` : ""}${s.maps.length} search map${s.maps.length === 1 ? "" : "s"}, ${s.positions.length} batch position${s.positions.length === 1 ? "" : "s"}${s.atlas ? ", atlas" : ""} found.`);
+    $("#openTilt").disabled = false;
+    if(want.tilt) await setTiltFolder(want.tilt, true);
     fillTilts();
 
     const pick = want.map ? s.maps.findIndex(m => m.id === +want.map) : -1;
@@ -693,8 +708,8 @@ function findPositions(batchNames, topNames, batchDir, topDir, list){
   }
   for(const f of topNames){
     let m;
-    if((m = f.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i))) area(get(+m[1]), m[2] ? +m[2] : 1).mrc = join(topDir, f);
-    else if((m = f.match(/^Position_(\d+)(?:_(\d+))?(?:\.mrc)?\.mdoc$/i))) area(get(+m[1]), m[2] ? +m[2] : 1).mdoc = join(topDir, f);
+    if((m = f.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i))) Object.assign(area(get(+m[1]), m[2] ? +m[2] : 1), {mrc: join(topDir, f), mrcFrom: "session"});
+    else if((m = f.match(/^Position_(\d+)(?:_(\d+))?(?:\.mrc)?\.mdoc$/i))) Object.assign(area(get(+m[1]), m[2] ? +m[2] : 1), {mdoc: join(topDir, f), mrcFrom: "session"});
   }
   // positions and areas planned in BatchPositionsList.xml
   for(const [n, plan] of list || []){
@@ -703,14 +718,56 @@ function findPositions(batchNames, topNames, batchDir, topDir, list){
   }
   return [...P.values()].sort((a, b) => a.id - b.id).map(p => {
     p.areas = [...p.areas.values()].sort((a, b) => a.k - b.k);
-    const acq = p.areas.filter(a => a.mrc).length, refined = p.tracking || p.areas.some(a => a.exposure);
-    p.acquired = acq;
-    const fileStatus = acq ? (acq < p.areas.length ? `Acquired ${acq}/${p.areas.length}` : "Acquired") : refined ? "Refined" : "Initialized";
-    // Tomo5's own status when the list has it (it also knows e.g. Failed); file-based otherwise
-    p.status = p.plan?.status ? (p.plan.status === "Acquired" && acq && acq < p.areas.length ? fileStatus : p.plan.status) : fileStatus;
+    positionStatus(p);
     if(p.plan && Number.isFinite(p.plan.tiltA)) p.tilt = p.plan.tiltA * 180 / Math.PI;
     return p;
   });
+}
+function positionStatus(p){
+  const acq = p.areas.filter(a => a.mrc).length, refined = p.tracking || p.areas.some(a => a.exposure);
+  p.acquired = acq;
+  const fileStatus = acq ? (acq < p.areas.length ? `Acquired ${acq}/${p.areas.length}` : "Acquired") : refined ? "Refined" : "Initialized";
+  // Tomo5's own status when the list has it (it also knows e.g. Failed); file-based otherwise
+  p.status = p.plan?.status ? (p.plan.status === "Acquired" && acq && acq < p.areas.length ? fileStatus : p.plan.status) : fileStatus;
+}
+
+/* Tilt series folder: Position_<N>[_<k>].mrc and .mdoc (also .mrc.mdoc), in the folder or one level
+   of subfolders. They replace any tilt series found in the session folder. */
+async function setTiltFolder(path, quiet = false){
+  const s = SESSION;
+  if(!s) return;
+  status(`Reading tilt series folder ${path.split("/").pop()}…`);
+  try{
+    const top = await SRC.list(path);
+    const entries = top.files.map(f => ({...f, path: join(path, f.name)}));
+    const subs = top.dirs.slice(0, 300);
+    const lists = await Promise.all(subs.map(d => SRC.list(join(path, d.name)).catch(() => null)));
+    lists.forEach((l, i) => l && entries.push(...l.files.map(f => ({...f, path: join(path, `${subs[i].name}/${f.name}`)}))));
+    let stacks = 0, mdocs = 0;
+    const byId = new Map(s.positions.map(p => [p.id, p]));
+    for(const p of s.positions) for(const a of p.areas){ if(a.mrcFrom !== "session"){ a.mrc = a.mrcFrom === "tilt" ? null : a.mrc; a.mdoc = a.mrcFrom === "tilt" ? null : a.mdoc; } }
+    for(const f of entries){
+      if(f.size === 0) continue;
+      let m, kind;
+      if((m = f.name.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i))) kind = "mrc";
+      else if((m = f.name.match(/^Position_(\d+)(?:_(\d+))?(?:\.mrc)?\.mdoc$/i))) kind = "mdoc";
+      else continue;
+      const p = byId.get(+m[1]); if(!p) continue;
+      const k = m[2] ? +m[2] : 1;
+      let a = p.areas.find(a => a.k === k);
+      if(!a){ a = {k, exposure: null, mrc: null, mdoc: null}; p.areas.push(a); p.areas.sort((x, y) => x.k - y.k); }
+      a[kind] = f.path; a.mrcFrom = "tilt";
+      kind === "mrc" ? stacks++ : mdocs++;
+    }
+    for(const p of s.positions) positionStatus(p);
+    s.tilt = {path, stacks, mdocs};
+    $("#tiltInfo").textContent = `${path.split("/").pop()}: ${stacks} tilt series`;
+    $("#tiltInfo").title = path; $("#tiltInfo").classList.toggle("ok", stacks > 0);
+    if(!quiet || !stacks) status(stacks ? `Tilt series folder: ${stacks} tilt series, ${mdocs} .mdoc.` : "No Position_N[_k].mrc tilt series found in that folder.", !stacks);
+    s.overlay = null; await overlaySizes(s);
+    renderTasks(); renderTable(); updateChrome();
+    if(STATE.tab === "exposure" || STATE.tab === "search") await loadScene();
+  }catch(e){ console.error(e); status(e.message, true); }
 }
 
 // fill the ∠ and Rating columns from the XML / .dm files, in the background
@@ -919,7 +976,7 @@ function updateChrome(){
     : STATE.tab === "exposure" ? (pos ? `<b>${pos.id}.${STATE.area} : ${esc(ex ? ex.path.split("/").pop() : pos.name)}</b><small>${ex ? ex.kind : ""}</small>` : "")
     : map ? `${pos ? `<small>${esc(pos.name)} ·</small>` : ""}<b>${map.id} : ${esc(map.name)}</b>${stars(map.rating)}` : "";
   if(s && s.path && SRC.kind === "server")
-    history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}${batch && pos ? `&task=batch&pos=${pos.id}&area=${STATE.area}` : ""}&tab=${STATE.tab}`);
+    history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}${batch && pos ? `&task=batch&pos=${pos.id}&area=${STATE.area}` : ""}${s.tilt ? `&tilt=${encodeURIComponent(s.tilt.path)}` : ""}&tab=${STATE.tab}`);
 }
 
 /* ------------------------------------------------------------------ scenes
@@ -2013,7 +2070,7 @@ $("#localDir").addEventListener("change", e => {
 });
 
 /* ------------------------------------------------------------------ server folder picker */
-const FP = {path: ""};
+const FP = {path: "", mode: "session", tiltPath: ""};
 async function fpGo(path){
   FP.path = path;
   const list = $("#fpList"), note = $("#fpNote");
@@ -2026,8 +2083,9 @@ async function fpGo(path){
     const files = l.files.slice(0, 200).map(f => `<div class="fp-item file"><span class="ic">·</span>${esc(f.name)}<span class="sz">${fmtBytes(f.size)}</span></div>`);
     list.innerHTML = dirs.join("") + files.join("") + (l.files.length > 200 ? `<div class="fp-note" style="padding:6px 8px">… and ${l.files.length - 200} more files</div>` : "") ||
       '<div class="fp-note" style="padding:8px">Empty folder.</div>';
-    const looks = l.dirs.some(d => d.name === "Atlas" || d.name === "SearchMaps") || l.files.some(f => f.name === "Session.dm");
-    note.textContent = !path ? "Pick a shared folder." : looks ? "Looks like a Tomo5 session." : "";
+    const tilts = l.files.filter(f => f.size > 0 && /^Position_\d+(_\d+)?\.mrc$/i.test(f.name)).length;
+    const looks = FP.mode === "tilt" ? tilts > 0 : l.dirs.some(d => d.name === "Atlas" || d.name === "SearchMaps") || l.files.some(f => f.name === "Session.dm");
+    note.textContent = !path ? "Pick a shared folder." : !looks ? "" : FP.mode === "tilt" ? `${tilts} tilt series here.` : "Looks like a Tomo5 session.";
     note.classList.toggle("ok", looks);
     $("#fpUse").disabled = !path;
   }catch(e){ list.innerHTML = `<div class="fp-note" style="padding:8px;color:var(--err)">${esc(e.message)}</div>`; }
@@ -2035,8 +2093,29 @@ async function fpGo(path){
 $("#fpList").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if(b) fpGo(b.dataset.go); });
 $("#fpCrumbs").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if(b) fpGo(b.dataset.go); });
 $("#fpCancel").addEventListener("click", () => $("#picker").close());
-$("#fpUse").addEventListener("click", () => { $("#picker").close(); openSession(ServerSource, FP.path); });
-$("#openServer").addEventListener("click", () => { $("#picker").showModal(); fpGo(FP.path || (SESSION && SRC === ServerSource ? SESSION.path : (SERVER.roots.length === 1 ? SERVER.roots[0].name : ""))); });
+$("#fpUse").addEventListener("click", () => {
+  $("#picker").close();
+  if(FP.mode === "tilt"){ FP.tiltPath = FP.path; setTiltFolder(FP.path); } else openSession(ServerSource, FP.path);
+});
+function openPicker(mode){
+  FP.mode = mode;
+  $("#fpTitle").textContent = mode === "tilt" ? "Tilt Series Folder" : "Open Session Data";
+  $("#fpUse").textContent = mode === "tilt" ? "Use this folder" : "Open this folder";
+  $("#picker").showModal();
+  const start = mode === "tilt" ? (SESSION?.tilt?.path || FP.tiltPath || (SESSION?.path || "").split("/").slice(0, -1).join("/"))
+                                : (FP.path || (SESSION && SRC === ServerSource ? SESSION.path : (SERVER.roots.length === 1 ? SERVER.roots[0].name : "")));
+  fpGo(start);
+}
+$("#openServer").addEventListener("click", () => openPicker("session"));
+$("#openTilt").addEventListener("click", () => {
+  if(!SESSION) return;
+  if(SRC.kind === "local") $("#localTiltDir").click(); else openPicker("tilt");
+});
+$("#localTiltDir").addEventListener("change", e => {
+  const files = e.target.files; if(!files.length || SRC?.kind !== "local") return;
+  setTiltFolder(SRC.add(files));
+  e.target.value = "";
+});
 
 /* ------------------------------------------------------------------ start */
 (async function start(){
@@ -2049,7 +2128,7 @@ $("#openServer").addEventListener("click", () => { $("#picker").showModal(); fpG
       $("#openLocal").textContent = "From this computer…";
       $("#welcomeLocal").hidden = true;
       const q = new URLSearchParams(location.hash.slice(1));
-      if(q.get("session")) openSession(ServerSource, q.get("session"), {map: q.get("map"), tab: q.get("tab"), task: q.get("task"), pos: q.get("pos"), area: q.get("area")});
+      if(q.get("session")) openSession(ServerSource, q.get("session"), {map: q.get("map"), tab: q.get("tab"), task: q.get("task"), pos: q.get("pos"), area: q.get("area"), tilt: q.get("tilt")});
     }
   }catch{ /* opened as a plain file: local folders only */ }
   draw();
