@@ -239,6 +239,25 @@ the overview).
 - **Cursor readout.** The stage X/Y under the cursor is `S + (view position turned back)`; it
   matches the stage values in the XML files.
 
+### Tile positions: XML vs reality
+
+The tiles of a search map are taken with image shift, and the stage positions in `Tile_*.xml` come from
+the image-shift calibration. Measured on real tiles (3 × 3 map, 2048 px at 5.83 nm), the true offsets
+(cross-correlation of the overlaps) are:
+
+| Offset of tile 2 / tile 4 from tile 1 | Tile 2 | Tile 4 |
+|---|---|---|
+| From the tile XML stage positions | (−23, 1903) px | (1906, 49) px |
+| From `SearchMap.dm` `AtlasPixelPosition` (Tomo5's stitching) | (0, 1945) px | (1945, 0) px |
+| **True (overlap cross-correlation)** | **(−2, 1998) px** | **(1981, 3) px** |
+
+So the tiles lie on a camera-axis grid with only ~50–70 px of overlap. The XML positions are ~5 %
+short and rotated by ~1° (the `ReferenceCorrectionForImageShift` in `SearchMap.xml` is of that
+order: 2.7° rotation, 1 % scale), and Tomo5's own grid is ~2–3 % short, which leaves the faint seams
+in Tomo5's `SearchMap.mrc`. The viewer starts from `AtlasPixelPosition` and refines every overlap by
+cross-correlation, which joins real tiles to within a pixel. The tile XML positions are still used
+for the tile outlines on the Overview (they match Tomo5's drawing there).
+
 ### Checks used
 
 - Tile outlines drawn on the real `Overview.mrc` match Tomo5's Overview (position, size, ~3°
@@ -261,8 +280,12 @@ Search map folder:
   `CustomData` has `NumberOfTilesPlanned` / `NumberOfTilesAcquired` and `AppliedDefocus`.
 
 - `TileSetAcquisitionOptions.xml`: tile grid size (`GridSize/width`, `GridSize/height`), e.g. 3 × 3.
-- `SearchMap.dm`: the tile set (`TileSetXml`), including `AcquiredWithImageBeamShift` and the
-  user's rating, `StarRating` (0 = not rated, 1–5 stars).
+- `SearchMap.dm`: the tile set (`TileSetXml`), including `AcquiredWithImageBeamShift`, the user's
+  rating `StarRating` (0 = not rated, 1–5 stars), `ImageSize` of the stitched `SearchMap.mrc`
+  (e.g. 4005 × 4005), and for every tile (`Tiles/_items/TileSetTileXml[n]`) its `Id`,
+  `TileImageReference/BaseFileName` (`Tile_<Id>_<n>`), `StagePosition` and **`AtlasPixelPosition`**:
+  x, y, width, height of the tile in the stitched `SearchMap.mrc` (e.g. 1379 px wide for a 2048 px tile
+  at 5.83 → 8.65 nm). This grid is axis-aligned in camera pixels.
 - Tiles are numbered from the centre outward in a spiral: `Tile_<ID>_1` is the centre tile, at
   the same position as the overview.
 - `Overview.mrc` has a FEI extended header (`FEI2`, about 0.9 MB) before the image data.
