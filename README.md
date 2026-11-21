@@ -119,10 +119,10 @@ zoomed out; dots on the Atlas). Click a position to select it, double-click to o
 The Overview and Search Map tabs show the search map that holds the selected position.
 
 **Sizes.** The camera field is read from the exposure pixel size and image size (a tilt-series
-`.mdoc`, or the FEI extended header of an Exposure / tilt-series MRC). The beam diameter is read from
-the header's illuminated area when the microscope records it (not on a Glacios); otherwise it
-starts at 1.84 µm (from a Tomo5 5.26 Search view). Both can be edited under Image Information, and
-your values are remembered in the browser.
+`.mdoc`, or the FEI extended header of an Exposure / tilt-series MRC; 0.81 µm by default). Tomo5 does
+not store the beam size, so the beam is drawn as **2× the camera field**. Both can be changed in the
+toolbar under the image (*Camera … µm*, *Beam … × camera*, shown on views that draw areas) and are
+remembered in the browser.
 
 ### How tiles are placed
 

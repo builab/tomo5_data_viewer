@@ -139,6 +139,8 @@ dl.info dt{color:var(--t-ink)}
 dl.info dd{margin:0;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 dl.info dd.warn{color:var(--warn)}
 .note{color:var(--t-muted);font-size:12px;margin:8px 0 0}
+.ovset{display:flex;gap:12px;margin-left:16px;font-size:12px;color:var(--t-muted)}
+.ovset label{display:flex;align-items:center;gap:5px}
 input.ov{width:64px;background:#1b2834;border:1px solid var(--t-line);border-radius:3px;padding:1px 4px;font-size:12px}
 .ovsrc{color:var(--t-muted);font-size:11px}
 details.xml{margin-top:10px}
@@ -227,6 +229,10 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
       <button class="zbtn" id="zoomOut" title="Zoom out (−)">−</button>
       <input type="range" id="zoom" min="0" max="1000" value="111" title="Zoom" aria-label="Zoom">
       <button class="zbtn" id="zoomIn" title="Zoom in (+)">+</button>
+      <span class="ovset" id="ovSet" hidden title="Size of the exposure-area drawings. Tomo5 does not store the beam size, so the beam is drawn as a multiple of the camera field.">
+        <label>Camera <input class="ov" id="ovCam" type="number" step="0.01" min="0.05"> µm</label>
+        <label>Beam <input class="ov" id="ovBeamX" type="number" step="0.1" min="0.5" max="10"> × camera</label>
+      </span>
       <span id="readout"></span>
     </div>
   </section>
@@ -560,10 +566,20 @@ async function openSession(src, path, want = {}){
       }catch(e){ console.warn("Batch", e); }
     }
 
+    // Session.dm (TomographySession): name, mode, specimen type
+    if(top.files.some(f => f.name === "Session.dm")){
+      try{
+        const r = flattenXml(await src.text(join(path, "Session.dm")));
+        const g = k => r.find(([p]) => p === k)?.[1];
+        s.info = {name: g("Name"), mode: g("Mode"), specimen: g("SpecimenType"), lowDose: g("LowDose")};
+      }catch(e){ console.warn("Session.dm", e); }
+    }
     SESSION = s;
+    document.title = s.info?.name ? `${s.info.name} · Tomo5 Data Viewer` : "Tomo5 Data Viewer";
+    $("#tasksHead").title = s.info?.name ? `Session ${s.info.name}${s.info.mode ? ` · ${s.info.mode}` : ""}${s.info.specimen ? ` · ${s.info.specimen}` : ""}${s.info.lowDose === "true" ? " · low dose" : ""}` : "";
     renderTasks(); renderTable();
     if(!s.atlas && !s.maps.length && !s.positions.length){ status("No Atlas_*.xml, SearchMaps/ or Batch/ found in this folder.", true); return; }
-    status(`${s.maps.length} search map${s.maps.length === 1 ? "" : "s"}, ${s.positions.length} batch position${s.positions.length === 1 ? "" : "s"}${s.atlas ? ", atlas" : ""} found.`);
+    status(`${s.info?.name ? `${s.info.name}: ` : ""}${s.maps.length} search map${s.maps.length === 1 ? "" : "s"}, ${s.positions.length} batch position${s.positions.length === 1 ? "" : "s"}${s.atlas ? ", atlas" : ""} found.`);
     fillTilts();
 
     const pick = want.map ? s.maps.findIndex(m => m.id === +want.map) : -1;
@@ -670,44 +686,57 @@ async function fillTilts(){
   ]);
   if(SESSION === s){ renderTable(); updateChrome(); }
 }
-/* Sizes for the area overlays: camera field (exposure pixel size × image size) from a tilt-series
-   .mdoc or the FEI extended header of an Exposure / tilt-series MRC; beam diameter from the header's
-   illuminated area when the microscope sets it. Missing values start from the proportions of a
-   Tomo5 5.26 Search view (camera 0.81 µm, beam 1.84 µm) and can be edited in the panel. */
-const OVERLAY_DEFAULT = {cam: 0.81, beam: 1.84};
+/* Sizes for the area overlays. Camera field = exposure pixel size × image size, from a tilt-series
+   .mdoc or the FEI extended header of an Exposure / tilt-series MRC. Tomo5 does not store the beam
+   size, so the beam is drawn as a multiple of the camera field (2× by default, like Tomo5's Search
+   view). Both can be changed in the toolbar and are remembered in the browser. */
+const OVERLAY_DEFAULT = {cam: 0.81, beamX: 2};
 function savedOverlay(){ try{ return JSON.parse(localStorage.getItem("tomo5.overlay") || "{}"); }catch{ return {}; } }
+function saveOverlay(k, v){ const o = savedOverlay(); o[k] = v; try{ localStorage.setItem("tomo5.overlay", JSON.stringify(o)); }catch{} }
 async function feiHeader(path){                // FEI extended header (metadata version ≥ 2), first section
   const h = await getHeader(path);
   if(h.nxt < 480) return null;
   const e = new DataView(await SRC.bytes(path, 1024, 1024 + 480 - 1));
   if(e.getInt32(4, true) < 2) return null;
-  return {pixel: e.getFloat64(156, true), illum: e.getFloat64(313, true), readout: [e.getInt32(459, true) - e.getInt32(451, true), e.getInt32(463, true) - e.getInt32(455, true)]};
+  return {pixel: e.getFloat64(156, true)};
 }
 async function overlaySizes(s){
-  const o = {cam: NaN, beam: NaN, camFrom: "", beamFrom: ""};
+  let cam = NaN, camFrom = "";
   const areas = s.positions.flatMap(p => p.areas);
   try{
     for(const a of areas.filter(a => a.mdoc).slice(0, 3)){
-      const t = (await SRC.bytes(a.mdoc, 0, 4095).then(b => new TextDecoder().decode(b)));
+      const t = new TextDecoder().decode(await SRC.bytes(a.mdoc, 0, 4095));
       const px = parseFloat(t.match(/^\s*PixelSpacing\s*=\s*([\d.eE+-]+)/m)?.[1]), sz = t.match(/^\s*ImageSize\s*=\s*(\d+)\s+(\d+)/m);
-      if(px > 0 && sz){ o.cam = Math.max(+sz[1], +sz[2]) * px * 1e-4; o.camFrom = a.mdoc.split("/").pop(); break; }
+      if(px > 0 && sz){ cam = Math.max(+sz[1], +sz[2]) * px * 1e-4; camFrom = a.mdoc.split("/").pop(); break; }
     }
-    for(const f of [...areas.map(a => a.mrc), ...areas.map(a => a.exposure)].filter(Boolean).slice(0, 4)){
+    if(!Number.isFinite(cam)) for(const f of [...areas.map(a => a.mrc), ...areas.map(a => a.exposure)].filter(Boolean).slice(0, 4)){
       const h = await getHeader(f).catch(() => null);
       if(!h || h.nx < 16) continue;
       const fei = await feiHeader(f).catch(() => null);
-      if(!fei) continue;
-      if(!Number.isFinite(o.cam) && fei.pixel > 0){ o.cam = Math.max(h.nx, h.ny) * fei.pixel * 1e6; o.camFrom = f.split("/").pop(); }
-      if(!Number.isFinite(o.beam) && fei.illum > 0){ o.beam = 2 * Math.sqrt(fei.illum / Math.PI) * 1e6; o.beamFrom = f.split("/").pop(); }
-      if(Number.isFinite(o.cam) && Number.isFinite(o.beam)) break;
+      if(fei?.pixel > 0){ cam = Math.max(h.nx, h.ny) * fei.pixel * 1e6; camFrom = f.split("/").pop(); break; }
     }
   }catch(e){ console.warn("overlay sizes", e); }
   const saved = savedOverlay();
   s.overlay = {
-    cam: saved.cam || (Number.isFinite(o.cam) ? o.cam : OVERLAY_DEFAULT.cam), camFrom: saved.cam ? "set by you" : o.camFrom || "default",
-    beam: saved.beam || (Number.isFinite(o.beam) ? o.beam : OVERLAY_DEFAULT.beam), beamFrom: saved.beam ? "set by you" : o.beamFrom || "default",
+    cam: saved.cam || (Number.isFinite(cam) ? cam : OVERLAY_DEFAULT.cam),
+    camFrom: saved.cam ? "set by you" : camFrom || "default",
+    beamX: saved.beamX || OVERLAY_DEFAULT.beamX,
   };
-  if(SESSION === s && SCENE) draw();
+  if(SESSION === s){ syncOverlayInputs(); if(SCENE){ renderInfo(); draw(); } }
+}
+function overlay(){ const o = SESSION?.overlay || {...OVERLAY_DEFAULT, camFrom: "default"}; return {...o, beam: o.cam * o.beamX}; }
+function syncOverlayInputs(){
+  const o = overlay();
+  $("#ovCam").value = (+o.cam).toFixed(2); $("#ovCam").title = `Camera field (${o.camFrom})`;
+  $("#ovBeamX").value = (+o.beamX).toFixed(1);
+}
+for(const [id, k, min] of [["#ovCam", "cam", 0.05], ["#ovBeamX", "beamX", 0.5]]){
+  $(id).addEventListener("change", e => {
+    const v = parseFloat(e.target.value);
+    if(!(v >= min) || !SESSION) return syncOverlayInputs();
+    SESSION.overlay = {...overlay(), [k]: v, ...(k === "cam" ? {camFrom: "set by you"} : {})};
+    saveOverlay(k, v); syncOverlayInputs(); renderInfo(); draw();
+  });
 }
 
 // 5 stars: yellow for the rating, empty for the rest (no rating = 5 empty stars)
@@ -927,8 +956,7 @@ async function searchScene(p, id, q){
     if(p.plan.comment) sc.info.rows.unshift(["Comment", esc(p.plan.comment)]);
     sc.info.rows.push(["Tilt Axis", `${fmtNum(p.plan.tiltAxis, 1)}°`]);
   } else sc.info.notes.push("Batch/BatchPositionsList.xml not found, so only area 1.1 (the image centre) can be marked.");
-  sc.info.rows.push(["Camera Field", '<input class="ov" id="ovCam" type="number" step="0.01" min="0.05"> µm <span class="ovsrc" id="ovCamFrom"></span>']);
-  sc.info.rows.push(["Beam Diameter", '<input class="ov" id="ovBeam" type="number" step="0.01" min="0.05"> µm <span class="ovsrc" id="ovBeamFrom"></span>']);
+  sc.info.sizes = true;     // camera field / beam rows, filled in by renderInfo
   status(`${p.name}: ${p.status}, ${p.areas.length || 1} exposure area${p.areas.length > 1 ? "s" : ""}.`);
   return sc;
 }
@@ -1240,28 +1268,18 @@ function imageInfo(xml, img, px, notes = []){
   rows.push(...stageRows(xml?.info), ...statRows([img]));
   return {rows, notes};
 }
-function bindOverlayInputs(){
-  const o = SESSION?.overlay || {...OVERLAY_DEFAULT, camFrom: "default", beamFrom: "default"};
-  const set = (id, v, from) => { const el = $(id); if(el){ el.value = (+v).toFixed(2); $(id + "From").textContent = `(${from})`; } };
-  set("#ovCam", o.cam, o.camFrom); set("#ovBeam", o.beam, o.beamFrom);
-  for(const [id, k] of [["#ovCam", "cam"], ["#ovBeam", "beam"]]){
-    const el = $(id); if(!el) continue;
-    el.onchange = () => {
-      const v = parseFloat(el.value); if(!(v > 0) || !SESSION) return;
-      SESSION.overlay = {...(SESSION.overlay || OVERLAY_DEFAULT), [k]: v, [k + "From"]: "set by you"};
-      const saved = savedOverlay(); saved[k] = v;
-      try{ localStorage.setItem("tomo5.overlay", JSON.stringify(saved)); }catch{}
-      $(id + "From").textContent = "(set by you)"; draw();
-    };
-  }
-}
 function renderInfo(){
   const sc = SCENE;
-  if(!sc){ $("#info").innerHTML = '<dt style="color:var(--t-muted)">Nothing shown yet.</dt><dd></dd>'; $("#infoNote").innerHTML = ""; $("#xmlBox").hidden = true; return; }
+  if(!sc){ $("#info").innerHTML = '<dt style="color:var(--t-muted)">Nothing shown yet.</dt><dd></dd>'; $("#infoNote").innerHTML = ""; $("#xmlBox").hidden = true; $("#ovSet").hidden = true; return; }
   $("#info").innerHTML = sc.info.rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
   $("#infoNote").innerHTML = sc.info.notes.map(n => `<p class="note">${esc(n)}</p>`).join("");
   $("#xmlBox").hidden = !sc.xmlRows.length;
-  bindOverlayInputs();
+  if(sc.info.sizes){
+    const o = overlay();
+    $("#info").insertAdjacentHTML("beforeend", `<dt>Camera Field</dt><dd>${fmtNum(o.cam, 2)} µm <span class="ovsrc">(${esc(o.camFrom)})</span></dd>` +
+      `<dt>Beam (drawn)</dt><dd>${fmtNum(o.beam, 2)} µm <span class="ovsrc">(${fmtNum(o.beamX, 1)} × camera; not stored by Tomo5)</span></dd>`);
+  }
+  $("#ovSet").hidden = !(SESSION?.positions.length && ["search", "overview", "tiles", "searchmap"].includes(sc.kind));
   renderMeta();
 }
 function renderMeta(){
@@ -1409,7 +1427,7 @@ function maybeSharpen(){
 const AREA = {exp: "#1fa01f", track: "#ffe600", focus: "#5a64ff", axis: "#2a3cff"};
 function areaStage(p, offset){ const st = p.plan?.stage; return st ? [st[0] - offset[0], st[1] - offset[1]] : null; }
 function drawPositionAreas(ctx, p, selected, axisLine){
-  const ov = SESSION.overlay || OVERLAY_DEFAULT, k = V.s;
+  const ov = overlay(), k = V.s;
   if(!p.plan) return false;
   const beam = ov.beam * k, cam = ov.cam * k;
   if(beam < 6) return false;                       // too small: the caller draws a dot

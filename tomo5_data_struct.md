@@ -208,7 +208,7 @@ Batch positions (`Batch/`):
 
   Offsets are in metres, and an area sits at **`StagePosition − offset`** (checked against Tomo5's
   Search and Search Map views).
-- The camera field and beam size are not in this list. The exposure pixel size and image size are in
+- The camera field and beam size are not in this list, nor in `Session.dm`. The exposure pixel size and image size are in
   the tilt-series `.mdoc` (`PixelSpacing`, `ImageSize`) and in the FEI extended header of the MRC
   files (FEI2: pixel size at byte 156, illuminated area at 313, readout area at 451–466); the
   illuminated area is 0 on a Glacios.
@@ -219,3 +219,11 @@ Batch positions (`Batch/`):
 - `Position_<N>_Search.xml`: the Search image (e.g. 2048 px at 5.83 nm, 4100×), centred on area N.1.
   Its `CustomData` holds a copy of other settings (`BackwardAlignmentTransformation`, magnification 1),
   so the image's own `microscopeData` fields must be read first.
+
+Session file:
+
+- `Session.dm` (`TomographySession`): `Name` (session name), `DatasetName`, `Mode` (e.g. `Eftem`),
+  `LowDose`, `SpecimenType` (e.g. `Slab`), `Batch`, `AtlasId` (path of the atlas `.dm` on the
+  microscope PC), `DoseFractionsFormat`. No presets, so no beam size.
+- The tracking area always lies along the tilt axis from area N.1.
+
