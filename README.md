@@ -67,9 +67,11 @@ Every Tomo5 image XML (`Overview.xml`, `Tile_*.xml`, …) has:
 - `ReferenceTransformation/matrix`: a 2 × 2 matrix from image pixels to stage metres. It holds
   the camera rotation and a flip, and differs slightly between magnifications (about 3° between
   the overview and the tiles). It is given per unbinned camera pixel, so the viewer uses only its
-  direction and takes the size from the pixel size.
+  direction and takes the size from the pixel size. **Its sign is the opposite of pixel → stage
+  as Tomo5 draws it**: the viewer uses −R. This was checked on real data (search maps on the
+  atlas, and tiles against `SearchMap.mrc`).
 
-So `stage = S + pixelSize · R · (pixel − centre)`. The pixel size always refers to the saved
+So `stage = S − pixelSize · R · (pixel − centre)`. The pixel size always refers to the saved
 image, also for stitched images (the atlas, `SearchMap.mrc`) whose size differs from the camera
 readout. A search map is marked on the atlas with the footprint of `SearchMap.mrc`
 (`SearchMap.xml` position, pixel size and direction); a map without `SearchMap.mrc` yet is shown

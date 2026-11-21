@@ -153,7 +153,7 @@ Thermo Fisher `MicroscopeImage` documents, like EPU's.
 | `microscopeData/stage/Position/X, Y, Z` | Stage position of the image centre, in metres. For tiles, it includes the image shift used to reach the tile. |
 | `microscopeData/stage/Position/A` | Tilt angle, in radians |
 | `SpatialScale/pixelSize/x/numericValue` | Pixel size of the image, in metres |
-| `ReferenceTransformation/matrix/_m11 … _m22` | Image pixels → stage metres (rotation and flip), per unbinned camera pixel |
+| `ReferenceTransformation/matrix/_m11 … _m22` | Image pixels (x right, y down) ↔ stage (rotation and flip), per unbinned camera pixel. As Tomo5 displays it, `stage = S − M · (pixel − centre)`: note the minus sign. |
 | `microscopeData/optics/TemMagnification/NominalMagnification` | Magnification |
 | `microscopeData/acquisition/camera/ExposureTime` | Exposure time, in seconds |
 | `CustomData/…/AppliedDefocus` | Applied defocus, in metres |

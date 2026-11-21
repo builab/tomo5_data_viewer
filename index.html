@@ -290,6 +290,7 @@ const MAX_ATLAS = 4096, MAX_OVERVIEW = 2048, MAX_STITCH = 4096;
    and it is given per *unbinned* camera pixel, so only its direction is used here; the size
    comes from the pixel size. For an image:
        stage = S + ps · R · (p − centre)          S: stage X/Y of the image (its centre)
+   where R is the *negated* ReferenceTransformation direction (see xmlInfo).
    The view is turned by the inverse of the main image's R, so that image looks as in Tomo5. */
 const IDENT = [[1, 0], [0, 1]];
 const mul = (A, v) => [A[0][0] * v[0] + A[0][1] * v[1], A[1][0] * v[0] + A[1][1] * v[1]];
@@ -426,10 +427,12 @@ function xmlInfo(rows){
   const find = re => { const r = rows.find(([p]) => re.test(p)); return r ? r[1] : undefined; };
   const num = re => { const v = parseFloat(find(re)); return Number.isFinite(v) ? v : NaN; };
   const unit = find(/pixelSize\/x\/unit\/[^/]*symbol[^/]*$/i) || "m";
-  // ReferenceTransformation: keep only its direction (rotation, flip), normalised
+  // ReferenceTransformation: keep only its direction (rotation, flip), normalised. Its sign is
+  // the opposite of pixel → stage as Tomo5 draws it (checked on real data: atlas markers and tile
+  // positions), so it is negated here.
   const m = ["11", "12", "21", "22"].map(k => num(new RegExp(`^ReferenceTransformation/matrix/_m${k}$`, "i")));
   const det = m[0] * m[3] - m[1] * m[2], n = Math.sqrt(Math.abs(det));
-  const R = m.every(Number.isFinite) && n > 0 ? [[m[0] / n, m[1] / n], [m[2] / n, m[3] / n]] : null;
+  const R = m.every(Number.isFinite) && n > 0 ? [[-m[0] / n, -m[1] / n], [-m[2] / n, -m[3] / n]] : null;
   return {
     R,
     pixelM: num(/pixelSize\/x\/numericValue$/i) * (UNIT[unit] ?? 1),   // metres per pixel
