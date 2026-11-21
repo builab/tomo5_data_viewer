@@ -115,6 +115,13 @@ table.grid tbody tr:nth-child(even){background:var(--t-row2)}
 table.grid tbody tr:hover{background:#34495e}
 table.grid tbody tr.sel{background:var(--t-sel);color:#fff}
 table.grid td.st-ok{color:#bfe3ff}
+.areas{display:inline-flex;gap:4px}
+.ar{width:20px;height:20px;border-radius:50%;border:none;padding:0;font:600 11px var(--font-body);cursor:pointer;background:#46607a;color:#e8eef3}
+.ar.none{background:#33475b;color:#8396a8;cursor:pointer}
+.ar.on{background:#fff;color:#1d4f73}
+table.grid tr.sel .ar{background:#1f6fa8}
+table.grid tr.sel .ar.none{background:#3d82b8;color:#bcd6ec}
+table.grid tr.sel .ar.on{background:#fff;color:#1d4f73}
 .stars{color:#f5c518;letter-spacing:1px;font-size:14px;white-space:nowrap}
 .stars .off{color:#7d90a3}
 table.grid tr.sel .stars .off{color:#d6e9f8}
@@ -173,7 +180,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 <body>
 <div class="app">
   <header>
-    <h1>Tomo5 Data Viewer<small>v0.4</small></h1>
+    <h1>Tomo5 Data Viewer<small>v0.5</small></h1>
     <div class="opens">
       <button class="btn primary" id="openServer" hidden>Open session…</button>
       <button class="btn" id="openLocal">Open folder from this computer…</button>
@@ -202,6 +209,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
       <button class="tab" data-tab="overview" role="tab" disabled>Overview</button>
       <button class="tab" data-tab="searchmap" role="tab" disabled>Search Map</button>
       <button class="tab" data-tab="search" role="tab" disabled>Search</button>
+      <button class="tab" data-tab="exposure" role="tab" disabled>Exposure</button>
     </div>
     <div class="subbar">
       <button class="nav" id="prevMap" title="Previous" disabled>‹</button>
@@ -209,6 +217,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
         <option value="tiles">Tiles, stitched here (aligned, blended)</option>
         <option value="stitched">SearchMap.mrc (stitched by Tomo5)</option>
       </select>
+      <select id="secSel" hidden title="Tilt-series section"></select>
       <span class="title" id="subTitle"></span>
       <button class="nav" id="nextMap" title="Next" disabled>›</button>
     </div>
@@ -475,12 +484,13 @@ const CACHE = new Map();
 function cached(key, fn){ if(!CACHE.has(key)){ const p = fn(); CACHE.set(key, p); p.catch(() => CACHE.delete(key)); } return CACHE.get(key); }
 const getXml = path => cached("x:" + path, async () => { const rows = flattenXml(await SRC.text(path)); return {rows, info: xmlInfo(rows)}; });
 const getHeader = path => cached("h:" + path, async () => parseMrcHeader(await SRC.bytes(path, 0, 1023)));
-const getImage = (path, maxDim) => cached(`i:${maxDim}:${path}`, async () => {
+const getImage = (path, maxDim, z = 0) => cached(`i:${maxDim}:${z}:${path}`, async () => {
   const h = await getHeader(path);
+  if(z < 0 || z >= h.nz) throw new Error(`Section ${z} is outside ${path.split("/").pop()} (${h.nz} sections).`);
   const bin = binFor(h, maxDim);
-  let img = await SRC.section(path, 0, bin);
+  let img = await SRC.section(path, z, bin);
   if(!img){
-    const n = h.nx * h.ny * h.bytesPer, start = 1024 + h.nxt;
+    const n = h.nx * h.ny * h.bytesPer, start = 1024 + h.nxt + z * n;        // only this section is read
     const a = typedSection(await SRC.bytes(path, start, start + n - 1), h);
     if(a.length < h.nx * h.ny) throw new Error(`${path.split("/").pop()} is shorter than its header says.`);
     img = bin > 1 ? binImage(a, h.nx, h.ny, bin) : {data: Float32Array.from(a), w: h.nx, h: h.ny};
@@ -488,6 +498,21 @@ const getImage = (path, maxDim) => cached(`i:${maxDim}:${path}`, async () => {
   return {header: h, bin, ...img};
 });
 const tryXml = async path => { try{ return await getXml(path); }catch{ return null; } };
+/* SerialEM-style .mdoc: global "Key = value" lines, then one [ZValue = n] block per section */
+const getMdoc = path => cached("m:" + path, async () => {
+  const head = [], secs = [];
+  let cur = null;
+  for(const line of (await SRC.text(path)).split(/\r?\n/)){
+    const z = line.match(/^\s*\[\s*ZValue\s*=\s*(\d+)\s*\]/i);
+    if(z){ cur = {z: +z[1], rows: []}; secs.push(cur); continue; }
+    if(/^\s*\[/.test(line)){ cur = null; continue; }
+    const kv = line.match(/^\s*([^=]+?)\s*=\s*(.*)$/);
+    if(kv) (cur ? cur.rows : head).push([kv[1], kv[2].trim()]);
+  }
+  const val = (rows, k) => rows.find(r => r[0].toLowerCase() === k.toLowerCase())?.[1];
+  for(const s of secs) s.tilt = parseFloat(val(s.rows, "TiltAngle"));
+  return {head, secs, val, pixelA: parseFloat(val(head, "PixelSpacing") ?? val(secs[0]?.rows || [], "PixelSpacing"))};
+});
 
 /* metres per original pixel: XML first, MRC header as fallback (1 Å in the header means "not set") */
 function pixelOf(xml, header){
@@ -513,7 +538,7 @@ const corners = g => [[0, 0], [g.nx, 0], [g.nx, g.ny], [0, g.ny]].map(([x, y]) =
 
 /* ------------------------------------------------------------------ session discovery */
 let SESSION = null;
-const STATE = {task: "searchMaps", tab: "atlas", sel: -1, pos: -1, smMode: "tiles"};
+const STATE = {task: "searchMaps", tab: "atlas", sel: -1, pos: -1, area: 1, z: {}, smMode: "tiles"};
 const MAP_RE = /^SearchMap_(\d+)_(\d{8}_\d{6})$/i;
 
 async function openSession(src, path, want = {}){
@@ -561,7 +586,8 @@ async function openSession(src, path, want = {}){
         const lf = bl.files.find(f => /^BatchPositions?List\.xml$/i.test(f.name));
         let list = null;
         if(lf){ try{ list = parseBatchList(await src.text(join(path, `Batch/${lf.name}`))); }catch(e){ console.warn("BatchPositionsList", e); } }
-        s.positions = findPositions(bl.files.map(f => f.name), top.files.map(f => f.name), join(path, "Batch"), path, list);
+        const names = fl => fl.filter(f => f.size !== 0).map(f => f.name);      // an empty file is not data
+        s.positions = findPositions(names(bl.files), names(top.files), join(path, "Batch"), path, list);
         s.batchList = !!list;
       }catch(e){ console.warn("Batch", e); }
     }
@@ -585,11 +611,13 @@ async function openSession(src, path, want = {}){
     const pick = want.map ? s.maps.findIndex(m => m.id === +want.map) : -1;
     STATE.sel = pick >= 0 ? pick : s.maps.length ? Math.max(0, s.maps.findIndex(m => m.status === "Acquired")) : -1;
     const pp = want.pos ? s.positions.findIndex(p => p.id === +want.pos) : -1;
+    STATE.area = +want.area || 1;
     STATE.pos = pp >= 0 ? pp : s.positions.length ? 0 : -1;
     if(STATE.task === "batch" && !s.positions.length) STATE.task = "searchMaps";
     if(STATE.task === "batch" && STATE.pos >= 0){ const mi = await mapOfPosition(s.positions[STATE.pos]); if(mi >= 0) STATE.sel = mi; }
     renderTasks(); renderTable();
-    const tabs = ["atlas", "overview", "searchmap", "search"];
+    const tabs = ["atlas", "overview", "searchmap", "search", "exposure"];
+    if(want.tab === "exposure" && !exposureOf(s.positions[STATE.pos], STATE.area)) want.tab = "search";
     await setTab(want.tab && tabs.includes(want.tab) ? want.tab : STATE.task === "batch" ? "search" : s.atlas ? "atlas" : "overview");
   }catch(e){ console.error(e); status(e.message, true); }
 }
@@ -739,6 +767,15 @@ for(const [id, k, min] of [["#ovCam", "cam", 0.05], ["#ovBeamX", "beamX", 0.5]])
   });
 }
 
+// exposure areas as numbered circles (like Tomo5); white = the area shown, dim = nothing to show yet
+function areaButtons(p, selRow){
+  const areas = p.areas.length ? p.areas : [{k: 1}];
+  return `<span class="areas" title="${p.acquired} of ${areas.length} areas acquired">` + areas.map(a => {
+    const has = !!exposureOf(p, a.k), on = selRow && a.k === STATE.area;
+    return `<button class="ar ${on ? "on" : has ? "" : "none"}" data-k="${a.k}" title="Area ${p.id}.${a.k}: ${a.mrc ? "tilt series" : a.exposure ? "refined exposure" : "no image yet"}">${a.k}</button>`;
+  }).join("") + "</span>";
+}
+
 // 5 stars: yellow for the rating, empty for the rest (no rating = 5 empty stars)
 function stars(n){
   n = Number.isFinite(n) ? n : 0;
@@ -763,6 +800,16 @@ async function mapOfPosition(p){
   return (p.map = (inside[0] || near[0])?.i ?? -1);
 }
 
+/* Exposure tab: the area's tilt series Position_<N>[_<k>].mrc, or its refined exposure image
+   (Position_<N>[_<k>]_Exposure.mrc) before acquisition. Nothing for an Initialized position. */
+function exposureOf(p, k){
+  if(!p || /^Initialized/i.test(p.status)) return null;
+  const a = p.areas.find(a => a.k === k);
+  if(!a) return null;
+  if(a.mrc) return {path: a.mrc, mdoc: a.mdoc, kind: "tilt series", area: a};
+  if(a.exposure) return {path: a.exposure, mdoc: null, kind: "refined exposure", area: a};
+  return null;
+}
 function renderTasks(){
   const s = SESSION;
   $("#cntMaps").textContent = s ? `${s.maps.filter(m => m.status === "Acquired").length} / ${s.maps.length}` : "–";
@@ -777,7 +824,7 @@ async function setTask(task){
     if(p){ const mi = await mapOfPosition(p); if(mi >= 0) STATE.sel = mi; }
   }
   renderTasks(); renderTable();
-  const tab = task === "batch" ? (SESSION.positions.length ? "search" : STATE.tab) : (STATE.tab === "search" ? (SESSION.atlas ? "atlas" : "overview") : STATE.tab);
+  const tab = task === "batch" ? (SESSION.positions.length ? "search" : STATE.tab) : (["search", "exposure"].includes(STATE.tab) ? (SESSION.atlas ? "atlas" : "overview") : STATE.tab);
   await setTab(tab);
 }
 
@@ -794,7 +841,7 @@ function renderTable(){
   tb.innerHTML = list.map((m, i) => `<tr data-i="${i}" class="${i === sel ? "sel" : ""}">
     <td>${m.id}</td><td>${tilt(m.tilt)}</td>
     <td class="${m.status.startsWith("Acquired") ? "st-ok" : ""}">${m.status}</td><td>${esc(m.name)}</td>
-    <td>${batch ? `${m.acquired} / ${Math.max(1, m.areas.length)}` : stars(m.rating)}</td></tr>`).join("");
+    <td>${batch ? areaButtons(m, i === sel) : stars(m.rating)}</td></tr>`).join("");
   const row = tb.querySelector("tr.sel"); if(row) row.scrollIntoView({block: "nearest"});
 }
 
@@ -804,13 +851,14 @@ async function setTab(tab){
   updateChrome();
   await loadScene();
 }
-async function select(i){
+async function select(i, areaK){
   const batch = STATE.task === "batch", list = SESSION ? (batch ? SESSION.positions : SESSION.maps) : null;
   if(!list || i < 0 || i >= list.length || i === (batch ? STATE.pos : STATE.sel)) return;
   if(batch){
-    STATE.pos = i;
+    STATE.pos = i; STATE.area = areaK || 1;
     const mi = await mapOfPosition(list[i]);
     if(mi >= 0) STATE.sel = mi;
+    if(STATE.tab === "exposure" && !exposureOf(list[i], STATE.area)) STATE.tab = "search";
   } else STATE.sel = i;
   renderTable(); updateChrome();
   if(STATE.tab !== "atlas") await loadScene(); else draw();
@@ -820,8 +868,11 @@ function updateChrome(){
   const map = s && STATE.sel >= 0 ? s.maps[STATE.sel] : null, pos = s && batch && STATE.pos >= 0 ? s.positions[STATE.pos] : null;
   for(const b of $$(".tab")){
     const t = b.dataset.tab;
-    b.disabled = !s || (t === "atlas" ? !s.atlas : t === "search" ? !pos : !map);
-    b.title = t === "search" && s && !batch ? "Select Batch Positions on the left to see a position's Search image" : "";
+    const ex = pos && exposureOf(pos, STATE.area);
+    b.disabled = !s || (t === "atlas" ? !s.atlas : t === "search" ? !pos : t === "exposure" ? !ex : !map);
+    b.title = !s ? "" : t === "search" && !batch ? "Select Batch Positions on the left to see a position's Search image"
+      : t === "exposure" ? (!pos ? "Select a batch position" : ex ? `Area ${pos.id}.${STATE.area}: ${ex.kind}`
+        : /^Initialized/i.test(pos.status) ? "The position is only initialized: no exposure yet" : `Area ${pos.id}.${STATE.area} has no image yet`) : "";
     b.classList.toggle("active", t === STATE.tab);
     b.setAttribute("aria-selected", t === STATE.tab);
   }
@@ -838,11 +889,14 @@ function updateChrome(){
     $("#smMode").value = want;
   }
   const posTitle = p => `<b>${p.id} : ${esc(p.name)}</b><small>${esc(p.status)}</small>`;
+  const ex = pos && exposureOf(pos, STATE.area);
+  $("#secSel").hidden = STATE.tab !== "exposure" || !ex || $("#secSel").options.length < 2;
   $("#subTitle").innerHTML = !s ? "" : STATE.tab === "atlas" ? (s.atlas ? `<b>${esc(s.atlas.stem)}</b>` : "")
     : STATE.tab === "search" ? (pos ? posTitle(pos) : "")
+    : STATE.tab === "exposure" ? (pos ? `<b>${pos.id}.${STATE.area} : ${esc(ex ? ex.path.split("/").pop() : pos.name)}</b><small>${ex ? ex.kind : ""}</small>` : "")
     : map ? `${pos ? `<small>${esc(pos.name)} ·</small>` : ""}<b>${map.id} : ${esc(map.name)}</b>${stars(map.rating)}` : "";
   if(s && s.path && SRC.kind === "server")
-    history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}${batch && pos ? `&task=batch&pos=${pos.id}` : ""}&tab=${STATE.tab}`);
+    history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}${batch && pos ? `&task=batch&pos=${pos.id}&area=${STATE.area}` : ""}&tab=${STATE.tab}`);
 }
 
 /* ------------------------------------------------------------------ scenes
@@ -860,6 +914,7 @@ async function loadScene(){
   const build = async q => {
     if(tab === "atlas") return atlasScene(s.atlas, id, q);
     if(tab === "search") return searchScene(s.positions[STATE.pos], id, q);
+    if(tab === "exposure") return exposureScene(s.positions[STATE.pos], STATE.area, id, q);
     if(tab === "overview") return overviewScene(map, id, q);
     if(map && !map.tiles.length && !map.names.has("SearchMap.mrc")) throw new Error(`${map.name} has no tiles or SearchMap.mrc yet.`);
     const mode = $("#smMode").value;
@@ -928,13 +983,66 @@ async function atlasScene(a, id, q){
 
 // batch positions as points (centre of their Search image), on every map but the Search tab
 async function addPositionMarks(sc){
-  if(!sc || !SESSION?.positions.length || sc.kind === "search") return sc;
+  if(!sc || !SESSION?.positions.length || sc.kind === "search" || sc.kind === "exposure") return sc;
   const marks = await Promise.all(SESSION.positions.map(async (p, i) => {
     const pt = await positionStage(p);
     return pt ? {kind: "pos", i, pos: p, point: pt} : null;
   }));
   sc.marks = [...(sc.marks || []), ...marks.filter(Boolean)];
   return sc;
+}
+
+// Exposure tab: one section of the area's tilt series (or its refined exposure image)
+async function exposureScene(p, k, id, q){
+  const ex = exposureOf(p, k);
+  if(!ex) throw new Error(`Area ${p?.id}.${k} has no exposure image.`);
+  const name = ex.path.split("/").pop();
+  status(`Loading ${name}…`);
+  const [header, mdoc] = await Promise.all([getHeader(ex.path), ex.mdoc ? getMdoc(ex.mdoc).catch(() => null) : null]);
+  // sections: by tilt angle when the .mdoc has them; start at the one closest to 0°
+  const secs = mdoc?.secs.filter(s => s.z < header.nz) || [];
+  const byTilt = secs.length === header.nz && secs.every(s => Number.isFinite(s.tilt));
+  let z = STATE.z[ex.path];
+  if(!(z >= 0 && z < header.nz)) z = byTilt ? secs.reduce((a, b) => Math.abs(b.tilt) < Math.abs(a.tilt) ? b : a).z : Math.floor(header.nz / 2);
+  STATE.z[ex.path] = z;
+  const opts = byTilt ? [...secs].sort((a, b) => a.tilt - b.tilt).map(s => [s.z, `${s.tilt.toFixed(1)}°  (z ${s.z})`])
+                      : Array.from({length: header.nz}, (_, i) => [i, `section ${i}`]);
+  $("#secSel").innerHTML = opts.map(([v, t]) => `<option value="${v}"${v === z ? " selected" : ""}>${t}</option>`).join("");
+  updateChrome();
+  const dim = q === "preview" ? PREVIEW : q === "full" ? MAX_ATLAS : Math.min(q, MAX_ATLAS);
+  const img = await getImage(ex.path, dim, z);
+  if(stale(id)) return null;
+  // pixel size: .mdoc PixelSpacing (Å), else the FEI extended header, else the MRC header
+  let pxM = mdoc?.pixelA > 0 ? mdoc.pixelA * 1e-10 : NaN, pxFrom = "mdoc";
+  if(!(pxM > 0)){ const fei = await feiHeader(ex.path).catch(() => null); if(fei?.pixel > 0){ pxM = fei.pixel; pxFrom = "FEI header"; } }
+  if(!(pxM > 0)){ const h = pixelOf(null, header); pxM = h.m; pxFrom = "MRC header"; }
+  // placed at the area's stage position, turned like the Search image (same camera)
+  const sx = p.searchXml ? await tryXml(p.searchXml) : null;
+  const st = p.plan ? areaStage(p, ex.area.off || [0, 0]) : sx && Number.isFinite(sx.info.stage.x) ? [sx.info.stage.x * 1e6, sx.info.stage.y * 1e6] : [0, 0];
+  const geo = {S: st, R: sx?.info.R || IDENT, ps: pxM > 0 ? pxM * 1e6 : 1, nx: header.nx, ny: header.ny};
+  const sec = secs.find(s => s.z === z);
+  const g = k => sec && mdoc.val(sec.rows, k);
+  const rows = [["Area", `${p.id}.${k} (${ex.kind})`], ["File", esc(name)]];
+  if(header.nz > 1) rows.push(["Section", `${z + 1} / ${header.nz}${byTilt ? "" : " (no tilt angles)"}`]);
+  if(sec && Number.isFinite(sec.tilt)) rows.push(["Tilt Angle", `${sec.tilt.toFixed(2)}°`]);
+  rows.push(["Image Size", `${header.nx} × ${header.ny}${header.nz > 1 ? ` × ${header.nz}` : ""}`]);
+  if(img.bin > 1) rows.push(["Shown at", `bin ${img.bin} (${img.w} × ${img.h})`]);
+  rows.push(["Pixel Size", pxM > 0 ? `${fmtNum(pxM * 1e10, 3)} Å (${pxFrom})` : '<span class="warn">unknown</span>']);
+  if(pxM > 0) rows.push(["Field Of View", `${fmtNum(header.nx * pxM * 1e6, 3)} µm`]);
+  for(const [k2, label, f] of [["ExposureDose", "Dose", v => `${v} e/Å²`], ["Defocus", "Defocus", v => `${v} µm`], ["ExposureTime", "Exposure Time", v => `${v} s`],
+                               ["Magnification", "Magnification", v => `${v}×`], ["DateTime", "Acquired", v => v]]){
+    const v = g(k2); if(v !== undefined && v !== "") rows.push([label, esc(f(v))]);
+  }
+  if(ex.area.defocus !== undefined && Number.isFinite(ex.area.defocus)) rows.push(["Target Defocus", `${fmtNum(ex.area.defocus, 2)} µm`]);
+  rows.push(...statRows([img]));
+  const xmlRows = mdoc ? [...mdoc.head, ...(sec ? sec.rows.map(([a, b]) => [`[ZValue = ${z}] ${a}`, b]) : [])] : [];
+  status(`${p.name} area ${p.id}.${k}: ${name}${header.nz > 1 ? `, section ${z + 1} of ${header.nz}` : ""}.`);
+  return {
+    kind: "exposure", layers: [{img, geo}], outlines: [], Q: transpose(geo.R), scaled: pxM > 0,
+    final: binFor(header, dim) === binFor(header, MAX_ATLAS),
+    info: {rows, notes: !mdoc && ex.kind === "tilt series" ? ["No .mdoc found next to the tilt series, so the sections have no tilt angles."] : []},
+    xmlName: ex.mdoc ? ex.mdoc.split("/").pop() : "", xmlRows,
+  };
 }
 
 // a batch position's Search image, with its exposure areas and tracking region
@@ -1462,8 +1570,9 @@ function drawPositionAreas(ctx, p, selected, axisLine){
   for(const a of p.areas){
     if(!a.off) continue;
     const c = toScreen(areaStage(p, a.off)), first = a.k === 1;
-    ring(c, AREA.exp, a.mrc ? 0.32 : 0.18, first && selected ? 2.5 : 1.4);
-    ctx.fillStyle = AREA.exp; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
+    const chosen = selected && STATE.task === "batch" && a.k === STATE.area;
+    ring(c, AREA.exp, a.mrc ? 0.32 : 0.18, chosen ? 2.8 : first && selected ? 2.2 : 1.4);
+    ctx.fillStyle = chosen ? "#ffffff" : AREA.exp; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
     ctx.fillText(`${p.id}.${a.k}`, c[0] + beam * 0.55, c[1] - beam * 0.3); ctx.shadowBlur = 0;
   }
   if(selected){                                   // red cross on N.1
@@ -1583,10 +1692,28 @@ new ResizeObserver(() => draw()).observe(view);
 
 /* ------------------------------------------------------------------ controls */
 $$(".tab").forEach(b => b.addEventListener("click", () => { if(!b.disabled && b.dataset.tab !== STATE.tab) setTab(b.dataset.tab); }));
-$("#mapTable tbody").addEventListener("click", e => { const tr = e.target.closest("tr[data-i]"); if(tr) select(+tr.dataset.i); });
+$("#mapTable tbody").addEventListener("click", async e => {
+  const tr = e.target.closest("tr[data-i]"); if(!tr) return;
+  const btn = e.target.closest(".ar");
+  if(!btn) return select(+tr.dataset.i);
+  // an area circle: select the position and that area, and show it in Exposure when there is an image
+  const i = +tr.dataset.i, k = +btn.dataset.k, p = SESSION.positions[i];
+  const changed = i !== STATE.pos || k !== STATE.area;
+  STATE.area = k;
+  if(i !== STATE.pos) await select(i, k); else { renderTable(); updateChrome(); }
+  if(exposureOf(p, k)){ if(STATE.tab !== "exposure") await setTab("exposure"); else if(changed) await loadScene(); }
+  else {
+    status(`Area ${p.id}.${k}: ${/^Initialized/i.test(p.status) ? "the position is only initialized" : "no image yet"}.`);
+    if(STATE.tab === "exposure") await setTab("search"); else if(STATE.tab === "search") draw();
+  }
+});
 $("#prevMap").addEventListener("click", () => select((STATE.task === "batch" ? STATE.pos : STATE.sel) - 1));
 $("#nextMap").addEventListener("click", () => select((STATE.task === "batch" ? STATE.pos : STATE.sel) + 1));
 $("#smMode").addEventListener("change", e => { STATE.smMode = e.target.value; loadScene(); });
+$("#secSel").addEventListener("change", e => {
+  const ex = exposureOf(SESSION?.positions[STATE.pos], STATE.area);
+  if(ex){ STATE.z[ex.path] = +e.target.value; loadScene(); }
+});
 $("#tasksHead").addEventListener("click", e => { const b = e.currentTarget, open = b.getAttribute("aria-expanded") !== "true"; b.setAttribute("aria-expanded", open); $("#taskList").hidden = !open; });
 $$(".task.soon").forEach(b => b.addEventListener("click", () => status(`${b.firstChild.textContent.trim()}: coming later.`)));
 $$(".task[data-task=searchMaps], .task[data-task=batch]").forEach(b => b.addEventListener("click", () => setTask(b.dataset.task)));
@@ -1653,7 +1780,7 @@ $("#openServer").addEventListener("click", () => { $("#picker").showModal(); fpG
       $("#openLocal").textContent = "From this computer…";
       $("#welcomeLocal").hidden = true;
       const q = new URLSearchParams(location.hash.slice(1));
-      if(q.get("session")) openSession(ServerSource, q.get("session"), {map: q.get("map"), tab: q.get("tab"), task: q.get("task"), pos: q.get("pos")});
+      if(q.get("session")) openSession(ServerSource, q.get("session"), {map: q.get("map"), tab: q.get("tab"), task: q.get("task"), pos: q.get("pos"), area: q.get("area")});
     }
   }catch{ /* opened as a plain file: local folders only */ }
   draw();

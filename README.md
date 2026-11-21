@@ -6,7 +6,7 @@ A web-based interface to view Thermo Scientific Tomography 5 (Tomo5) data, in th
 It is one HTML page (`index.html`) plus a small Python server (`tomo5_viewer.py`) that serves your
 session folders to the browser, read-only.
 
-**Status: v0.4, atlas, search maps and batch positions. Tested with Tomo5 5.26.**
+**Status: v0.5, atlas, search maps, batch positions and their exposures. Tested with Tomo5 5.26.**
 The session layout is described in [tomo5_data_struct.md](tomo5_data_struct.md).
 
 ## Quick start
@@ -34,7 +34,7 @@ The layout follows Tomo5:
 
 - **Left, Tasks:** *Search Maps* and *Batch Positions* (acquired / total) switch the table on
   the right. *Data Acquisition* and *Movie Player* are placeholders for now.
-- **Centre, viewer:** tabs **Atlas › Overview › Search Map › Search** (*Search* comes later).
+- **Centre, viewer:** tabs **Atlas › Overview › Search Map › Search › Exposure** (*Search* and *Exposure* with Batch Positions selected).
   The bar above the image shows the selected search map, with ‹ › to step through them.
   Below the image: **−** / **+** and a zoom slider. Scroll to zoom, drag to pan, double-click
   or **F** to fit. A scale bar is drawn on the image, and the stage X/Y under the cursor is shown
@@ -117,6 +117,19 @@ position's areas drawn as in Tomo5:
 The areas are also drawn on the Overview and Search Map tabs for every position (as dots when
 zoomed out; dots on the Atlas). Click a position to select it, double-click to open its Search image.
 The Overview and Search Map tabs show the search map that holds the selected position.
+
+**Exposure tab.** In the batch-position table the *Areas* column shows each exposure area as a
+numbered circle (white = the area shown, dim = no image yet). Click a circle to show that area in the
+**Exposure** tab:
+
+- the tilt series `Position_<N>.mrc`, `Position_<N>_2.mrc`, … (only the section shown is read, so
+  large stacks open quickly); it starts at the section closest to 0°, and the drop-down in the bar
+  lists the sections by tilt angle, from the `.mdoc`;
+- before acquisition, the refined exposure image `Position_<N>[_<k>]_Exposure.mrc`.
+
+The tab is greyed out when the position is only *Initialized* or the area has no image. Image
+Information shows the section's tilt, dose, defocus, exposure time, magnification and time from the
+`.mdoc`, and *All XML fields* lists the `.mdoc` header and section.
 
 **Sizes.** The camera field is read from the exposure pixel size and image size (a tilt-series
 `.mdoc`, or the FEI extended header of an Exposure / tilt-series MRC; 0.81 µm by default). Tomo5 does
