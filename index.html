@@ -270,6 +270,16 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
       </div>
     </details>
     <details class="panel" open>
+      <summary>Filter</summary>
+      <div class="pbody">
+        <div class="checks"><label><input type="checkbox" id="lpOn">Low-pass</label><span class="ovsrc" id="lpFor"></span></div>
+        <div class="ctl">
+          <label for="lpRes">Resolution</label><input type="range" id="lpRes" min="0" max="1000"><output id="lpOut"></output>
+        </div>
+        <p class="note" id="lpNote"></p>
+      </div>
+    </details>
+    <details class="panel" open>
       <summary>Image Information</summary>
       <div class="pbody">
         <dl class="info" id="info"><dt style="color:var(--t-muted)">Nothing shown yet.</dt><dd></dd></dl>
@@ -1401,9 +1411,85 @@ function renderMeta(){
 
 /* ------------------------------------------------------------------ contrast (shared by all layers of a scene) */
 let STATS = null;
+/* ------------------------------------------------------------------ low-pass filter
+   A Gaussian low-pass, set by resolution in Å: the image keeps detail down to about that size.
+   Counted low-dose exposures (tens of electrons per pixel) are dominated by shot noise and are
+   unreadable unfiltered, so the Exposure tab has it on by default (60 Å); other views off.
+   Gaussian blur in real space, σ = 0.187 · resolution / pixel (half-height at 1/resolution),
+   approximated by three box blurs (fast at any σ). Display only: values in the panel are unfiltered. */
+const FILTER_DEFAULT = {exposure: {on: true, res: 60}, other: {on: false, res: 60}};
+const filterKey = () => SCENE?.kind === "exposure" ? "exposure" : "other";
+function filterSettings(){
+  let saved = {}; try{ saved = JSON.parse(localStorage.getItem("tomo5.filter") || "{}"); }catch{}
+  const k = filterKey(); return {...FILTER_DEFAULT[k], ...(saved[k] || {})};
+}
+function saveFilter(f){
+  let saved = {}; try{ saved = JSON.parse(localStorage.getItem("tomo5.filter") || "{}"); }catch{}
+  saved[filterKey()] = f; try{ localStorage.setItem("tomo5.filter", JSON.stringify(saved)); }catch{}
+}
+const resFromSlider = v => 10 * Math.pow(50, v / 1000);          // 10 … 500 Å, logarithmic
+const sliderFromRes = r => Math.round(Math.log(r / 10) / Math.log(50) * 1000);
+function boxBlur1D(src, dst, w, h, r, horizontal){              // running-sum box blur, edges clamped
+  const n = horizontal ? w : h, lines = horizontal ? h : w, inv = 1 / (2 * r + 1);
+  for(let L = 0; L < lines; L++){
+    const at = i => horizontal ? L * w + Math.min(n - 1, Math.max(0, i)) : Math.min(n - 1, Math.max(0, i)) * w + L;
+    let acc = 0;
+    for(let i = -r; i <= r; i++) acc += src[at(i)];
+    for(let i = 0; i < n; i++){
+      dst[horizontal ? L * w + i : i * w + L] = acc * inv;
+      acc += src[at(i + r + 1)] - src[at(i - r)];
+    }
+  }
+}
+function gaussBlur(data, w, h, sigma){
+  // three box blurs with widths chosen to approximate a Gaussian of this sigma
+  const nb = 3, wIdeal = Math.sqrt(12 * sigma * sigma / nb + 1);
+  let wl = Math.floor(wIdeal); if(wl % 2 === 0) wl--;
+  const m = Math.round((12 * sigma * sigma - nb * wl * wl - 4 * nb * wl - 3 * nb) / (-4 * wl - 4));
+  let a = Float32Array.from(data), b = new Float32Array(data.length);
+  for(let i = 0; i < nb; i++){
+    const r = ((i < m ? wl : wl + 2) - 1) / 2;
+    if(r < 1) continue;
+    boxBlur1D(a, b, w, h, r, true); boxBlur1D(b, a, w, h, r, false);
+  }
+  return a;
+}
+// the data a layer is drawn from: filtered when the low-pass is on and coarser than its pixels
+function layerData(l){
+  const f = filterSettings(), pxA = l.geo.ps * 1e4 * l.img.bin;          // Å per loaded pixel
+  const sigma = f.on && SCENE.scaled ? 0.187 * f.res / pxA : 0;
+  if(sigma < 0.5) return l.img.data;
+  const key = `${f.res}`;
+  if(l.fkey !== key){ l.fdata = gaussBlur(l.img.data, l.img.w, l.img.h, sigma); l.fkey = key; }
+  return l.fdata;
+}
+function renderFilter(){
+  const f = filterSettings(), on = !!SCENE;
+  $("#lpOn").checked = f.on; $("#lpOn").disabled = !on; $("#lpRes").disabled = !on || !f.on;
+  $("#lpRes").value = sliderFromRes(f.res); $("#lpOut").value = `${Math.round(f.res)} Å`;
+  $("#lpFor").textContent = on ? (filterKey() === "exposure" ? "(exposures)" : "(maps and search images)") : "";
+  let note = "";
+  if(SCENE && f.on){
+    const l = SCENE.layers[0], pxA = l.geo.ps * 1e4 * l.img.bin;
+    note = !SCENE.scaled ? "Pixel size unknown, so the filter is off." :
+      0.187 * f.res / pxA < 0.5 ? `Finer than the displayed pixels (${fmtNum(pxA, 1)} Å): no effect at this resolution.` :
+      `Gaussian σ ≈ ${fmtNum(0.187 * f.res / pxA, 1)} displayed px (${fmtNum(pxA, 1)} Å each). Display only.`;
+  }
+  $("#lpNote").textContent = note;
+}
+function applyFilter(f){
+  saveFilter(f);
+  if(!SCENE) return renderFilter();
+  STATS = sceneStats(SCENE.layers);
+  renderFilter(); renderContrast();
+}
+$("#lpOn").addEventListener("change", e => applyFilter({...filterSettings(), on: e.target.checked}));
+$("#lpRes").addEventListener("input", e => { $("#lpOut").value = `${Math.round(resFromSlider(+e.target.value))} Å`; });
+$("#lpRes").addEventListener("change", e => applyFilter({...filterSettings(), res: Math.round(resFromSlider(+e.target.value))}));
+
 function sceneStats(layers){
   const total = layers.reduce((n, l) => n + l.img.data.length, 0), step = Math.max(1, Math.floor(total / 600000)), s = [];
-  for(const l of layers){ const d = l.img.data; for(let i = 0; i < d.length; i += step){ const v = d[i]; if(Number.isFinite(v)) s.push(v); } }
+  for(const l of layers){ const d = layerData(l); for(let i = 0; i < d.length; i += step){ const v = d[i]; if(Number.isFinite(v)) s.push(v); } }
   return {sorted: Float32Array.from(s).sort()};
 }
 const pct = p => STATS.sorted[Math.min(STATS.sorted.length - 1, Math.max(0, Math.round(p * (STATS.sorted.length - 1))))];
@@ -1416,7 +1502,7 @@ function renderContrast(){
   $("#loOut").value = fmtVal(lo); $("#hiOut").value = fmtVal(hi);
   const inv = $("#invert").checked, k = 255 / (hi - lo);
   for(const l of SCENE.layers){
-    const {w, h, data} = l.img;
+    const {w, h} = l.img, data = layerData(l);
     if(!l.canvas) l.canvas = Object.assign(document.createElement("canvas"), {width: w, height: h});
     const ctx = l.canvas.getContext("2d"), id = ctx.createImageData(w, h), px = new Uint32Array(id.data.buffer);
     for(let i = 0; i < data.length; i++){
@@ -1451,7 +1537,7 @@ function showScene(scene, keepView = false){
   const had = !!SCENE;
   SCENE = scene && scene.layers.length ? scene : null;
   STATS = SCENE ? sceneStats(SCENE.layers) : null;
-  renderInfo();
+  renderInfo(); renderFilter();
   if(SCENE){ if(!(keepView && had)) fit(); renderContrast(); } else { drawHist(); draw(); }
   $("#scalebar").hidden = !SCENE || !SCENE.scaled;
 }

@@ -131,6 +131,12 @@ The tab is greyed out when the position is only *Initialized* or the area has no
 Information shows the section's tilt, dose, defocus, exposure time, magnification and time from the
 `.mdoc`, and *All XML fields* lists the `.mdoc` header and section.
 
+**Filter.** Counted low-dose exposures (tens of electrons per pixel) are dominated by shot noise and
+look like grain at full resolution. The **Filter** panel under the histogram has a Gaussian
+**low-pass** set by resolution (10–500 Å): it keeps detail down to about that size. It is on by
+default at 60 Å for the Exposure tab and off for maps and Search images (separate settings,
+remembered in the browser). It changes only the display; Image Information shows unfiltered values.
+
 **Sizes.** The camera field is read from the exposure pixel size and image size (a tilt-series
 `.mdoc`, or the FEI extended header of an Exposure / tilt-series MRC; 0.81 µm by default). Tomo5 does
 not store the beam size, so the beam is drawn as **2× the camera field**. Both can be changed in the
