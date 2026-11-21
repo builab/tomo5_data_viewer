@@ -36,7 +36,7 @@ except ImportError:
     np = None
 
 APP = "tomo5-data-viewer"
-VERSION = "0.4"
+VERSION = "0.5"
 TESTED_WITH = "Tomo5 5.26"
 CHUNK = 1 << 20          # 1 MiB per write when streaming a file
 
