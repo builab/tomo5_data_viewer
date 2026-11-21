@@ -3,7 +3,9 @@
 tomo5_viewer.py - serve Tomo5 session folders to the Tomo5 Data Viewer (index.html).
 
 The viewer page (index.html) must sit next to this script, or be given with --html.
-Only the folders you list are reachable, and the server never writes anything.
+Only the folders you list are reachable, and the server never writes into them.
+Acquisition movies are encoded by ffmpeg on this machine (if installed) in a temporary
+folder and downloaded from there.
 
 Usage
     python3 tomo5_viewer.py /path/to/data [/another/root ...] [--port 8766] [--host 127.0.0.1]
@@ -24,10 +26,14 @@ import getpass
 import json
 import os
 import re
+import secrets
 import socket
 import struct
 import shutil
+import subprocess
 import sys
+import tempfile
+import threading
 import time
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -38,7 +44,7 @@ except ImportError:
     np = None
 
 APP = "tomo5-data-viewer"
-VERSION = "0.6"
+VERSION = "0.7"
 TESTED_WITH = "Tomo5 5.26"
 CHUNK = 1 << 20          # 1 MiB per write when streaming a file
 
@@ -48,9 +54,74 @@ VERBOSE = False
 EDIT = False                    # --edit: allow saving edits (experimental)
 EDIT_DIRS = {"batch": "Batch/Edit", "maps": "SearchMaps/Edit"}   # where edits go, relative to the session folder
 MAX_SAVE = 32 << 20             # largest save request accepted
+FFMPEG = "auto"                 # --ffmpeg: path, "auto" (look on PATH) or "none"
+MOVIES = {}                     # id -> {"proc", "dir", "out", "log", "n", "t"}: movies being encoded by ffmpeg
+MOVIE_LOCK = threading.Lock()
+MOVIE_MAX_FRAMES = 30000        # about 16 minutes at 30 frames per second
+MOVIE_MAX_FRAME = 16 << 20
 # files a save may write, relative to the edit folder
 SAVE_OK = {"batch": re.compile(r"^(BatchPositionsList\.xml|edit_session\.json)$"),
            "maps": re.compile(r"^SearchMap_\d+_\d{8}_\d{6}/SearchMap\.dm$")}
+
+
+def ffmpeg_path():
+    if FFMPEG == "none":
+        return None
+    if FFMPEG != "auto":
+        return FFMPEG if os.path.isfile(FFMPEG) else shutil.which(FFMPEG)
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        try:                                   # the copy that comes with the imageio-ffmpeg Python package
+            import imageio_ffmpeg
+            exe = imageio_ffmpeg.get_ffmpeg_exe()
+        except Exception:
+            exe = None
+    return exe
+
+
+_ENCODER = {}
+
+
+def ffmpeg_encoder(exe):
+    """An H.264 encoder this ffmpeg really has (some builds lack libx264), else MPEG-4."""
+    if exe in _ENCODER:
+        return _ENCODER[exe]
+    try:
+        out = subprocess.run([exe, "-hide_banner", "-encoders"], capture_output=True, text=True, timeout=20).stdout
+    except Exception:
+        out = ""
+    table = [("libx264", ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18"]),
+             ("h264_videotoolbox", ["-c:v", "h264_videotoolbox", "-b:v", "20M", "-allow_sw", "1"]),
+             ("libopenh264", ["-c:v", "libopenh264", "-b:v", "20M"]),
+             ("h264_nvenc", ["-c:v", "h264_nvenc", "-cq", "19", "-b:v", "0"])]
+    res = next(((n, a) for n, a in table if f" {n} " in out), ("mpeg4", ["-c:v", "mpeg4", "-q:v", "2"]))
+    _ENCODER[exe] = res
+    return res
+
+
+def movie_drop(mid):
+    """Stop the encoder of a movie and delete its temporary folder."""
+    with MOVIE_LOCK:
+        m = MOVIES.pop(mid, None)
+    if not m:
+        return
+    try:
+        if m["proc"].poll() is None:
+            m["proc"].kill()
+    except Exception:
+        pass
+    try:
+        m["log"].close()
+    except Exception:
+        pass
+    shutil.rmtree(m["dir"], ignore_errors=True)
+
+
+def movie_sweep():
+    """Forget movies nobody touched for an hour."""
+    now = time.time()
+    for mid in [k for k, m in list(MOVIES.items()) if now - m["t"] > 3600]:
+        movie_drop(mid)
 
 
 def norm(p):
@@ -179,6 +250,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         url = urllib.parse.urlparse(self.path)
         try:
+            if url.path.startswith("/api/movie/"):
+                return self.api_movie(url.path[len("/api/movie/"):], urllib.parse.parse_qs(url.query))
             if url.path != "/api/save":
                 return self.send_err(404, "Unknown address.")
             if not EDIT:
@@ -195,6 +268,90 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             return self.send_err(500, f"{type(e).__name__}: {e}")
 
+    # ---------- acquisition movies: the page sends JPEG frames, ffmpeg on this machine encodes them ----------
+    def body(self, limit):
+        n = int(self.headers.get("Content-Length") or 0)
+        if n <= 0 or n > limit:
+            return None
+        return self.rfile.read(n)
+
+    def api_movie(self, action, q):
+        arg = lambda k, d="": q.get(k, [d])[0]
+        ctype = (self.headers.get("Content-Type") or "").lower()
+        if action == "start":
+            # JSON content type: a page from another site cannot start an encoder here (CORS preflight is never answered)
+            if not ctype.startswith("application/json"):
+                return self.send_err(415, "Send application/json.")
+            exe = ffmpeg_path()
+            if not exe:
+                return self.send_err(501, "ffmpeg is not installed on the server.")
+            try:
+                o = json.loads((self.body(1 << 16) or b"{}").decode("utf-8"))
+                w, h, fps = int(o.get("w", 1920)), int(o.get("h", 1080)), float(o.get("fps", 30))
+            except Exception:
+                return self.send_err(400, "Bad movie settings.")
+            if not (64 <= w <= 4096 and 64 <= h <= 4096 and w % 2 == 0 and h % 2 == 0 and 1 <= fps <= 60):
+                return self.send_err(400, "Movie size must be even, 64 to 4096 px, at 1 to 60 frames per second.")
+            movie_sweep()
+            if sum(1 for m in MOVIES.values() if not m.get("done")) >= 2:
+                return self.send_err(429, "Two movies are already being encoded on this server.")
+            d = tempfile.mkdtemp(prefix="tomo5_movie_")
+            out, log = os.path.join(d, "movie.mp4"), open(os.path.join(d, "ffmpeg.log"), "wb")
+            enc, args = ffmpeg_encoder(exe)
+            proc = subprocess.Popen([exe, "-y", "-loglevel", "error", "-f", "image2pipe", "-c:v", "mjpeg", "-framerate", f"{fps:g}", "-i", "-"]
+                                    + args + ["-r", f"{fps:g}", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out],
+                                    stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=log)
+            mid = secrets.token_urlsafe(18)
+            with MOVIE_LOCK:
+                MOVIES[mid] = {"proc": proc, "dir": d, "out": out, "log": log, "n": 0, "t": time.time(), "lock": threading.Lock()}
+            return self.send_json({"id": mid, "encoder": enc})
+        m = MOVIES.get(arg("id"))
+        if not m:
+            return self.send_err(404, "Unknown movie.")
+        m["t"] = time.time()
+
+        def why():
+            try:
+                m["log"].flush()
+                return open(os.path.join(m["dir"], "ffmpeg.log"), "rb").read()[-400:].decode("utf-8", "replace").strip()
+            except Exception:
+                return ""
+        if action == "frame":
+            if not ctype.startswith("image/jpeg"):
+                return self.send_err(415, "Send each frame as image/jpeg.")
+            data = self.body(MOVIE_MAX_FRAME)
+            if not data or data[:2] != b"\xff\xd8":
+                return self.send_err(400, "Not a JPEG frame.")
+            if m.get("done") or m["n"] >= MOVIE_MAX_FRAMES:
+                return self.send_err(400, "This movie takes no more frames.")
+            try:
+                with m["lock"]:
+                    m["proc"].stdin.write(data)
+                    m["n"] += 1
+            except (BrokenPipeError, OSError):
+                return self.send_err(500, "ffmpeg stopped: " + (why() or "no message"))
+            return self.send_json({"n": m["n"]})
+        if action == "end":
+            try:
+                m["proc"].stdin.close()
+            except Exception:
+                pass
+            try:
+                code = m["proc"].wait(timeout=900)
+            except subprocess.TimeoutExpired:
+                movie_drop(arg("id"))
+                return self.send_err(500, "ffmpeg did not finish.")
+            if code != 0 or not os.path.isfile(m["out"]):
+                msg = why()
+                movie_drop(arg("id"))
+                return self.send_err(500, "ffmpeg failed: " + (msg or f"exit code {code}"))
+            m["done"] = True
+            return self.send_json({"frames": m["n"], "size": os.path.getsize(m["out"])})
+        if action == "cancel":
+            movie_drop(arg("id"))
+            return self.send_json({"ok": True})
+        return self.send_err(404, "Unknown address.")
+
     def do_HEAD(self):
         self.do_GET()
 
@@ -210,7 +367,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/info":
                 return self.send_json({"app": APP, "version": VERSION, "numpy": np is not None,
                                        "roots": [{"name": n, "path": r} for n, r in ROOTS.items()],
-                                       "edit": EDIT, "editDirs": EDIT_DIRS})
+                                       "edit": EDIT, "editDirs": EDIT_DIRS, "ffmpeg": bool(ffmpeg_path())})
             if url.path == "/api/list":
                 return self.api_list(arg("path"))
             if url.path == "/api/section":
@@ -241,6 +398,12 @@ class Handler(BaseHTTPRequestHandler):
                 if self.command != "HEAD":
                     self.wfile.write(body)
                 return
+            if url.path == "/api/movie/file":
+                m = MOVIES.get(arg("id"))
+                if not m or not m.get("done") or not os.path.isfile(m["out"]):
+                    return self.send_err(404, "That movie is not available (any more).")
+                m["t"] = time.time()
+                return self.send_path(m["out"], "video/mp4")
             if url.path == "/api/file":
                 real, _ = resolve(arg("path"))
                 if not real or not os.path.isfile(real):
@@ -344,13 +507,14 @@ def save_edits(req):
 
 
 def main():
-    global HTML_PATH, VERBOSE, EDIT
+    global HTML_PATH, VERBOSE, EDIT, FFMPEG
     ap = argparse.ArgumentParser(description="Serve Tomo5 session folders to the Tomo5 Data Viewer.")
     ap.add_argument("roots", nargs="+", help="folders to share (read-only)")
     ap.add_argument("--port", type=int, default=8766)
     ap.add_argument("--host", default="127.0.0.1", help="127.0.0.1 (default, this computer only) or 0.0.0.0")
     ap.add_argument("--html", help="path to index.html (default: next to this script)")
     ap.add_argument("--verbose", action="store_true", help="log every request")
+    ap.add_argument("--ffmpeg", default="auto", help="ffmpeg used to encode acquisition movies: a path, 'auto' (default: look on PATH) or 'none'")
     # experimental edit mode: not listed in --help yet
     ap.add_argument("--edit", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--edit-dir", default=EDIT_DIRS["batch"], help=argparse.SUPPRESS)        # batch positions
@@ -369,6 +533,9 @@ def main():
     HTML_PATH = os.path.abspath(a.html) if a.html else os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
     VERBOSE = a.verbose
     EDIT = a.edit
+    FFMPEG = a.ffmpeg
+    import atexit
+    atexit.register(lambda: [movie_drop(k) for k in list(MOVIES)])     # no temporary movie folders left behind
     for t, v in (("batch", a.edit_dir), ("maps", a.edit_maps_dir)):
         v = v.replace("\\", "/").strip("/")
         if not v or ".." in v.split("/"):
@@ -383,6 +550,8 @@ def main():
               f"star ratings to <session>/{EDIT_DIRS['maps']}; Tomo5's files are not changed.")
     for n, r in ROOTS.items():
         print(f"  sharing  {n}  ->  {r}")
+    exe = ffmpeg_path()
+    print("  movies   " + (f"encoded with {exe} ({ffmpeg_encoder(exe)[0]})" if exe else "ffmpeg not found (pass --ffmpeg PATH): the browser encodes them (.webm)"))
     if np is None:
         print("  numpy not found: large images are sent in full and shrunk in the browser.")
     # like Jupyter: tell the user how to reach this server from their own computer

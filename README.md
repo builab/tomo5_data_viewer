@@ -42,7 +42,7 @@ start the server.
 The layout follows Tomo5:
 
 - **Left, Tasks:** *Search Maps* and *Batch Positions* (acquired / total) switch the table on
-  the right. *Data Acquisition* and *Movie Player* are placeholders for now.
+  the right. *Movie Player* is a placeholder for now.
 - **Centre, viewer:** tabs **Atlas › Overview › Search Map › Search › Exposure** (*Search* and *Exposure* with Batch Positions selected).
   The bar above the image shows the selected search map, with ‹ › to step through them.
   Below the image: **−** / **+** and a zoom slider. Scroll to zoom, drag to pan, double-click
@@ -177,6 +177,26 @@ remembered in the browser). It changes only the display; Image Information shows
 not store the beam size, so the beam is drawn as **2× the camera field**. Both can be changed in the
 toolbar under the image (*Camera … µm*, *Beam … × camera*, shown on views that draw areas) and are
 remembered in the browser.
+
+### Acquisition movies
+
+Right-click a sub-position in **Batch Positions › Search** (or a position on the Search Map,
+or anywhere on its **Exposure** tab) and choose:
+
+- **Make acquisition movie (N.k)…** — Atlas › zoom to the Search Map › zoom to area N.k (the
+  Search image fades in as the close-up) › its tilt series as an inset, with the tilt angle, an
+  angle track and a stage-tilt schematic.
+- **Make parallel acquisition movie (Position_N)…** — the same up to the Search Map, then the
+  Search image with each area picked in turn (1.1, the tilt axis and tracking area, then 1.2,
+  1.3, …), then all the tilt series in a grid, playing in step by tilt angle.
+
+Both need the tilt series (**Tilt Series Folder…**). The dialog shows a preview you can play and
+scrub, with settings for titles, zoom, timing, playback order (as acquired from the `.mdoc`
+times, by angle, or start → lowest → highest → start), a low-pass for the tilt images (60 Å by
+default), size (720p, 1080p, 4K) and frame rate. **Make movie** encodes it with ffmpeg on the
+server (`.mp4`, H.264) and offers it for download; nothing is written into the data folders.
+Without ffmpeg the browser encodes a `.webm` (current Chrome or Edge). As a guide, a 12 s 720p
+parallel movie of three 41-image tilt series took about 16 s to render.
 
 ### How tiles are placed
 
@@ -320,14 +340,18 @@ workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
 ## Server options
 
 ```text
-python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--host 127.0.0.1] [--html index.html] [--verbose]
+python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--host 127.0.0.1] [--html index.html] [--verbose] [--ffmpeg auto]
 ```
 
-- Only the listed folders are reachable, and nothing is ever written.
+- Only the listed folders are reachable, and nothing is ever written into them.
+- `--ffmpeg` sets the ffmpeg used for acquisition movies: a path, `auto` (default: look on the
+  PATH, or the `imageio-ffmpeg` Python package) or `none` (the browser encodes them). Movies are
+  encoded in a temporary folder that is deleted after an hour or when the server stops.
 - `--host 0.0.0.0` makes the server reachable from other machines. The default, `127.0.0.1`,
   with an SSH tunnel is safer.
 
 ## Requirements
 
 - Python 3.7+ (numpy optional, recommended).
+- ffmpeg (optional) for `.mp4` acquisition movies.
 - A current Chrome, Edge or Firefox.
