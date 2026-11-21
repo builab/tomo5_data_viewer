@@ -46,10 +46,11 @@ ROOTS = {}               # name -> absolute path
 HTML_PATH = None
 VERBOSE = False
 EDIT = False                    # --edit: allow saving edits (experimental)
-EDIT_DIR = "Batch/Edit"         # where edits go, relative to the session folder
+EDIT_DIRS = {"batch": "Batch/Edit", "maps": "SearchMaps/Edit"}   # where edits go, relative to the session folder
 MAX_SAVE = 32 << 20             # largest save request accepted
 # files a save may write, relative to the edit folder
-SAVE_OK = re.compile(r"^(BatchPositionsList\.xml|edit_session\.json|SearchMaps/SearchMap_\d+_\d{8}_\d{6}/SearchMap\.dm)$")
+SAVE_OK = {"batch": re.compile(r"^(BatchPositionsList\.xml|edit_session\.json)$"),
+           "maps": re.compile(r"^SearchMap_\d+_\d{8}_\d{6}/SearchMap\.dm$")}
 
 
 def norm(p):
@@ -209,7 +210,7 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/info":
                 return self.send_json({"app": APP, "version": VERSION, "numpy": np is not None,
                                        "roots": [{"name": n, "path": r} for n, r in ROOTS.items()],
-                                       "edit": EDIT, "editDir": EDIT_DIR})
+                                       "edit": EDIT, "editDirs": EDIT_DIRS})
             if url.path == "/api/list":
                 return self.api_list(arg("path"))
             if url.path == "/api/section":
@@ -287,63 +288,73 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def save_edits(req):
-    """Write edited files into <session>/<EDIT_DIR>/. The previous save there is moved into
-    <EDIT_DIR>/history/<time>/ first. Tomo5's own files are never written."""
+    """Write edited files into the session's edit folders:
+         batch -> <session>/<EDIT_DIRS["batch"]>/  (BatchPositionsList.xml, edit_session.json)
+         maps  -> <session>/<EDIT_DIRS["maps"]>/   (<map folder>/SearchMap.dm with the new rating)
+    A save is one snapshot: whatever was saved before in either folder is moved into
+    <folder>/history/<time>/ first. Tomo5's own files are never written."""
     session, _ = resolve(req["session"])
     if not session or not os.path.isdir(session):
         raise ValueError("unknown session folder")
-    edit_root = os.path.normpath(os.path.join(session, *EDIT_DIR.split("/")))
-    if not inside(edit_root, session):
-        raise PermissionError("edit folder must be inside the session folder")
+    roots = {}
+    for t, d in EDIT_DIRS.items():
+        r = os.path.normpath(os.path.join(session, *d.split("/")))
+        if not inside(r, session) or r == os.path.normpath(session):
+            raise PermissionError("edit folders must be inside the session folder")
+        roots[t] = r
     files = req["files"]
     if not isinstance(files, list) or not files:
         raise ValueError("no files to save")
     for f in files:
-        rel = str(f["path"]).replace("\\", "/")
-        if not SAVE_OK.match(rel):
-            raise PermissionError(f"not allowed to write {rel!r}")
+        t, rel = f.get("target"), str(f.get("path", "")).replace("\\", "/")
+        if t not in SAVE_OK or not SAVE_OK[t].match(rel):
+            raise PermissionError(f"not allowed to write {t}:{rel!r}")
         f["path"] = rel
-        if not isinstance(f["content"], str):
+        if not isinstance(f.get("content"), str):
             raise ValueError(f"content of {rel} must be text")
-    os.makedirs(edit_root, exist_ok=True)
-    # keep the previous save
-    previous = [e for e in os.listdir(edit_root) if e != "history"]
-    history = None
-    if previous:
-        base = os.path.join(edit_root, "history", time.strftime("%Y%m%d_%H%M%S"))
+    stamp, histories = time.strftime("%Y%m%d_%H%M%S"), {}
+    for t, root in roots.items():               # keep the previous save
+        if not os.path.isdir(root):
+            continue
+        previous = [e for e in os.listdir(root) if e != "history"]
+        if not previous:
+            continue
+        base = os.path.join(root, "history", stamp)
         history, k = base, 2
         while os.path.exists(history):
             history = f"{base}_{k}"; k += 1
         os.makedirs(history)
         for e in previous:
-            shutil.move(os.path.join(edit_root, e), os.path.join(history, e))
+            shutil.move(os.path.join(root, e), os.path.join(history, e))
+        histories[t] = os.path.relpath(history, session).replace(os.sep, "/")
     saved = []
     for f in files:
-        dest = os.path.normpath(os.path.join(edit_root, *f["path"].split("/")))
-        if not inside(dest, edit_root):
+        root = roots[f["target"]]
+        dest = os.path.normpath(os.path.join(root, *f["path"].split("/")))
+        if not inside(dest, root):
             raise PermissionError("path outside the edit folder")
         os.makedirs(os.path.dirname(dest), exist_ok=True)
         tmp = dest + ".tmp"
         with open(tmp, "w", encoding="utf-8", newline="") as fh:
             fh.write(f["content"])
         os.replace(tmp, dest)            # atomic: a half-written file never replaces a good one
-        saved.append(f["path"])
-    print(f"  saved {len(saved)} file(s) to {edit_root}" + (f" (previous save -> {history})" if history else ""))
-    return {"saved": saved, "editDir": EDIT_DIR, "history": os.path.relpath(history, edit_root).replace(os.sep, "/") if history else None}
+        saved.append(f"{EDIT_DIRS[f['target']]}/{f['path']}")
+    print(f"  saved {len(saved)} file(s) in {session}: " + ", ".join(saved))
+    return {"saved": saved, "editDirs": EDIT_DIRS, "history": histories}
 
 
 def main():
-    global HTML_PATH, VERBOSE, EDIT, EDIT_DIR
+    global HTML_PATH, VERBOSE, EDIT
     ap = argparse.ArgumentParser(description="Serve Tomo5 session folders to the Tomo5 Data Viewer.")
     ap.add_argument("roots", nargs="+", help="folders to share (read-only)")
     ap.add_argument("--port", type=int, default=8766)
     ap.add_argument("--host", default="127.0.0.1", help="127.0.0.1 (default, this computer only) or 0.0.0.0")
     ap.add_argument("--html", help="path to index.html (default: next to this script)")
     ap.add_argument("--verbose", action="store_true", help="log every request")
-    ap.add_argument("--edit", action="store_true",
-                    help="experimental: allow editing batch positions and star ratings; edits are saved to "
-                         "<session>/Batch/Edit, Tomo5's files are never changed")
-    ap.add_argument("--edit-dir", default="Batch/Edit", help="edit folder, relative to the session folder (default Batch/Edit)")
+    # experimental edit mode: not listed in --help yet
+    ap.add_argument("--edit", action="store_true", help=argparse.SUPPRESS)
+    ap.add_argument("--edit-dir", default=EDIT_DIRS["batch"], help=argparse.SUPPRESS)        # batch positions
+    ap.add_argument("--edit-maps-dir", default=EDIT_DIRS["maps"], help=argparse.SUPPRESS)    # search-map ratings
     a = ap.parse_args()
 
     for r in a.roots:
@@ -358,15 +369,18 @@ def main():
     HTML_PATH = os.path.abspath(a.html) if a.html else os.path.join(os.path.dirname(os.path.abspath(__file__)), "index.html")
     VERBOSE = a.verbose
     EDIT = a.edit
-    EDIT_DIR = a.edit_dir.strip("/").replace("\\", "/") or "Batch/Edit"
-    if ".." in EDIT_DIR.split("/"):
-        sys.exit("--edit-dir must stay inside the session folder")
+    for t, v in (("batch", a.edit_dir), ("maps", a.edit_maps_dir)):
+        v = v.replace("\\", "/").strip("/")
+        if not v or ".." in v.split("/"):
+            sys.exit("edit folders must stay inside the session folder")
+        EDIT_DIRS[t] = v
 
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
     print(f"Tomo5 Data Viewer {VERSION} on http://{'localhost' if a.host in ('127.0.0.1', '0.0.0.0') else a.host}:{a.port}")
     print(f"  Tested with {TESTED_WITH}")
     if EDIT:
-        print(f"  EDIT MODE (experimental): edits are saved to <session>/{EDIT_DIR}; Tomo5's files are not changed.")
+        print(f"  EDIT MODE (experimental): batch positions are saved to <session>/{EDIT_DIRS['batch']}, "
+              f"star ratings to <session>/{EDIT_DIRS['maps']}; Tomo5's files are not changed.")
     for n, r in ROOTS.items():
         print(f"  sharing  {n}  ->  {r}")
     if np is None:

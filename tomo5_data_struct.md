@@ -143,16 +143,17 @@ to `Tile_24587947_9`.
 |---|---|
 | `Position_<N>.mrc` | Thumbnail for each position |
 
-## Batch/Edit/ (written by the viewer in `--edit` mode)
+## Batch/Edit/ and SearchMaps/Edit/ (written by the viewer's experimental edit mode)
 
 Not part of Tomo5. The viewer saves edits here so Tomo5's files are never overwritten.
+Batch-position edits go to `Batch/Edit/`, search-map star ratings to `SearchMaps/Edit/`.
 
 | File | Description |
 |---|---|
-| `BatchPositionsList.xml` | Copy of `Batch/BatchPositionsList.xml`; only `AdditionalExposureTemplateAreas` of edited positions change |
-| `SearchMaps/<map>/SearchMap.dm` | Copy of the map's `SearchMap.dm`; only `<StarRating>` (0–5) changes |
-| `edit_session.json` | Manifest: tool, version, save time, source list, edited positions, sub-position offsets (µm), ratings |
-| `history/<YYYYmmdd_HHMMSS>/` | The previous save, moved here before each new save |
+| `Batch/Edit/BatchPositionsList.xml` | Copy of `Batch/BatchPositionsList.xml`; only `AdditionalExposureTemplateAreas` of edited positions change |
+| `Batch/Edit/edit_session.json` | Manifest: tool, version, save time, source list, edited positions, sub-position offsets (µm), ratings, folders |
+| `SearchMaps/Edit/<map>/SearchMap.dm` | Copy of the map's `SearchMap.dm`; only `<StarRating>` (0–5) changes |
+| `…/Edit/history/<YYYYmmdd_HHMMSS>/` | The previous save, moved here before each new save (in both folders) |
 
 A sub-position as Tomo5 writes it (offset from the anchoring position, in metres):
 
