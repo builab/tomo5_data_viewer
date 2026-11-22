@@ -117,7 +117,7 @@ start by default, low-pass, 720p / 1080p / 4K). **Make movie** encodes with ffmp
 
 ## Remote workstation
 
-Like a Jupyter notebook: run the viewer where the data is and tunnel its port over SSH.
+Run the viewer where the data is and tunnel its port over SSH.
 
 ```bash
 # on the workstation (tmux or nohup keep it running after you log out)
