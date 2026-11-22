@@ -60,6 +60,13 @@ Example session (atlas acquired 2026-09-21, search maps 2026-09-24).
 | `Position_<N>.mrc` | Tilt series stack for a batch position |
 | `Position_<N>.mdoc` | Tilt series metadata (SerialEM-style mdoc) |
 
+**Section order.** The stack `Position_<N>.mrc` is sorted by tilt angle (section 0 = lowest angle,
+e.g. −60°), while the `.mdoc` lists the images in acquisition order (dose-symmetric: `[ZValue = 0]`
+0°, `[ZValue = 1]` −3°, `[ZValue = 2]` +3°, …). So `ZValue` is the acquisition index, not the section
+number. Each section's own stage tilt is in the MRC's FEI extended header (one 888-byte block per
+section, metadata version 2: alpha tilt in degrees at byte 100, pixel size in metres at byte 156);
+match it to the `.mdoc` block with the same `TiltAngle` to get that image's dose and time.
+
 Several positions can share one search image. The first, the anchoring position, is `Position_<N>`, and the
 following ones get a sub-index: `Position_<N>_2`, `Position_<N>_3`, …
 In this example, `Position_1` and `Position_1_2` share the search image of position 1.
@@ -145,7 +152,7 @@ session folder):
 | File | Description |
 |---|---|
 | `Position_<N>[_<k>].mrc` | the tilt series binned to ≤ 512 px, 8-bit MRC (mode 0), sections in the original order |
-| `Position_<N>[_<k>].json` | `angles`, `times` (from the `.mdoc`), `pixelA`, `bin`, `shape`, `sourceShape`, `sourceSize`, `sourceMtime`, `range` |
+| `Position_<N>[_<k>].json` | `angles`, `times` per section (`anglesFrom`: FEI header or `.mdoc`), `pixelA`, `bin`, `shape`, `sourceShape`, `sourceSize`, `sourceMtime`, `range` |
 | `Position_<N>[_<k>].mp4` | optional (`--mp4`): the series by angle, low-passed |
 | `tiltseries_ratings.xml` | star ratings (1–5) set in the viewer's Movie Player: `<TiltSeries name="Position_1_2.mrc" position="1" area="2" rating="4" updated="…" />` per rated tilt series |
 
