@@ -200,12 +200,21 @@ numbered circle (white = the area shown, dim = no image yet). Click a circle to 
 
 - the tilt series `Position_<N>.mrc`, `Position_<N>_2.mrc`, … (only the section shown is read, so
   large stacks open quickly); it starts at the section closest to 0°, and the drop-down in the bar
-  lists the sections by tilt angle, from the `.mdoc`;
+  lists the sections by tilt angle;
 - before acquisition, the refined exposure image `Position_<N>[_<k>]_Exposure.mrc`.
 
 The tab is greyed out when the position is only *Initialized* or the area has no image. Image
 Information shows the section's tilt, dose, defocus, exposure time, magnification and time from the
 `.mdoc`, and *All XML fields* lists the `.mdoc` header and section.
+
+**Which angle is which section.** Tomo5 saves the stack sorted by angle (section 0 = −60°, …,
+section 40 = +60°) but writes the `.mdoc` in acquisition order (`[ZValue = 0]` 0°, `[ZValue = 1]`
+−3°, …), so `ZValue` is *not* the section number. The viewer (and `--make-previews`) therefore
+takes each section's angle from the stack's own FEI extended header when it has one, and gives it
+the `.mdoc` block with that angle (for dose, time, defocus). Without that header, a `.mdoc` whose
+angles do not go up with `ZValue` is matched to the stack in angle order. Image Information says
+where the angle came from (*FEI header*, *.mdoc* or *.mdoc, sorted by angle*), and *As acquired*
+playback follows the `.mdoc` times.
 
 **Filter.** Counted low-dose exposures (tens of electrons per pixel) are dominated by shot noise and
 look like grain at full resolution. The **Filter** panel under the histogram has a Gaussian
