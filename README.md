@@ -7,7 +7,7 @@ It is one HTML page (`index.html`) plus a small Python server (`tomo5_viewer.py`
 session folders to the browser. It does not change Tomo5's files; the only thing it writes is the
 Movie Player's star ratings, into `tiltseries_movie/` (see below).
 
-**Status: v0.8: atlas, search maps, batch positions, exposures, tilt series (Movie Player) and
+**Status: v0.9: atlas, search maps, batch positions, exposures, tilt series (Movie Player) and
 acquisition movies. Tested with Tomo5 5.26.**
 The session layout is described in [tomo5_data_struct.md](tomo5_data_struct.md).
 
@@ -81,17 +81,21 @@ The layout follows Tomo5:
 - **Left, Tasks:** *Search Maps* and *Batch Positions* (acquired / total) switch the table on
   the right. *Movie Player* lists the tilt series to play (see below).
 - **Centre, viewer:** tabs **Atlas › Overview › Search Map › Search › Exposure** (*Search* and *Exposure* with Batch Positions selected).
-  The bar above the image shows the selected search map, with ‹ › to step through them.
+  The bar above the image shows the selected search map, with ‹ › to step through the table
+  (in a circle: after the last comes the first).
   Below the image: **−** / **+** and a zoom slider. Scroll to zoom, drag to pan, double-click
   or **F** to fit. A scale bar is drawn on the image, and the stage X/Y under the cursor is shown
   at the bottom right.
 - **Right:** the search-map table (Id, tilt, status, name, rating) or the batch-position table
-  (Id, tilt, status, name, exposure areas acquired / planned). Click a row, or use the arrow keys,
-  to select. The search-map rating (`StarRating` in `SearchMap.dm`) is shown as 5 stars, yellow for
+  (Id, tilt, status, name, ★, exposure areas acquired / planned). The batch ★ is the best star
+  rating of the position's tilt series, or, in a paler yellow, its search map's rating. Click a
+  row, or use the arrow keys, to select; click the ★ / Rating header to put the highest rated
+  first (remembered per task). The search-map rating (`StarRating` in `SearchMap.dm`) is shown as 5 stars, yellow for
   the rating, also in the bar above the image. Below it, the **Histogram** (Auto Filter, black/white levels, invert) and
   **Image Information** (size, pixel size, field of view, defocus, dose, exposure, magnification,
   stage, tilt, camera, date, min/mean/max). *All XML fields* lists every field of the XML,
   with a filter.
+- **?** (top right, or the **?** key) lists every keyboard and mouse shortcut.
 
 ### Tabs (with Search Maps selected)
 
@@ -248,7 +252,8 @@ the image (the same bar appears in the Exposure tab of Batch Positions):
   is shown again; the slider scrubs through the frames.
 - **fps** (5–30) and **Order**: *as acquired* (the `.mdoc` DateTime, else file order) or *by angle*.
 - **next series at end** (Movie Player only): when a series ends, go on with the next one in the
-  list, for going through a whole session. Arrow keys step through the list.
+  list, and after the last one back to the first, for going through a whole session. Arrow keys
+  step through the list (also in a circle).
 - Contrast and the low-pass filter (right panel) apply while it plays; one contrast is used for
   the whole series.
 - **★ Star rating** of each tilt series, at the top right of the image (next to its name) and in
@@ -261,8 +266,9 @@ the image (the same bar appears in the Exposure tab of Batch Positions):
 
 Frames come from the **preview cache** when there is one, and start at once. Without it they are
 read **live**: each section is read from the full-size tilt series and shrunk to 512 px on the
-server, so the first play of a series takes as long as reading the stack (see below); later
-plays are instant until the page is reloaded.
+server. Playing starts once the first frames are in and the rest keep loading while it plays
+(the bar shows *loading 12/41*); a full pass takes as long as reading the stack (see below), and
+later plays are instant. Decoded images are kept up to about 1 GB, oldest dropped first.
 
 ### Preview cache: `tiltseries_movie/` (recommended)
 
@@ -278,7 +284,7 @@ For every `Position_N[_k].mrc` in the folder (and one level of subfolders) this 
 | File | What it is |
 |---|---|
 | `Position_N[_k].mrc` | the tilt series binned to ≤ 512 px, 8-bit (0.5–99.5 % of the whole stack), pixel size in the header, sections in the original order (≈ 10 MB for 41 images) |
-| `Position_N[_k].json` | tilt angles and times (from the `.mdoc`), pixel size, binning, and the size and date of the source, to tell when it is out of date |
+| `Position_N[_k].json` | tilt angles and times (from the `.mdoc`), pixel size (from the `.mdoc`, else the tilt series' own FEI or MRC header), binning, and the size and date of the source, to tell when it is out of date |
 | `Position_N[_k].mp4` | with `--mp4`: a movie of the series by angle, 60 Å low-pass, 10 fps (≈ 1–4 MB), to share or play anywhere |
 
 The same folder holds **`tiltseries_ratings.xml`**, the star ratings set in the Movie Player
@@ -501,6 +507,21 @@ python3 tomo5_viewer.py --make-previews TILTDIR [--mp4] [--preview-out DIR] [--p
   computer (DNS rebinding). Behind a proxy that uses another name, add `--allow-host NAME`.
 - `--host 0.0.0.0` makes the server reachable from other machines. The default, `127.0.0.1`,
   with an SSH tunnel is safer.
+
+## Testing
+
+`tests/smoke_test.py` clicks through the viewer on one of your sessions in a headless browser —
+every task, tab, button, drop-down, right-click menu item, table row and shortcut — and reports
+JavaScript errors and server errors. It starts its own read-only viewer on a free port and writes
+nothing. Run it before sending a change:
+
+```bash
+pip install playwright && python3 -m playwright install chromium       # once
+make test SESSION=/data/tomo5/Session_X TILT=/data/tomo5/TiltSeries_X  # or: python3 tests/smoke_test.py --session … --tilt …
+make check                                                             # syntax only (Python, and JavaScript with node)
+```
+
+On a slow network share add `--slow 2` to wait longer between clicks.
 
 ## Requirements
 

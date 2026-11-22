@@ -47,7 +47,7 @@ except ImportError:
     np = None
 
 APP = "tomo5-data-viewer"
-VERSION = "0.8"
+VERSION = "0.9"
 TESTED_WITH = "Tomo5 5.26"
 CHUNK = 1 << 20          # 1 MiB per write when streaming a file
 
@@ -201,6 +201,29 @@ def mrc_header(real):
     return nx, ny, nz, mode, nxt, stamp == 1146047817 and (flags & 1) == 1
 
 
+def mrc_pixel_a(real):
+    """Pixel size in Å of an MRC file itself: the FEI extended header (Tomo5, metadata version ≥ 2,
+    metres at byte 156 of the first section's block), else the MRC header (cell size / grid size;
+    1 Å or 0 there means "not set"). None if neither has it."""
+    try:
+        with open(real, "rb") as f:
+            h = f.read(1024)
+            nxt = max(0, struct.unpack("<i", h[92:96])[0])
+            ext = f.read(480) if nxt >= 480 else b""
+        if len(ext) == 480 and struct.unpack("<i", ext[4:8])[0] >= 2:
+            px = struct.unpack("<d", ext[156:164])[0] * 1e10
+            if 0.01 < px < 1e5:
+                return px
+        mx, xlen = struct.unpack("<i", h[28:32])[0], struct.unpack("<f", h[40:44])[0]
+        if mx > 0 and xlen > 0:
+            px = xlen / mx
+            if abs(px - 1) > 1e-6 and 0.01 < px < 1e5:
+                return px
+    except (OSError, struct.error):
+        pass
+    return None
+
+
 def read_binned_section(real, z, binf):
     """Read MRC section z and average bin x bin blocks. Returns (float32 bytes, width, height)."""
     nx, ny, nz, mode, nxt, signed = mrc_header(real)
@@ -330,6 +353,10 @@ def make_preview(ts, out, size, mp4, lp, fps, exe):
     hi = hi if hi > lo else lo + 1
     u8 = np.clip((np.nan_to_num(stack, nan=lo) - lo) * (255.0 / (hi - lo)), 0, 255).round().astype(np.uint8)
     px_src, secs = parse_mdoc(ts["mdoc"]) if ts["mdoc"] else (None, {})
+    px_from = "mdoc" if px_src else None
+    if not px_src:                                 # no .mdoc (or no PixelSpacing): from the MRC file itself
+        px_src = mrc_pixel_a(src)
+        px_from = "mrc" if px_src else None
     px = (px_src or 0) * b
     angles = [secs.get(z, {}).get("a") for z in range(nz)]
     times = [secs.get(z, {}).get("t") for z in range(nz)]
@@ -337,7 +364,7 @@ def make_preview(ts, out, size, mp4, lp, fps, exe):
     meta = {"tool": f"tomo5_viewer.py {VERSION}", "made": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "source": os.path.basename(src), "sourceSize": st.st_size, "sourceMtime": int(st.st_mtime),
             "sourceShape": [nx, ny, nz], "bin": b, "shape": [bw, bh, nz], "pixelA": px or None,
-            "sourcePixelA": px_src, "angles": angles, "times": times, "range": [float(lo), float(hi)]}
+            "sourcePixelA": px_src, "pixelFrom": px_from, "angles": angles, "times": times, "range": [float(lo), float(hi)]}
     if mp4 and exe:
         order = sorted(range(nz), key=lambda z: angles[z]) if all(a is not None for a in angles) else list(range(nz))
         vf = ["pad=ceil(iw/2)*2:ceil(ih/2)*2"]
