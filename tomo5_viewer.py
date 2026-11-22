@@ -22,6 +22,7 @@ before sending them (much less data over the network); without numpy the viewer
 reads the full file and shrinks it itself.
 """
 import argparse
+import errno
 import getpass
 import json
 import os
@@ -326,7 +327,7 @@ def make_preview(ts, out, size, mp4, lp, fps, exe):
 
 def make_previews(a):
     if np is None:
-        sys.exit("--make-previews needs numpy (pip install numpy).")
+        sys.exit("--make-previews needs numpy. Install it with:  pip install --user numpy imageio-ffmpeg")
     tiltdir = os.path.abspath(os.path.expanduser(a.make_previews))
     if not os.path.isdir(tiltdir):
         sys.exit(f"Not a folder: {a.make_previews}")
@@ -335,7 +336,7 @@ def make_previews(a):
     series = find_tilt_series(tiltdir, out)
     exe = ffmpeg_path() if a.mp4 else None
     if a.mp4 and not exe:
-        print("ffmpeg not found: making the previews without .mp4 (pass --ffmpeg PATH).")
+        print("ffmpeg not found: making the previews without .mp4. Install it with  pip install --user imageio-ffmpeg  (or pass --ffmpeg PATH).")
     todo = []
     for ts in series:
         jp = os.path.join(out, ts["stem"] + ".json")
@@ -366,11 +367,17 @@ def make_previews(a):
                 el = time.time() - t0
                 eta = el / done * (len(todo) - done)
                 print(f"  [{done}/{len(todo)}] {ts['stem']}: {took:.1f} s ({size / 1e9:.2f} GB, {size / 1e6 / max(took, 1e-3):.0f} MB/s)"
+                      f"  · all {a.workers} worker{'s' if a.workers != 1 else ''}: {nbytes / 1e6 / max(el, 1e-3):.0f} MB/s"
                       f"  · elapsed {el / 60:.1f} min, about {eta / 60:.1f} min left", flush=True)
             except Exception as e:
                 fails.append(ts["stem"])
                 print(f"  [{done}/{len(todo)}] {ts['stem']}: FAILED: {e}", flush=True)
     el = time.time() - t0
+    rate = nbytes / 1e6 / max(el, 1e-3)
+    if done >= 3 and nbytes > 2e9 and rate < 150:
+        print(f"Note: the files were read at {rate:.0f} MB/s in total, so reading the disk or network share is what sets the time"
+              f" (shrinking takes 1–2 s per series). On a network share, try --workers {min(8, a.workers * 2)};"
+              " running it on the machine where the disks are local is fastest.")
     print(f"Done: {done - len(fails)} previews in {el / 60:.1f} min ({nbytes / 1e9:.1f} GB read, {nbytes / 1e6 / max(el, 1e-3):.0f} MB/s)"
           + (f"; failed: {', '.join(fails)}" if fails else ""))
 
@@ -698,7 +705,8 @@ def main():
     global HTML_PATH, VERBOSE, EDIT, FFMPEG
     ap = argparse.ArgumentParser(description="Serve Tomo5 session folders to the Tomo5 Data Viewer.")
     ap.add_argument("roots", nargs="*", help="folders to share (read-only)")
-    ap.add_argument("--port", type=int, default=8766)
+    ap.add_argument("--port", type=int, default=8766, help="port to listen on (default 8766); if it is busy the next free one is used, like Jupyter")
+    ap.add_argument("--port-retries", type=int, default=50, help="how many following ports to try when the port is busy (default 50; 0 = fail instead)")
     ap.add_argument("--host", default="127.0.0.1", help="127.0.0.1 (default, this computer only) or 0.0.0.0")
     ap.add_argument("--html", help="path to index.html (default: next to this script)")
     ap.add_argument("--verbose", action="store_true", help="log every request")
@@ -743,7 +751,17 @@ def main():
             sys.exit("edit folders must stay inside the session folder")
         EDIT_DIRS[t] = v
 
-    srv = ThreadingHTTPServer((a.host, a.port), Handler)
+    # like Jupyter: if the port is busy, take the next free one (--port-retries)
+    srv, port = None, a.port
+    for port in range(a.port, a.port + max(0, a.port_retries) + 1):
+        try:
+            srv = ThreadingHTTPServer((a.host, port), Handler)
+            break
+        except OSError as e:
+            if e.errno not in (errno.EADDRINUSE, errno.EACCES) or port >= a.port + max(0, a.port_retries):
+                sys.exit(f"Cannot listen on {a.host}:{port}: {e.strerror or e}. Try another --port.")
+            print(f"The port {port} is already in use, trying another port.")
+    a.port = port
     print(f"Tomo5 Data Viewer {VERSION} on http://{'localhost' if a.host in ('127.0.0.1', '0.0.0.0') else a.host}:{a.port}")
     print(f"  Tested with {TESTED_WITH}")
     if EDIT:
@@ -752,9 +770,14 @@ def main():
     for n, r in ROOTS.items():
         print(f"  sharing  {n}  ->  {r}")
     exe = ffmpeg_path()
-    print("  movies   " + (f"encoded with {exe} ({ffmpeg_encoder(exe)[0]})" if exe else "ffmpeg not found (pass --ffmpeg PATH): the browser encodes them (.webm)"))
+    print("  movies   " + (f"encoded with {exe} ({ffmpeg_encoder(exe)[0]})" if exe else
+                             "ffmpeg off (--ffmpeg none): the browser encodes them (.webm)" if FFMPEG == "none" else
+                             "ffmpeg not found (pass --ffmpeg PATH): the browser encodes them (.webm)"))
+    missing = (["numpy"] if np is None else []) + ([] if exe or FFMPEG != "auto" else ["imageio-ffmpeg"])
     if np is None:
-        print("  numpy not found: large images are sent in full and shrunk in the browser.")
+        print("  numpy not found: large images are sent in full and shrunk in the browser (slower).")
+    if missing:
+        print(f"  To add what is missing (no admin rights needed):  pip install --user {' '.join(missing)}")
     # like Jupyter: tell the user how to reach this server from their own computer
     try:
         user = getpass.getuser()

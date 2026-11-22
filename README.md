@@ -6,7 +6,8 @@ A web-based interface to view Thermo Scientific Tomography 5 (Tomo5) data, in th
 It is one HTML page (`index.html`) plus a small Python server (`tomo5_viewer.py`) that serves your
 session folders to the browser, read-only.
 
-**Status: v0.5, atlas, search maps, batch positions and their exposures. Tested with Tomo5 5.26.**
+**Status: v0.8: atlas, search maps, batch positions, exposures, tilt series (Movie Player) and
+acquisition movies. Tested with Tomo5 5.26.**
 The session layout is described in [tomo5_data_struct.md](tomo5_data_struct.md).
 
 ## Quick start
@@ -31,11 +32,46 @@ Then open **http://localhost:8766** in Chrome, Edge or Firefox and:
    *Acquired* status and the camera field. Tilt series that sit in the session folder itself are
    used too. The choice is kept in the page address, so a reload keeps it.
 
+If the port is busy (someone else runs the viewer there), the next free port is used, as
+Jupyter does; the address and tunnel command it prints show which one.
+
 If the data is on a remote workstation, see
 [Running on a remote workstation](#running-on-a-remote-workstation-port-forwarding).
 
 The viewer always runs through `tomo5_viewer.py`: opening `index.html` directly only shows how to
 start the server.
+
+## Install
+
+Nothing to install for the viewer itself: it runs on plain Python 3.7+. Two optional extras make
+it better, and both install with pip, without admin rights:
+
+```bash
+pip install --user -r requirements.txt        # = numpy + imageio-ffmpeg
+```
+
+| Extra | What it adds | Without it |
+|---|---|---|
+| numpy | faster loading (the server shrinks images and sends 16-bit data); `--make-previews` | the browser reads full files and shrinks them (slower); no preview cache |
+| imageio-ffmpeg | its own ffmpeg, so movies are `.mp4` (H.264) | movies are encoded in the browser as `.webm` (Chrome, Edge) |
+
+When it starts, `tomo5_viewer.py` says what it found, and the pip command for anything missing.
+
+Other ways, if you prefer:
+
+- **A virtual environment**, to keep it separate:
+  ```bash
+  python3 -m venv ~/tomo5_env && ~/tomo5_env/bin/pip install -r requirements.txt
+  ~/tomo5_env/bin/python tomo5_viewer.py /path/to/sessions
+  ```
+- **Conda** (`environment.yml`, with ffmpeg from conda-forge):
+  ```bash
+  conda env create -f environment.yml && conda activate tomo5_viewer
+  python tomo5_viewer.py /path/to/sessions
+  ```
+- **A system ffmpeg** instead of imageio-ffmpeg: `sudo apt install ffmpeg` (Ubuntu/Debian),
+  `sudo dnf install ffmpeg` (Rocky/Alma/RHEL with EPEL and RPM Fusion), or `module load ffmpeg`
+  on a cluster. Any ffmpeg on the PATH is used; `--ffmpeg PATH` picks a specific one.
 
 ## Interface
 
@@ -191,10 +227,12 @@ or anywhere on its **Exposure** tab) and choose:
   1.3, …), then all the tilt series in a grid, playing in step by tilt angle.
 
 Both need the tilt series (**Tilt Series Folder…**). The dialog shows a preview you can play and
-scrub, with settings for titles, zoom, timing, playback order (as acquired from the `.mdoc`
-times, by angle, or start → lowest → highest → start), a low-pass for the tilt images (60 Å by
+scrub, with settings for titles, zoom, timing, playback order (start → lowest → highest →
+start by default, as acquired from the `.mdoc` times, or by angle), a low-pass for the tilt images (60 Å by
 default), size (720p, 1080p, 4K) and frame rate. **Make movie** encodes it with ffmpeg on the
 server (`.mp4`, H.264) and offers it for download; nothing is written into the data folders.
+The tilt series play **start → lowest → highest → start** by default (from the first acquired
+angle, usually 0°); *as acquired* and *by angle* are the other choices.
 Without ffmpeg the browser encodes a `.webm` (current Chrome or Edge). As a guide, a 12 s 720p
 parallel movie of three 41-image tilt series took about 16 s to render.
 
@@ -256,8 +294,11 @@ series and for a session of 100–200 series:
 | 10 GbE share (~1 GB/s) | ~2–3 s | ~4–10 min |
 | 1 GbE share (~110 MB/s) | ~13–15 s | ~25–50 min |
 
-It prints progress with the time left. More `--workers` help on fast local storage, not on a
-1 GbE share (use `--workers 1` there). Playing *live* in the viewer costs the same reading time,
+It prints progress with the time left and the speed of all workers together. If that total stays
+low (tens of MB/s), the disk or share sets the pace: on a network share try more `--workers`
+(4–8 help when each read waits on the network, e.g. sshfs, SMB, or NFS with small reads; they do
+not help when the link is simply full, or on spinning disks), or run it on the machine where the
+disks are local. Playing *live* in the viewer costs the same reading time,
 per series, each time the page is loaded.
 
 ### Making movies: summary
@@ -306,7 +347,9 @@ cd tomo5_data_viewer
 python3 tomo5_viewer.py /path/to/Tomo5/sessions --port 8766
 ```
 
-When it starts, the viewer prints the tunnel command to run on your own computer:
+When it starts, the viewer prints the tunnel command to run on your own computer. If the port is
+already taken on the workstation, it moves on to the next free one (like Jupyter) and the
+printed address and tunnel command use that port:
 
 ```text
 Tomo5 Data Viewer 0.1 on http://localhost:8766
@@ -358,13 +401,18 @@ another tunnel). Pick a different local port. Only the first number changes:
 ssh -N -L 9000:localhost:8766 user@workstation      # then open http://localhost:9000
 ```
 
-**Port already in use on the workstation** (someone else runs the viewer there). Start the viewer
-on another port and tunnel that one:
+**Port already in use on the workstation** (someone else runs the viewer there). The viewer
+takes the next free port by itself and prints, for example:
 
-```bash
-python3 tomo5_viewer.py /path/to/sessions --port 8770        # on the workstation
-ssh -N -L 8770:localhost:8770 user@workstation               # on your computer
+```text
+The port 8766 is already in use, trying another port.
+Tomo5 Data Viewer 0.8 on http://localhost:8767
+…
+  ssh -N -L 8767:localhost:8767 user@workstation
 ```
+
+Use the printed tunnel command. To choose the port yourself, pass `--port 8770`; to fail instead
+of moving on, pass `--port-retries 0`.
 
 **Through a gateway / login node** (the workstation is only reachable through another host):
 
@@ -403,7 +451,7 @@ workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
 | Problem | Fix |
 |---|---|
 | `bind [127.0.0.1]:8766: Address already in use` | A tunnel or program already uses that local port. Close the old tunnel (`pkill -f "ssh -N"` on macOS/Linux) or use another local port. |
-| `OSError: [Errno 98] Address already in use` on the workstation | The viewer is already running there, or another program uses the port. Use `--port 8770`. |
+| The viewer printed *The port 8766 is already in use, trying another port.* | Normal: it took the next free port. Use the address and tunnel command it printed. |
 | The browser says "connection refused" | The viewer is not running on the workstation, or the tunnel points to the wrong port. Check both terminals. |
 | `channel 2: open failed: connect failed` in the tunnel terminal | The tunnel works but nothing listens on that port on the workstation. Check the viewer's port. |
 | The page loads but **Open Session Data…** is missing | The page was opened as a file, not through `http://localhost:…`. |
@@ -411,7 +459,7 @@ workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
 ## Server options
 
 ```text
-python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--host 127.0.0.1] [--html index.html] [--verbose] [--ffmpeg auto]
+python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--port-retries 50] [--host 127.0.0.1] [--html index.html] [--verbose] [--ffmpeg auto]
 python3 tomo5_viewer.py --make-previews TILTDIR [--mp4] [--preview-out DIR] [--preview-size 512]
                         [--preview-fps 10] [--preview-lowpass 60] [--workers 2] [--force]
 ```
@@ -422,12 +470,14 @@ python3 tomo5_viewer.py --make-previews TILTDIR [--mp4] [--preview-out DIR] [--p
 - `--ffmpeg` sets the ffmpeg used for acquisition movies: a path, `auto` (default: look on the
   PATH, or the `imageio-ffmpeg` Python package) or `none` (the browser encodes them). Movies are
   encoded in a temporary folder that is deleted after an hour or when the server stops.
+- `--port` is where it listens (default 8766). If that port is busy, the next of up to
+  `--port-retries` (default 50) ports is used, as Jupyter does; `--port-retries 0` stops instead.
 - `--host 0.0.0.0` makes the server reachable from other machines. The default, `127.0.0.1`,
   with an SSH tunnel is safer.
 
 ## Requirements
 
-- Python 3.7+ (numpy optional, recommended).
-- ffmpeg (optional) for `.mp4` movies.
-- numpy for `--make-previews`.
+- Python 3.7+.
+- Optional (see [Install](#install)): numpy (faster; needed for `--make-previews`) and ffmpeg via
+  `imageio-ffmpeg`, conda or the system (for `.mp4` movies).
 - A current Chrome, Edge or Firefox.

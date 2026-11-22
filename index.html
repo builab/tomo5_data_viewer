@@ -2197,7 +2197,7 @@ $("#loadEdits").addEventListener("click", loadEdits);
    canvas and encoded by ffmpeg on the server (.mp4), or in this browser (.webm) without it. */
 const MV_KEY = "tomo5.movie";
 const MV_DEF = {size: "1920x1080", fps: 30, zoom: 0, tAtlas: 3, tToMap: 4, tMap: 2, tToTg: 4, hold: 2, tToView: 3, tPick: 0.8,
-  viewZoom: 1, tiltAxis: true, tiltFps: 10, order: "acq", schematic: true, lp: 60,
+  viewZoom: 1, tiltAxis: true, tiltFps: 10, order: "sweep", schematic: true, lp: 60, cfgV: 2,
   labels: [["Atlas", "Grid overview"], ["Search Map", ""], ["Acquisition position", ""], ["Tilt series", ""]],
   pLabels: [["Atlas", "Grid overview"], ["Search Map", ""], ["Target selection", ""], ["Tilt series acquisition", ""]]};
 let mv = null;
@@ -2207,6 +2207,7 @@ const rot2 = a => [[Math.cos(a), -Math.sin(a)], [Math.sin(a), Math.cos(a)]];
 const det2 = A => A[0][0] * A[1][1] - A[0][1] * A[1][0];
 function mvCfg(){
   let sv = {}; try{ sv = JSON.parse(localStorage.getItem(MV_KEY) || "{}") || {}; }catch{}
+  if((sv.cfgV || 1) < 2){ delete sv.order; sv.cfgV = 2; }       // new default order: start → lowest → highest → start
   const c = {...MV_DEF, ...sv, zoom: 0};
   const labs = key => MV_DEF[key].map((d, i) => Array.isArray(sv[key]?.[i]) ? [String(sv[key][i][0] ?? d[0]), String(sv[key][i][1] ?? d[1])] : d.slice());
   c.labels = labs("labels"); c.pLabels = labs("pLabels");
@@ -2295,13 +2296,17 @@ function mvOrder(secs, how, start){
 }
 function mvSchemeText(seq){
   if(!seq.length || !Number.isFinite(seq[0].a)) return `${seq.length} images`;
-  const lo = Math.min(...seq.map(x => x.a)), hi = Math.max(...seq.map(x => x.a));
-  // dose-symmetric: the angle changes sign most steps
-  let flips = 0; for(let i = 2; i < seq.length; i++) if(Math.sign(seq[i].a - seq[0].a) !== Math.sign(seq[i - 1].a - seq[0].a)) flips++;
-  if(flips > seq.length / 3) return `dose-symmetric from ${mvDeg(seq[0].a)}, ${mvDeg(lo)} to ${mvDeg(hi)}`;
-  const parts = [seq[0].a];
-  for(const v of [seq[Math.floor(seq.length / 2)].a, seq[seq.length - 1].a]) if(Math.abs(v - parts[parts.length - 1]) > 0.5) parts.push(v);
-  return parts.map(mvDeg).join(" → ");
+  // turning points of the angle: 0° → −60° → +60° → 0° for a sweep; many of them = dose-symmetric
+  const A = seq.map(x => x.a), pts = [A[0]];
+  let dir = 0;
+  for(let i = 1; i < A.length; i++){
+    const d = Math.sign(A[i] - A[i - 1]);
+    if(d && dir && d !== dir) pts.push(A[i - 1]);
+    if(d) dir = d;
+  }
+  if(A.length > 1 && A[A.length - 1] !== pts[pts.length - 1]) pts.push(A[A.length - 1]);
+  if(pts.length > 6) return `dose-symmetric from ${mvDeg(A[0])}, ${mvDeg(Math.min(...A))} to ${mvDeg(Math.max(...A))}`;
+  return pts.map(mvDeg).join(" → ");
 }
 const mvKey = (path, z, px) => `${path}|${z}|${px}`;
 async function mvTiltImg(ts, z, px){
@@ -2802,9 +2807,9 @@ function mvForm(){
     <h4>Tilt series playback</h4>
     <div class="mvfs">
       <label class="mvf full">Order<select id="mvOrder">
+        <option value="sweep" ${c.order === "sweep" ? "selected" : ""}>start → lowest → highest → start</option>
         <option value="acq" ${c.order === "acq" ? "selected" : ""}>as acquired (.mdoc time, else file order)</option>
-        <option value="angle" ${c.order === "angle" ? "selected" : ""}>by angle, lowest → highest</option>
-        <option value="sweep" ${c.order === "sweep" ? "selected" : ""}>start → lowest → highest → start</option></select></label>
+        <option value="angle" ${c.order === "angle" ? "selected" : ""}>by angle, lowest → highest</option></select></label>
       <label class="mvf">Images per second<input type="number" id="mvTfps" min="1" max="30" step="1" value="${c.tiltFps}"></label>
       <label class="mvf" title="Low-pass for the tilt images (Å); 0 = off">Low-pass (Å)<input type="number" id="mvLp" min="0" max="500" step="5" value="${c.lp}"></label>
       <label class="mvf">Lowest angle (°)<input type="number" id="mvLow" step="1" value="${c.low ?? -60}"></label>
