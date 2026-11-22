@@ -30,7 +30,7 @@ Example session (atlas acquired 2026-09-21, search maps 2026-09-24).
 │   ├── Position_1_Search.mrc
 │   ├── Position_1_Search.xml
 │   ├── Position_1_Tracking.mrc
-│   ├── Position_1_2_Exposure.mrc      # Extra position: exposure only
+│   ├── Position_1_2_Exposure.mrc      # Offaxis position: exposure only
 │   ├── Position_2_Exposure.mrc
 │   ├── Position_2_Search.mrc
 │   ├── Position_2_Search.xml
