@@ -25,6 +25,7 @@ reads the full file and shrinks it itself.
 import argparse
 import errno
 import getpass
+import ipaddress
 import json
 import os
 import re
@@ -58,6 +59,7 @@ EDIT_DIRS = {"batch": "Batch/Edit", "maps": "SearchMaps/Edit"}   # where edits g
 MAX_SAVE = 32 << 20             # largest save request accepted
 READ_ONLY = False               # --read-only: no tilt-series ratings either
 FFMPEG = "auto"                 # --ffmpeg: path, "auto" (look on PATH) or "none"
+ALLOWED_HOSTS = {"localhost", "127.0.0.1", "::1"}   # Host headers accepted (DNS-rebinding guard), plus IP addresses
 MOVIES = {}                     # id -> {"proc", "dir", "out", "log", "n", "t"}: movies being encoded by ffmpeg
 MOVIE_LOCK = threading.Lock()
 MOVIE_MAX_FRAMES = 30000        # about 16 minutes at 30 frames per second
@@ -67,19 +69,48 @@ SAVE_OK = {"batch": re.compile(r"^(BatchPositionsList\.xml|edit_session\.json)$"
            "maps": re.compile(r"^SearchMap_\d+_\d{8}_\d{6}/SearchMap\.dm$")}
 
 
+_FFMPEG_EXE = {}
+
+
 def ffmpeg_path():
+    """The ffmpeg to use (looked up once)."""
+    if FFMPEG in _FFMPEG_EXE:
+        return _FFMPEG_EXE[FFMPEG]
     if FFMPEG == "none":
-        return None
-    if FFMPEG != "auto":
-        return FFMPEG if os.path.isfile(FFMPEG) else shutil.which(FFMPEG)
-    exe = shutil.which("ffmpeg")
-    if not exe:
-        try:                                   # the copy that comes with the imageio-ffmpeg Python package
-            import imageio_ffmpeg
-            exe = imageio_ffmpeg.get_ffmpeg_exe()
-        except Exception:
-            exe = None
+        exe = None
+    elif FFMPEG != "auto":
+        exe = FFMPEG if os.path.isfile(FFMPEG) else shutil.which(FFMPEG)
+    else:
+        exe = shutil.which("ffmpeg")
+        if not exe:
+            try:                                   # the copy that comes with the imageio-ffmpeg Python package
+                import imageio_ffmpeg
+                exe = imageio_ffmpeg.get_ffmpeg_exe()
+            except Exception:
+                exe = None
+    _FFMPEG_EXE[FFMPEG] = exe
     return exe
+
+
+def host_ok(header):
+    """Accept requests addressed to this machine only: localhost, an IP address, this machine's
+    names or --allow-host names. A web page that points its own domain name at 127.0.0.1 (DNS
+    rebinding) sends that domain as Host and is refused."""
+    if not header:
+        return True                                # HTTP/1.0 clients
+    h = header.strip().lower()
+    if h.startswith("["):                          # [::1]:8766
+        h = h[1:h.find("]")] if "]" in h else h
+    elif h.count(":") == 1:
+        h = h.rsplit(":", 1)[0]
+    h = h.rstrip(".")
+    if h in ALLOWED_HOSTS or h.endswith(".localhost"):
+        return True
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        return False
 
 
 _ENCODER = {}
@@ -186,8 +217,12 @@ def read_binned_section(real, z, binf):
         raise ValueError(f"file is shorter than expected at section {z}")
     a = a.reshape(ny, nx)
     bw, bh = nx // binf, ny // binf
-    a = a[:bh * binf, :bw * binf].astype(np.float32).reshape(bh, binf, bw, binf).mean(axis=(1, 3))
-    return a.astype("<f4").tobytes(), bw, bh
+    if binf == 1:
+        return a.astype("<f4").tobytes(), bw, bh
+    # sum in integers for integer data (2–3× faster than converting the whole section to float first)
+    acc = np.int64 if dt.kind in "iu" else np.float64
+    a = a[:bh * binf, :bw * binf].reshape(bh, binf, bw * binf).sum(axis=1, dtype=acc).reshape(bh, bw, binf).sum(axis=2)
+    return (a / (binf * binf)).astype("<f4").tobytes(), bw, bh
 
 
 # ---------- tilt-series previews: python3 tomo5_viewer.py --make-previews TILTDIR ----------
@@ -505,7 +540,16 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(buf)
                 left -= len(buf)
 
+    def host_refused(self):
+        if host_ok(self.headers.get("Host")):
+            return False
+        self.send_err(403, f"Host '{self.headers.get('Host')}' is not allowed. Open the viewer as http://localhost:PORT, "
+                           "or start the server with --allow-host NAME.")
+        return True
+
     def do_POST(self):
+        if self.host_refused():
+            return
         url = urllib.parse.urlparse(self.path)
         try:
             if url.path.startswith("/api/movie/"):
@@ -621,6 +665,8 @@ class Handler(BaseHTTPRequestHandler):
         self.do_GET()
 
     def do_GET(self):
+        if self.host_refused():
+            return
         url = urllib.parse.urlparse(self.path)
         q = urllib.parse.parse_qs(url.query)
         arg = lambda k, d="": q.get(k, [d])[0]
@@ -779,6 +825,8 @@ def main():
     ap.add_argument("--port", type=int, default=8766, help="port to listen on (default 8766); if it is busy the next free one is used, like Jupyter")
     ap.add_argument("--port-retries", type=int, default=50, help="how many following ports to try when the port is busy (default 50; 0 = fail instead)")
     ap.add_argument("--host", default="127.0.0.1", help="127.0.0.1 (default, this computer only) or 0.0.0.0")
+    ap.add_argument("--allow-host", action="append", default=[], metavar="NAME",
+                    help="also accept requests addressed to this host name (e.g. behind a proxy); localhost, IP addresses and this machine's names are always accepted")
     ap.add_argument("--html", help="path to index.html (default: next to this script)")
     ap.add_argument("--verbose", action="store_true", help="log every request")
     ap.add_argument("--read-only", action="store_true", help=f"write nothing at all (by default the Movie Player saves star ratings to {PREVIEW_DIR}/tiltseries_ratings.xml)")
@@ -812,6 +860,13 @@ def main():
     EDIT = a.edit
     FFMPEG = a.ffmpeg
     READ_ONLY = a.read_only
+    names = {a.host} | set(a.allow_host)
+    for get in (socket.gethostname, socket.getfqdn):
+        try:
+            names.add(get())
+        except Exception:
+            pass
+    ALLOWED_HOSTS.update(n.lower().rstrip(".") for n in names if n)
     if READ_ONLY and EDIT:
         sys.exit("--read-only and --edit cannot be used together.")
     if a.make_previews:

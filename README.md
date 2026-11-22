@@ -474,12 +474,13 @@ workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
 | The viewer printed *The port 8766 is already in use, trying another port.* | Normal: it took the next free port. Use the address and tunnel command it printed. |
 | The browser says "connection refused" | The viewer is not running on the workstation, or the tunnel points to the wrong port. Check both terminals. |
 | `channel 2: open failed: connect failed` in the tunnel terminal | The tunnel works but nothing listens on that port on the workstation. Check the viewer's port. |
+| *Host '…' is not allowed* | Open the viewer as `http://localhost:PORT` (or by IP address). Behind a proxy with its own name, start the server with `--allow-host that.name`. |
 | The page loads but **Open Session Data…** is missing | The page was opened as a file, not through `http://localhost:…`. |
 
 ## Server options
 
 ```text
-python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--port-retries 50] [--host 127.0.0.1] [--html index.html] [--verbose] [--ffmpeg auto] [--read-only]
+python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--port-retries 50] [--host 127.0.0.1] [--allow-host NAME] [--html index.html] [--verbose] [--ffmpeg auto] [--read-only]
 python3 tomo5_viewer.py --make-previews TILTDIR [--mp4] [--preview-out DIR] [--preview-size 512]
                         [--preview-fps 10] [--preview-lowpass 60] [--workers 2] [--force]
 ```
@@ -495,6 +496,9 @@ python3 tomo5_viewer.py --make-previews TILTDIR [--mp4] [--preview-out DIR] [--p
   encoded in a temporary folder that is deleted after an hour or when the server stops.
 - `--port` is where it listens (default 8766). If that port is busy, the next of up to
   `--port-retries` (default 50) ports is used, as Jupyter does; `--port-retries 0` stops instead.
+- Requests must be addressed to `localhost`, an IP address or this machine's own name. This stops
+  a web page from reading your data through the viewer by pointing its own domain name at your
+  computer (DNS rebinding). Behind a proxy that uses another name, add `--allow-host NAME`.
 - `--host 0.0.0.0` makes the server reachable from other machines. The default, `127.0.0.1`,
   with an SSH tunnel is safer.
 
