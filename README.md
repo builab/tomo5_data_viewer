@@ -20,11 +20,6 @@ pip install --user -r requirements.txt        # numpy + imageio-ffmpeg (optional
 - **numpy**: faster loading; needed for `--make-previews`.
 - **imageio-ffmpeg**: brings its own ffmpeg, so movies are `.mp4` (without it the browser makes `.webm`).
 
-At startup the server says what is missing and the pip command to add it. Alternatives: a venv
-(`python3 -m venv ~/tomo5_env && ~/tomo5_env/bin/pip install -r requirements.txt`), conda
-(`conda env create -f environment.yml`), or any ffmpeg on the PATH (`apt install ffmpeg`,
-`module load ffmpeg`, or `--ffmpeg PATH`).
-
 ## Quick start
 
 ```bash
@@ -37,8 +32,22 @@ Give every folder you want to open (only those are reachable). Open the address 
 1. **Open Session Data…**: the session folder (with `Session.dm`, `Atlas/`, `SearchMaps/`, `Batch/`).
 2. **Tilt Series Folder…**: the folder with `Position_<N>[_<k>].mrc` and `.mdoc` (subfolders too).
 
-If the port is busy, the next free one is used. The data on another machine? See
-[Remote workstation](#remote-workstation).
+If the port is busy, the next free one is used.
+
+### Remote workstation
+
+If the data is on the server, run the viewer there and tunnel its port over SSH.
+
+```bash
+# on the workstation (tmux or nohup keep it running after you log out)
+python3 tomo5_viewer.py /path/to/sessions /path/to/tilt_series
+
+# on your local computer: the command the viewer printed, e.g.
+ssh -N -L 8766:localhost:8766 user@workstation
+```
+
+Then open **http://localhost:8766**.
+
 
 ## Using the viewer
 
@@ -88,18 +97,7 @@ python3 tomo5_viewer.py --make-previews /path/to/tilt_series --mp4
 
 This writes, per tilt series, into `tilt_series/tiltseries_movie/`: a 512 px 8-bit `.mrc`, a
 `.json` (angles, times, pixel size, source size/date) and, with `--mp4`, an `.mp4`. Up-to-date
-previews are skipped on the next run. Reading the stacks sets the time (~1.4 GB per 41-image
-series):
-
-| Storage | 100–200 series |
-|---|---|
-| Local disk / RAID | ~7–15 min |
-| 10 GbE share | ~4–10 min |
-| 1 GbE share | ~25–50 min |
-
-It prints the total speed of all workers. On a slow network share try `--workers 4`–`8`, or run it
-on the machine where the disks are local. Other options: `--preview-out DIR`, `--preview-size`,
-`--preview-fps`, `--preview-lowpass`, `--force`.
+previews are skipped on the next run.
 
 ## Acquisition movies
 
@@ -115,32 +113,6 @@ The dialog has a preview and settings (titles, zoom, timing, order: start → lo
 start by default, low-pass, 720p / 1080p / 4K). **Make movie** encodes with ffmpeg on the server
 (`.mp4`) or in the browser (`.webm`) and offers a download.
 
-## Remote workstation
-
-Run the viewer where the data is and tunnel its port over SSH.
-
-```bash
-# on the workstation (tmux or nohup keep it running after you log out)
-python3 tomo5_viewer.py /path/to/sessions /path/to/tilt_series
-
-# on your computer: the command the viewer printed, e.g.
-ssh -N -L 8766:localhost:8766 user@workstation
-```
-
-Then open **http://localhost:8766**. Variations:
-
-- Local port taken: `ssh -N -L 9000:localhost:8766 user@workstation`, then open `localhost:9000`.
-- Through a gateway: `ssh -N -J user@gateway -L 8766:localhost:8766 user@workstation`.
-- On a cluster node: start with `--host 0.0.0.0`, then `ssh -N -L 8766:node042:8766 user@login-node`.
-- `~/.ssh/config` with `LocalForward 8766 localhost:8766` makes it `ssh -N tomo5`; PuTTY:
-  *Connection › SSH › Tunnels*; VS Code Remote-SSH forwards it by itself.
-
-| Problem | Fix |
-|---|---|
-| `bind … Address already in use` (your computer) | An old tunnel uses the port: close it, or use another local port. |
-| "connection refused" / `channel 2: open failed` | The viewer is not running, or the tunnel points to the wrong port. |
-| *Host '…' is not allowed* | Open it as `http://localhost:PORT`; behind a proxy add `--allow-host NAME`. |
-| No **Open Session Data…** button | The page was opened as a file instead of through the server. |
 
 ## Server options
 
