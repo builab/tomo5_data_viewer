@@ -116,6 +116,7 @@ nav.tasks{background:var(--t-panel);border-right:3px solid var(--t-line);overflo
 .playbar input[type=checkbox]{accent-color:var(--t-sel);margin:0}
 .btn.small{padding:3px 9px;font-size:12px;color:var(--ink)}
 td.pv-ok{color:#39e639}
+#mapTable td .stars{letter-spacing:0;font-size:12.5px}
 .toolbar{display:flex;align-items:center;gap:6px;height:36px;margin:0 8px 8px;padding:0 6px;background:var(--t-bar)}
 .zbtn{width:24px;height:24px;border:none;border-radius:2px;background:#3a4f64;cursor:pointer;font-size:16px;line-height:1;display:grid;place-items:center}
 .zbtn:hover{background:#4a6278}
@@ -978,17 +979,17 @@ async function setTask(task){
 function renderMovieTable(){
   const tb = $("#mapTable tbody"), s = SESSION, list = movieList(), sel = curIndex();
   const so = STATE.sortRating ? " on" : "";
-  $("#tableHead").innerHTML = `<tr><th>Id</th><th title="Tilt angle of the position">∠</th><th>Status</th><th>Tilt series</th><th title="Preview made with --make-previews (in tiltseries_movie): starts at once">Preview</th><th class="sortable${so}" id="sortRating" title="Rating of the search map holding the position; click to sort highest first">★</th></tr>`;
+  $("#tableHead").innerHTML = `<tr><th>Id</th><th title="Tilt angle of the position">∠</th><th>Status</th><th>Tilt series</th><th title="Preview made with --make-previews (in tiltseries_movie): starts at once">Preview</th><th class="sortable${so}" id="sortRating" title="Star rating of each tilt series (saved in ${PREVIEW_DIR}/${TS_RATINGS}); click to sort highest first">★</th></tr>`;
   $("#mapEmpty").hidden = list.length > 0;
   $("#mapEmpty").textContent = !s ? "No session open." : "No tilt series found. Choose the Tilt Series Folder… at the top.";
-  const rating = m => m.p.map >= 0 ? s.maps[m.p.map]?.rating || 0 : 0;
+  const rating = m => m.a.tsRating || 0;
   const order = list.map((m, i) => i);
   if(STATE.sortRating) order.sort((a, b) => rating(list[b]) - rating(list[a]) || a - b);
   tb.innerHTML = order.map(i => { const m = list[i], p = m.p; return `<tr data-i="${i}" class="${i === sel ? "sel" : ""}">
     <td>${p.id}.${m.k}</td><td>${Number.isFinite(p.tilt) ? Math.round(p.tilt) : "–"}</td>
-    <td class="${p.status.startsWith("Acquired") ? "st-ok" : ""}">${p.status}</td><td>${esc(m.a.mrc.split("/").pop())}</td>
+    <td class="${p.status.startsWith("Acquired") ? "st-ok" : ""}">${p.status}</td><td title="${esc(m.a.mrc)}">${esc(m.a.mrc.split("/").pop().replace(/\.mrc$/i, ""))}</td>
     <td class="${m.a.preview ? "pv-ok" : ""}" title="${m.a.preview ? esc(m.a.preview.mrc) : "Live from the tilt series"}">${m.a.preview ? "✓" : "live"}</td>
-    <td>${rating(m) ? `<span class="stars">${rating(m)}★</span>` : "–"}</td></tr>`; }).join("");
+    <td>${tsStars(m)}</td></tr>`; }).join("");
   const row = tb.querySelector("tr.sel"); if(row) row.scrollIntoView({block: "nearest"});
 }
 function renderTable(){
@@ -1071,7 +1072,7 @@ function updateChrome(){
   $("#secSel").hidden = STATE.tab !== "exposure" || !ex || $("#secSel").options.length < 2;
   $("#subTitle").innerHTML = !s ? "" : STATE.tab === "atlas" ? (s.atlas ? `<b>${esc(s.atlas.stem)}</b>` : "")
     : STATE.tab === "search" ? (pos ? posTitle(pos) : "")
-    : STATE.tab === "exposure" ? (pos ? `<b>${pos.id}.${STATE.area} : ${esc(ex ? ex.path.split("/").pop() : pos.name)}</b><small>${ex ? ex.kind : ""}</small>` : "")
+    : STATE.tab === "exposure" ? (pos ? `<b>${pos.id}.${STATE.area} : ${esc(ex ? ex.path.split("/").pop() : pos.name)}</b><small>${ex ? ex.kind : ""}</small>${ex?.kind === "tilt series" ? tsStars({pi: STATE.pos, k: STATE.area, a: ex.area}) : ""}` : "")
     : map ? `${pos ? `<small>${esc(pos.name)} ·</small>` : ""}<b>${map.id} : ${esc(map.name)}</b>${stars(map.rating, canRate() && STATE.tab !== "atlas" ? STATE.sel : null)}` : "";
   $("#editHint").hidden = !canEditAreas();
   plChrome();
@@ -2075,7 +2076,7 @@ function setRating(mi, r){
   status(`${m.name}: ${m.rating ? `${m.rating} star${m.rating > 1 ? "s" : ""}` : "not rated"}. Save Session to keep it.`);
 }
 document.addEventListener("click", e => {
-  const st = e.target.closest(".stars.rate span[data-r]"); if(!st || !canRate()) return;
+  const st = e.target.closest(".stars.rate[data-map] span[data-r]"); if(!st || !canRate()) return;
   e.stopPropagation(); setRating(+st.parentElement.dataset.map, +st.dataset.r);
 }, true);
 document.addEventListener("click", e => {
@@ -2964,7 +2965,35 @@ function movieItems(item, head, pi, k){
    starts at once. Without it, each section is read from the tilt series and shrunk on the server
    (live: limited by how fast the server reads the full-size stack). Paused, the full-resolution
    section is shown again. The Movie Player task lists every tilt series of the session. */
-const PREVIEW_DIR = "tiltseries_movie", PLAY_PX = 512;
+const PREVIEW_DIR = "tiltseries_movie", PLAY_PX = 512, TS_RATINGS = "tiltseries_ratings.xml";
+// star rating of a tilt series: clickable unless the server is --read-only (saved at once, no Save needed)
+function tsStars(m){
+  const n = m.a.tsRating || 0;
+  if(SERVER?.readOnly || !SERVER) return stars(n);
+  return `<span class="stars rate" data-ts="${m.pi}:${m.k}" title="Rate this tilt series: click a star, or press 1–5 (0 clears); saved to ${PREVIEW_DIR}/${TS_RATINGS}">` +
+    [1, 2, 3, 4, 5].map(r => `<span data-r="${r}"${r > n ? ' class="off"' : ""}>${r <= n ? "★" : "☆"}</span>`).join("") + "</span>";
+}
+async function rateTilt(pi, k, r, toggle = true){
+  const s = SESSION, p = s?.positions[pi], a = p?.areas.find(x => x.k === k);
+  if(!a?.mrc || SERVER?.readOnly) return;
+  const old = a.tsRating || 0, want = toggle && old === r ? 0 : r, name = a.mrc.split("/").pop();
+  if(want === old) return;
+  a.tsRating = want; renderTable(); updateChrome();
+  try{
+    const res = await fetch("api/rate-tilt", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({base: s.tsRateBase, name, rating: want})});
+    const j = await res.json(); if(!res.ok) throw new Error(j.error || res.statusText);
+    status(`${p.id}.${k} (${name}): ${want ? `${want} star${want > 1 ? "s" : ""}` : "not rated"} · saved in ${j.file}`);
+  }catch(e){
+    a.tsRating = old; renderTable(); updateChrome();
+    status(`Could not save the rating: ${e.message}`, true);
+  }
+}
+document.addEventListener("click", e => {
+  const st = e.target.closest(".stars.rate[data-ts] span[data-r]"); if(!st) return;
+  e.stopPropagation(); e.preventDefault();
+  const [pi, k] = st.parentElement.dataset.ts.split(":").map(Number);
+  rateTilt(pi, k, +st.dataset.r);
+}, true);
 const PL = {key: null, frames: [], order: [], idx: 0, playing: false, loading: false, timer: null, src: "", meta: null};
 // the tilt series of the session (each area with a stack), in position order
 function movieList(){ return SESSION ? SESSION.positions.flatMap((p, pi) => p.areas.filter(a => a.mrc).map(a => ({pi, k: a.k, p, a}))) : []; }
@@ -2974,16 +3003,26 @@ const curIndex = () => STATE.task === "batch" ? STATE.pos : STATE.task === "movi
 // previews made by --make-previews, in <tilt folder>/tiltseries_movie and <session>/tiltseries_movie
 async function findPreviews(s){
   let n = 0;
-  for(const p of s.positions) for(const a of p.areas) a.preview = null;
+  for(const p of s.positions) for(const a of p.areas){ a.preview = null; a.tsRating = 0; }
   const dirs = [];
+  s.tsRateBase = null;
   for(const d of new Set([s.tilt?.path, s.path].filter(Boolean))){           // only folders that exist (no 404s)
     const l = await SRC.list(d).catch(() => null), sub = l?.dirs.find(x => x.name.toLowerCase() === PREVIEW_DIR);
-    if(sub) dirs.push(join(d, sub.name));
+    if(sub) dirs.push([d, join(d, sub.name)]);
   }
-  for(const dir of dirs){
+  const byName = new Map(s.positions.flatMap(p => p.areas.filter(a => a.mrc).map(a => [a.mrc.split("/").pop(), a])));
+  for(const [base, dir] of dirs){
     const l = await SRC.list(dir).catch(() => null);
     if(!l) continue;
     const names = new Set(l.files.map(f => f.name));
+    // star ratings of the tilt series (Movie Player): tiltseries_movie/tiltseries_ratings.xml
+    if(names.has(TS_RATINGS) && !s.tsRateBase){
+      s.tsRateBase = base;
+      try{
+        const doc = new DOMParser().parseFromString(await SRC.text(join(dir, TS_RATINGS)), "application/xml");
+        for(const el of doc.querySelectorAll("TiltSeries")){ const a = byName.get(el.getAttribute("name")), r = +el.getAttribute("rating"); if(a && r >= 1 && r <= 5) a.tsRating = r; }
+      }catch(e){ console.warn("ratings", e); }
+    }
     const byId = new Map(s.positions.map(p => [p.id, p]));
     for(const f of l.files){
       const m = f.name.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i), stem = f.name.slice(0, -4);
@@ -2994,6 +3033,8 @@ async function findPreviews(s){
       n++;
     }
   }
+  // new ratings go next to the ratings file, else next to the previews, else into the tilt-series folder
+  s.tsRateBase = s.tsRateBase || dirs[0]?.[0] || s.tilt?.path || s.path;
   s.previews = n;
   return n;
 }
@@ -3422,6 +3463,9 @@ addEventListener("keydown", e => {
   else if(e.key === "ArrowDown" || e.key === "ArrowRight"){ if(SESSION){ e.preventDefault(); select(curIndex() + 1); } }
   else if(e.key === "ArrowUp" || e.key === "ArrowLeft"){ if(SESSION){ e.preventDefault(); select(curIndex() - 1); } }
   else if(e.key === " " && !$("#playBar").hidden){ e.preventDefault(); $("#plPlay").click(); }
+  else if(/^[0-5]$/.test(e.key) && STATE.tab === "exposure" && plCurrent() && !SERVER?.readOnly){
+    e.preventDefault(); rateTilt(STATE.pos, STATE.area, +e.key, false);   // 1–5 set, 0 clears
+  }
 });
 
 

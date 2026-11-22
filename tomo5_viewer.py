@@ -3,7 +3,8 @@
 tomo5_viewer.py - serve Tomo5 session folders to the Tomo5 Data Viewer (index.html).
 
 The viewer page (index.html) must sit next to this script, or be given with --html.
-Only the folders you list are reachable, and the server never writes into them.
+Only the folders you list are reachable. The server writes only the Movie Player's star ratings
+(tiltseries_movie/tiltseries_ratings.xml; --read-only turns that off) and, with --edit, edits.
 Acquisition movies are encoded by ffmpeg on this machine (if installed) in a temporary
 folder and downloaded from there.
 
@@ -55,6 +56,7 @@ VERBOSE = False
 EDIT = False                    # --edit: allow saving edits (experimental)
 EDIT_DIRS = {"batch": "Batch/Edit", "maps": "SearchMaps/Edit"}   # where edits go, relative to the session folder
 MAX_SAVE = 32 << 20             # largest save request accepted
+READ_ONLY = False               # --read-only: no tilt-series ratings either
 FFMPEG = "auto"                 # --ffmpeg: path, "auto" (look on PATH) or "none"
 MOVIES = {}                     # id -> {"proc", "dir", "out", "log", "n", "t"}: movies being encoded by ffmpeg
 MOVIE_LOCK = threading.Lock()
@@ -382,6 +384,67 @@ def make_previews(a):
           + (f"; failed: {', '.join(fails)}" if fails else ""))
 
 
+# ---------- tilt-series star ratings (Movie Player): <base>/tiltseries_movie/tiltseries_ratings.xml ----------
+RATINGS_FILE = "tiltseries_ratings.xml"
+RATE_LOCK = threading.Lock()
+
+
+def read_tilt_ratings(path):
+    """{name: {"rating": n, "updated": "..."}} from a ratings file (missing file = none)."""
+    import xml.etree.ElementTree as ET
+    if not os.path.isfile(path):
+        return {}
+    out = {}
+    for el in ET.parse(path).getroot().iter("TiltSeries"):
+        try:
+            r = int(el.get("rating", "0"))
+        except ValueError:
+            continue
+        if el.get("name") and 0 < r <= 5:
+            out[el.get("name")] = {"rating": r, "updated": el.get("updated", "")}
+    return out
+
+
+def rate_tilt(req):
+    """Set (or clear, rating 0) the star rating of one tilt series. Writes only
+    <base>/tiltseries_movie/tiltseries_ratings.xml, where base is a shared folder."""
+    from xml.sax.saxutils import quoteattr
+    base, _ = resolve(req["base"])
+    if not base or not os.path.isdir(base):
+        raise ValueError("unknown folder")
+    name = os.path.basename(str(req["name"]))
+    m = TS_RE.match(name)
+    if not m:
+        raise ValueError("not a tilt series name (Position_N[_k].mrc)")
+    rating = int(req["rating"])
+    if not 0 <= rating <= 5:
+        raise ValueError("rating must be 0 to 5")
+    folder = os.path.join(base, PREVIEW_DIR)
+    path = os.path.join(folder, RATINGS_FILE)
+    with RATE_LOCK:                                   # read, change, write: one at a time
+        os.makedirs(folder, exist_ok=True)
+        cur = read_tilt_ratings(path)
+        now = time.strftime("%Y-%m-%dT%H:%M:%S")
+        if rating:
+            cur[name] = {"rating": rating, "updated": now}
+        else:
+            cur.pop(name, None)
+        key = lambda n: tuple(int(x or 1) for x in TS_RE.match(n).groups()) if TS_RE.match(n) else (1 << 30, 0)
+        lines = ['<?xml version="1.0" encoding="utf-8"?>',
+                 f'<TiltSeriesRatings tool="tomo5_viewer.py {VERSION}" updated="{now}">',
+                 "  <!-- Star ratings (1-5) of tilt series, set in the Tomo5 Data Viewer's Movie Player -->"]
+        for n in sorted(cur, key=key):
+            g = TS_RE.match(n).groups() if TS_RE.match(n) else (None, None)
+            pos = f' position="{g[0]}" area="{g[1] or 1}"' if g[0] else ""
+            lines.append(f'  <TiltSeries name={quoteattr(n)}{pos} rating="{cur[n]["rating"]}" updated={quoteattr(cur[n]["updated"])} />')
+        lines.append("</TiltSeriesRatings>")
+        tmp = path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        os.replace(tmp, path)
+    return {"ratings": {n: v["rating"] for n, v in cur.items()}, "file": f"{req['base'].rstrip('/')}/{PREVIEW_DIR}/{RATINGS_FILE}"}
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = f"tomo5Viewer/{VERSION}"
 
@@ -447,6 +510,13 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if url.path.startswith("/api/movie/"):
                 return self.api_movie(url.path[len("/api/movie/"):], urllib.parse.parse_qs(url.query))
+            if url.path == "/api/rate-tilt":
+                if READ_ONLY:
+                    return self.send_err(403, "Ratings are off: the server was started with --read-only.")
+                if not (self.headers.get("Content-Type") or "").lower().startswith("application/json"):
+                    return self.send_err(415, "Send application/json.")
+                req = json.loads((self.body(1 << 16) or b"{}").decode("utf-8"))
+                return self.send_json(rate_tilt(req))
             if url.path != "/api/save":
                 return self.send_err(404, "Unknown address.")
             if not EDIT:
@@ -459,7 +529,7 @@ class Handler(BaseHTTPRequestHandler):
         except PermissionError as e:
             return self.send_err(403, str(e))
         except (ValueError, KeyError, TypeError) as e:
-            return self.send_err(400, f"Bad save request: {e}")
+            return self.send_err(400, f"Bad request: {e}")
         except Exception as e:
             return self.send_err(500, f"{type(e).__name__}: {e}")
 
@@ -562,7 +632,8 @@ class Handler(BaseHTTPRequestHandler):
             if url.path == "/api/info":
                 return self.send_json({"app": APP, "version": VERSION, "numpy": np is not None,
                                        "roots": [{"name": n, "path": r} for n, r in ROOTS.items()],
-                                       "edit": EDIT, "editDirs": EDIT_DIRS, "ffmpeg": bool(ffmpeg_path())})
+                                       "edit": EDIT, "editDirs": EDIT_DIRS, "ffmpeg": bool(ffmpeg_path()),
+                                       "readOnly": READ_ONLY, "ratingsFile": f"{PREVIEW_DIR}/{RATINGS_FILE}"})
             if url.path == "/api/list":
                 return self.api_list(arg("path"))
             if url.path == "/api/section":
@@ -702,14 +773,15 @@ def save_edits(req):
 
 
 def main():
-    global HTML_PATH, VERBOSE, EDIT, FFMPEG
+    global HTML_PATH, VERBOSE, EDIT, FFMPEG, READ_ONLY
     ap = argparse.ArgumentParser(description="Serve Tomo5 session folders to the Tomo5 Data Viewer.")
-    ap.add_argument("roots", nargs="*", help="folders to share (read-only)")
+    ap.add_argument("roots", nargs="*", help="folders to share")
     ap.add_argument("--port", type=int, default=8766, help="port to listen on (default 8766); if it is busy the next free one is used, like Jupyter")
     ap.add_argument("--port-retries", type=int, default=50, help="how many following ports to try when the port is busy (default 50; 0 = fail instead)")
     ap.add_argument("--host", default="127.0.0.1", help="127.0.0.1 (default, this computer only) or 0.0.0.0")
     ap.add_argument("--html", help="path to index.html (default: next to this script)")
     ap.add_argument("--verbose", action="store_true", help="log every request")
+    ap.add_argument("--read-only", action="store_true", help=f"write nothing at all (by default the Movie Player saves star ratings to {PREVIEW_DIR}/tiltseries_ratings.xml)")
     pv = ap.add_argument_group("tilt-series previews (run once, then the Movie Player starts instantly)")
     pv.add_argument("--make-previews", metavar="TILTDIR", help=f"make 8-bit previews of every Position_N[_k].mrc in TILTDIR into TILTDIR/{PREVIEW_DIR}, then exit")
     pv.add_argument("--preview-out", metavar="DIR", help=f"where the previews go (default: TILTDIR/{PREVIEW_DIR})")
@@ -739,6 +811,9 @@ def main():
     VERBOSE = a.verbose
     EDIT = a.edit
     FFMPEG = a.ffmpeg
+    READ_ONLY = a.read_only
+    if READ_ONLY and EDIT:
+        sys.exit("--read-only and --edit cannot be used together.")
     if a.make_previews:
         return make_previews(a)
     if not a.roots:
@@ -769,6 +844,8 @@ def main():
               f"star ratings to <session>/{EDIT_DIRS['maps']}; Tomo5's files are not changed.")
     for n, r in ROOTS.items():
         print(f"  sharing  {n}  ->  {r}")
+    print("  ratings  " + ("off (--read-only): nothing is written" if READ_ONLY else
+                           f"tilt-series stars are saved to {PREVIEW_DIR}/{RATINGS_FILE} (next to the tilt series); nothing else is written"))
     exe = ffmpeg_path()
     print("  movies   " + (f"encoded with {exe} ({ffmpeg_encoder(exe)[0]})" if exe else
                              "ffmpeg off (--ffmpeg none): the browser encodes them (.webm)" if FFMPEG == "none" else

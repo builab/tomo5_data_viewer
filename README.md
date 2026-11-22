@@ -4,7 +4,8 @@ A web-based interface to view Thermo Scientific Tomography 5 (Tomo5) data, in th
 [SerialEM Grid Viewer](https://github.com/builab/serialEM_grid_viewer).
 
 It is one HTML page (`index.html`) plus a small Python server (`tomo5_viewer.py`) that serves your
-session folders to the browser, read-only.
+session folders to the browser. It does not change Tomo5's files; the only thing it writes is the
+Movie Player's star ratings, into `tiltseries_movie/` (see below).
 
 **Status: v0.8: atlas, search maps, batch positions, exposures, tilt series (Movie Player) and
 acquisition movies. Tested with Tomo5 5.26.**
@@ -250,6 +251,11 @@ the image (the same bar appears in the Exposure tab of Batch Positions):
   list, for going through a whole session. Arrow keys step through the list.
 - Contrast and the low-pass filter (right panel) apply while it plays; one contrast is used for
   the whole series.
+- **★ Star rating** of each tilt series, at the top right of the image (next to its name) and in
+  the ★ column of the table, or with the keys **1–5** (**0** clears) while it plays. It works
+  without `--edit` and is saved at once (no Save button) in
+  `tiltseries_movie/tiltseries_ratings.xml`. Click the ★ header to sort the best first; with
+  *next series at end* and the number keys you can go through a whole session in one pass.
 - **Export movie** saves the series as it plays (order, contrast, low-pass, angle label) as an
   `.mp4` (ffmpeg on the server) or `.webm` (in the browser), downloaded to your computer.
 
@@ -274,6 +280,20 @@ For every `Position_N[_k].mrc` in the folder (and one level of subfolders) this 
 | `Position_N[_k].mrc` | the tilt series binned to ≤ 512 px, 8-bit (0.5–99.5 % of the whole stack), pixel size in the header, sections in the original order (≈ 10 MB for 41 images) |
 | `Position_N[_k].json` | tilt angles and times (from the `.mdoc`), pixel size, binning, and the size and date of the source, to tell when it is out of date |
 | `Position_N[_k].mp4` | with `--mp4`: a movie of the series by angle, 60 Å low-pass, 10 fps (≈ 1–4 MB), to share or play anywhere |
+
+The same folder holds **`tiltseries_ratings.xml`**, the star ratings set in the Movie Player
+(written by the viewer, also when there are no previews yet; `--make-previews` never touches it):
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<TiltSeriesRatings tool="tomo5_viewer.py 0.8" updated="2026-11-21T21:09:28">
+  <TiltSeries name="Position_1_2.mrc" position="1" area="2" rating="4" updated="2026-11-21T21:09:22" />
+  <TiltSeries name="Position_1_3.mrc" position="1" area="3" rating="5" updated="2026-11-21T21:09:23" />
+</TiltSeriesRatings>
+```
+
+It is plain XML, easy to read from a script, e.g. to pick the 4- and 5-star tilt series for
+reconstruction.
 
 Run it again after more tilt series are acquired: previews that are up to date are skipped
 (`--force` remakes them). The viewer finds the folder by itself when you choose the **Tilt
@@ -459,12 +479,15 @@ workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
 ## Server options
 
 ```text
-python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--port-retries 50] [--host 127.0.0.1] [--html index.html] [--verbose] [--ffmpeg auto]
+python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--port-retries 50] [--host 127.0.0.1] [--html index.html] [--verbose] [--ffmpeg auto] [--read-only]
 python3 tomo5_viewer.py --make-previews TILTDIR [--mp4] [--preview-out DIR] [--preview-size 512]
                         [--preview-fps 10] [--preview-lowpass 60] [--workers 2] [--force]
 ```
 
-- Only the listed folders are reachable, and the server never writes into them.
+- Only the listed folders are reachable. The server never changes Tomo5's files. It writes only
+  the Movie Player's star ratings (`tiltseries_movie/tiltseries_ratings.xml`, next to the tilt
+  series) and, in the experimental edit mode, the edit folders.
+- `--read-only` writes nothing at all: the star ratings are shown but cannot be changed.
   (`--make-previews` is a separate command you run yourself; it writes only into
   `TILTDIR/tiltseries_movie/` or `--preview-out`, and then exits.)
 - `--ffmpeg` sets the ffmpeg used for acquisition movies: a path, `auto` (default: look on the

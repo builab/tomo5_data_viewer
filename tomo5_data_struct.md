@@ -147,6 +147,7 @@ session folder):
 | `Position_<N>[_<k>].mrc` | the tilt series binned to ≤ 512 px, 8-bit MRC (mode 0), sections in the original order |
 | `Position_<N>[_<k>].json` | `angles`, `times` (from the `.mdoc`), `pixelA`, `bin`, `shape`, `sourceShape`, `sourceSize`, `sourceMtime`, `range` |
 | `Position_<N>[_<k>].mp4` | optional (`--mp4`): the series by angle, low-passed |
+| `tiltseries_ratings.xml` | star ratings (1–5) set in the viewer's Movie Player: `<TiltSeries name="Position_1_2.mrc" position="1" area="2" rating="4" updated="…" />` per rated tilt series |
 
 ## Thumbnails/
 
