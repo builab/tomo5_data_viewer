@@ -1,0 +1,6 @@
+# Optional, but recommended. The viewer itself runs on plain Python 3.7+.
+#   numpy           faster loading (binning on the server); needed for --make-previews
+#   imageio-ffmpeg  brings its own ffmpeg, for .mp4 movies (else the browser makes .webm)
+# Install without admin rights:  pip install --user -r requirements.txt
+numpy
+imageio-ffmpeg

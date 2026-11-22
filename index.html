@@ -108,6 +108,15 @@ nav.tasks{background:var(--t-panel);border-right:3px solid var(--t-line);overflo
 #welcome h2{margin:0 0 8px;font:600 17px var(--font-body)}
 #welcome p{margin:0 0 10px;color:var(--t-muted)}
 #welcome code{font:12px var(--font-mono);color:var(--t-ink)}
+.playbar{display:flex;align-items:center;gap:10px;height:34px;margin:6px 8px 0;padding:0 8px;background:var(--t-bar);font-size:12px;color:var(--t-muted)}
+.playbar #plPos{flex:1;min-width:80px;accent-color:var(--t-sel)}
+.playbar #plInfo{font:12px var(--font-mono);color:var(--t-ink);white-space:nowrap;min-width:150px}
+.playbar select{background:var(--t-tab);border:1px solid var(--t-line);border-radius:3px;padding:1px 4px;font-size:12px;color:var(--t-ink)}
+.playbar label{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.playbar input[type=checkbox]{accent-color:var(--t-sel);margin:0}
+.btn.small{padding:3px 9px;font-size:12px;color:var(--ink)}
+td.pv-ok{color:#39e639}
+#mapTable td .stars{letter-spacing:0;font-size:12.5px}
 .toolbar{display:flex;align-items:center;gap:6px;height:36px;margin:0 8px 8px;padding:0 6px;background:var(--t-bar)}
 .zbtn{width:24px;height:24px;border:none;border-radius:2px;background:#3a4f64;cursor:pointer;font-size:16px;line-height:1;display:grid;place-items:center}
 .zbtn:hover{background:#4a6278}
@@ -224,7 +233,7 @@ dialog.mv{width:min(1240px,calc(100% - 24px));max-height:calc(100vh - 24px)}
 <body>
 <div class="app">
   <header>
-    <h1>Tomo5 Data Viewer<small>v0.7</small></h1>
+    <h1>Tomo5 Data Viewer<small>v0.8</small></h1>
     <div class="opens">
       <button class="btn primary" id="openServer" hidden title="The session folder: Session.dm, Atlas/, SearchMaps/, Batch/, Thumbnails/">Open Session Data…</button>
       <button class="btn" id="openTilt" disabled hidden title="The folder with the tilt series Position_N[_k].mrc and their .mdoc files">Tilt Series Folder…</button>
@@ -247,7 +256,7 @@ dialog.mv{width:min(1240px,calc(100% - 24px));max-height:calc(100vh - 24px)}
     <div id="taskList">
       <button class="task active" data-task="searchMaps">Search Maps<span class="cnt" id="cntMaps">–</span></button>
       <button class="task" data-task="batch">Batch Positions<span class="cnt" id="cntBatch">–</span></button>
-      <button class="task soon" data-task="movie" title="Coming later">Movie Player</button>
+      <button class="task" data-task="movie" title="Every tilt series of the session, to play one after another">Movie Player<span class="cnt" id="cntMovie">–</span></button>
     </div>
   </nav>
 
@@ -283,6 +292,15 @@ dialog.mv{width:min(1240px,calc(100% - 24px));max-height:calc(100vh - 24px)}
           <p id="welcomeLocal">This page needs the viewer server. Start it on the computer with the data, e.g. <code>python3 tomo5_viewer.py /path/to/sessions /path/to/tilt_series</code>, then open <code>http://localhost:8766</code>.</p>
         </div>
       </div>
+    </div>
+    <div class="playbar" id="playBar" hidden>
+      <button class="btn small" id="plPlay" title="Play the tilt series (Space)">▶ Play</button>
+      <input type="range" id="plPos" min="0" max="0" value="0" aria-label="Frame">
+      <span id="plInfo"></span>
+      <label title="Frames per second">fps <select id="plFps"><option>5</option><option selected>10</option><option>15</option><option>20</option><option>30</option></select></label>
+      <label>Order <select id="plOrder"><option value="acq">as acquired</option><option value="angle">by angle</option></select></label>
+      <label id="plNextWrap" title="At the end, go on with the next tilt series in the list"><input type="checkbox" id="plNext"> next series at end</label>
+      <button class="btn small" id="plExport" title="Save this tilt series as a movie (.mp4 with ffmpeg on the server, else .webm), as it plays: order, contrast, low-pass">Export movie</button>
     </div>
     <div class="toolbar">
       <button class="zbtn" id="zoomOut" title="Zoom out (−)">−</button>
@@ -601,7 +619,7 @@ async function openSession(src, path, want = {}){
   setDirty(false); EDIT_STATE.loaded = false;
   SRC = src; SESSION = null; CACHE.clear();
   $("#tiltInfo").textContent = ""; $("#openTilt").disabled = true;
-  STATE.tab = "atlas"; STATE.sel = -1; STATE.pos = -1; STATE.task = want.task === "batch" ? "batch" : "searchMaps";
+  STATE.tab = "atlas"; STATE.sel = -1; STATE.pos = -1; STATE.task = want.task === "batch" || want.task === "movie" ? want.task : "searchMaps";
   showScene(null);
   status(`Opening ${path || "folder"}…`);
   try{
@@ -674,6 +692,7 @@ async function openSession(src, path, want = {}){
       if(s.editSaved) setTimeout(() => status(`Saved edits found (${(s.editSaved.saved || "").replace("T", " ").slice(0, 16)}). Click Load Session to continue them.`), 1500);
     }
     if(want.tilt) await setTiltFolder(want.tilt, true);
+    else await findPreviews(s).catch(() => 0);          // tilt series kept in the session folder
     fillTilts();
 
     const pick = want.map ? s.maps.findIndex(m => m.id === +want.map) : -1;
@@ -681,8 +700,8 @@ async function openSession(src, path, want = {}){
     const pp = want.pos ? s.positions.findIndex(p => p.id === +want.pos) : -1;
     STATE.area = +want.area || 1;
     STATE.pos = pp >= 0 ? pp : s.positions.length ? 0 : -1;
-    if(STATE.task === "batch" && !s.positions.length) STATE.task = "searchMaps";
-    if(STATE.task === "batch" && STATE.pos >= 0){ const mi = await mapOfPosition(s.positions[STATE.pos]); if(mi >= 0) STATE.sel = mi; }
+    if(posTask() && !s.positions.length) STATE.task = "searchMaps";
+    if(posTask() && STATE.pos >= 0){ const mi = await mapOfPosition(s.positions[STATE.pos]); if(mi >= 0) STATE.sel = mi; }
     renderTasks(); renderTable();
     const tabs = ["atlas", "overview", "searchmap", "search", "exposure"];
     if(want.tab === "exposure" && !exposureOf(s.positions[STATE.pos], STATE.area)) want.tab = "search";
@@ -771,7 +790,7 @@ async function setTiltFolder(path, quiet = false){
   try{
     const top = await SRC.list(path);
     const entries = top.files.map(f => ({...f, path: join(path, f.name)}));
-    const subs = top.dirs.slice(0, 300);
+    const subs = top.dirs.filter(d => d.name.toLowerCase() !== PREVIEW_DIR).slice(0, 300);
     const lists = await Promise.all(subs.map(d => SRC.list(join(path, d.name)).catch(() => null)));
     lists.forEach((l, i) => l && entries.push(...l.files.map(f => ({...f, path: join(path, `${subs[i].name}/${f.name}`)}))));
     let stacks = 0, mdocs = 0;
@@ -788,13 +807,16 @@ async function setTiltFolder(path, quiet = false){
       let a = p.areas.find(a => a.k === k);
       if(!a){ a = {k, exposure: null, mrc: null, mdoc: null}; p.areas.push(a); p.areas.sort((x, y) => x.k - y.k); }
       a[kind] = f.path; a.mrcFrom = "tilt";
+      if(kind === "mrc") a.mrcSize = f.size;
       kind === "mrc" ? stacks++ : mdocs++;
     }
     for(const p of s.positions) positionStatus(p);
     s.tilt = {path, stacks, mdocs};
+    const pv = await findPreviews(s);
     $("#tiltInfo").textContent = `${path.split("/").pop()}: ${stacks} tilt series`;
     $("#tiltInfo").title = path; $("#tiltInfo").classList.toggle("ok", stacks > 0);
-    if(!quiet || !stacks) status(stacks ? `Tilt series folder: ${stacks} tilt series, ${mdocs} .mdoc.` : "No Position_N[_k].mrc tilt series found in that folder.", !stacks);
+    $("#tiltInfo").textContent += pv ? ` · ${pv} preview${pv === 1 ? "" : "s"}` : "";
+    if(!quiet || !stacks) status(stacks ? `Tilt series folder: ${stacks} tilt series, ${mdocs} .mdoc${pv ? `, ${pv} previews in ${PREVIEW_DIR}` : `; no previews (make them with --make-previews)`}.` : "No Position_N[_k].mrc tilt series found in that folder.", !stacks);
     s.overlay = null; await overlaySizes(s);
     renderTasks(); renderTable(); updateChrome();
     if(STATE.tab === "exposure" || STATE.tab === "search") await loadScene();
@@ -929,21 +951,49 @@ function renderTasks(){
   const s = SESSION;
   $("#cntMaps").textContent = s ? `${s.maps.filter(m => m.status === "Acquired").length} / ${s.maps.length}` : "–";
   $("#cntBatch").textContent = s ? `${s.positions.filter(p => p.status === "Acquired").length} / ${s.positions.length}` : "–";
+  $("#cntMovie").textContent = s ? `${movieList().length}` : "–";
   for(const b of $$(".task[data-task]")) b.classList.toggle("active", b.dataset.task === STATE.task);
 }
 async function setTask(task){
   if(!SESSION || task === STATE.task) return;
   STATE.task = task;
-  if(task === "batch"){
+  if(task === "movie"){
+    // keep the selected area if it has a tilt series, else the first tilt series
+    const list = movieList();
+    if(list.length && curIndex() < 0){ STATE.pos = list[0].pi; STATE.area = list[0].k; }
+  }
+  if(task === "batch" || task === "movie"){
     const p = SESSION.positions[STATE.pos];
     if(p){ const mi = await mapOfPosition(p); if(mi >= 0) STATE.sel = mi; }
   }
   renderTasks(); renderTable();
+  if(task === "movie"){
+    const p = SESSION.positions[STATE.pos];
+    if(!movieList().length) status("No tilt series yet: choose the Tilt Series Folder… at the top.", true);
+    return setTab(p && exposureOf(p, STATE.area) ? "exposure" : p ? "search" : STATE.tab);
+  }
   const tab = task === "batch" ? (SESSION.positions.length ? "search" : STATE.tab) : (["search", "exposure"].includes(STATE.tab) ? (SESSION.atlas ? "atlas" : "overview") : STATE.tab);
   await setTab(tab);
 }
 
+function renderMovieTable(){
+  const tb = $("#mapTable tbody"), s = SESSION, list = movieList(), sel = curIndex();
+  const so = STATE.sortRating ? " on" : "";
+  $("#tableHead").innerHTML = `<tr><th>Id</th><th title="Tilt angle of the position">∠</th><th>Status</th><th>Tilt series</th><th title="Preview made with --make-previews (in tiltseries_movie): starts at once">Preview</th><th class="sortable${so}" id="sortRating" title="Star rating of each tilt series (saved in ${PREVIEW_DIR}/${TS_RATINGS}); click to sort highest first">★</th></tr>`;
+  $("#mapEmpty").hidden = list.length > 0;
+  $("#mapEmpty").textContent = !s ? "No session open." : "No tilt series found. Choose the Tilt Series Folder… at the top.";
+  const rating = m => m.a.tsRating || 0;
+  const order = list.map((m, i) => i);
+  if(STATE.sortRating) order.sort((a, b) => rating(list[b]) - rating(list[a]) || a - b);
+  tb.innerHTML = order.map(i => { const m = list[i], p = m.p; return `<tr data-i="${i}" class="${i === sel ? "sel" : ""}">
+    <td>${p.id}.${m.k}</td><td>${Number.isFinite(p.tilt) ? Math.round(p.tilt) : "–"}</td>
+    <td class="${p.status.startsWith("Acquired") ? "st-ok" : ""}">${p.status}</td><td title="${esc(m.a.mrc)}">${esc(m.a.mrc.split("/").pop().replace(/\.mrc$/i, ""))}</td>
+    <td class="${m.a.preview ? "pv-ok" : ""}" title="${m.a.preview ? esc(m.a.preview.mrc) : "Live from the tilt series"}">${m.a.preview ? "✓" : "live"}</td>
+    <td>${tsStars(m)}</td></tr>`; }).join("");
+  const row = tb.querySelector("tr.sel"); if(row) row.scrollIntoView({block: "nearest"});
+}
 function renderTable(){
+  if(STATE.task === "movie") return renderMovieTable();
   const tb = $("#mapTable tbody"), s = SESSION, batch = STATE.task === "batch";
   const list = s ? (batch ? s.positions : s.maps) : [];
   const tilt = v => Number.isFinite(v) ? Math.round(v) : "–";
@@ -973,6 +1023,14 @@ async function setTab(tab){
   await loadScene();
 }
 async function select(i, areaK){
+  if(STATE.task === "movie"){
+    const list = movieList(), m = list[i];
+    if(!m || i === curIndex()) return;
+    STATE.pos = m.pi; STATE.area = m.k;
+    const mi = await mapOfPosition(m.p); if(mi >= 0) STATE.sel = mi;
+    renderTable(); updateChrome();
+    return STATE.tab === "exposure" ? loadScene() : setTab("exposure");
+  }
   const batch = STATE.task === "batch", list = SESSION ? (batch ? SESSION.positions : SESSION.maps) : null;
   if(!list || i < 0 || i >= list.length || i === (batch ? STATE.pos : STATE.sel)) return;
   if(batch){
@@ -985,7 +1043,7 @@ async function select(i, areaK){
   if(STATE.tab !== "atlas") await loadScene(); else draw();
 }
 function updateChrome(){
-  const s = SESSION, batch = STATE.task === "batch";
+  const s = SESSION, batch = posTask();
   const map = s && STATE.sel >= 0 ? s.maps[STATE.sel] : null, pos = s && batch && STATE.pos >= 0 ? s.positions[STATE.pos] : null;
   for(const b of $$(".tab")){
     const t = b.dataset.tab;
@@ -997,7 +1055,7 @@ function updateChrome(){
     b.classList.toggle("active", t === STATE.tab);
     b.setAttribute("aria-selected", t === STATE.tab);
   }
-  const n = !s ? 0 : batch ? s.positions.length : s.maps.length, k = batch ? STATE.pos : STATE.sel;
+  const n = !s ? 0 : STATE.task === "movie" ? movieList().length : batch ? s.positions.length : s.maps.length, k = curIndex();
   const stepping = s && STATE.tab !== "atlas" && n > 0;
   $("#prevMap").disabled = !stepping || k <= 0;
   $("#nextMap").disabled = !stepping || k >= n - 1;
@@ -1014,11 +1072,12 @@ function updateChrome(){
   $("#secSel").hidden = STATE.tab !== "exposure" || !ex || $("#secSel").options.length < 2;
   $("#subTitle").innerHTML = !s ? "" : STATE.tab === "atlas" ? (s.atlas ? `<b>${esc(s.atlas.stem)}</b>` : "")
     : STATE.tab === "search" ? (pos ? posTitle(pos) : "")
-    : STATE.tab === "exposure" ? (pos ? `<b>${pos.id}.${STATE.area} : ${esc(ex ? ex.path.split("/").pop() : pos.name)}</b><small>${ex ? ex.kind : ""}</small>` : "")
+    : STATE.tab === "exposure" ? (pos ? `<b>${pos.id}.${STATE.area} : ${esc(ex ? ex.path.split("/").pop() : pos.name)}</b><small>${ex ? ex.kind : ""}</small>${ex?.kind === "tilt series" ? tsStars({pi: STATE.pos, k: STATE.area, a: ex.area}) : ""}` : "")
     : map ? `${pos ? `<small>${esc(pos.name)} ·</small>` : ""}<b>${map.id} : ${esc(map.name)}</b>${stars(map.rating, canRate() && STATE.tab !== "atlas" ? STATE.sel : null)}` : "";
   $("#editHint").hidden = !canEditAreas();
+  plChrome();
   if(s && s.path && SRC.kind === "server")
-    history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}${batch && pos ? `&task=batch&pos=${pos.id}&area=${STATE.area}` : ""}${s.tilt ? `&tilt=${encodeURIComponent(s.tilt.path)}` : ""}&tab=${STATE.tab}`);
+    history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}${batch && pos ? `&task=${STATE.task}&pos=${pos.id}&area=${STATE.area}` : ""}${s.tilt ? `&tilt=${encodeURIComponent(s.tilt.path)}` : ""}&tab=${STATE.tab}`);
 }
 
 /* ------------------------------------------------------------------ scenes
@@ -1030,6 +1089,7 @@ function updateChrome(){
 let SCENE = null, SCENE_ID = 0;
 
 async function loadScene(){
+  if(PL.playing) plStop();
   const id = ++SCENE_ID, s = SESSION, tab = STATE.tab, map = s?.maps[STATE.sel];
   showMessage(""); $("#welcome").hidden = !!s;
   if(!s) return;
@@ -1047,6 +1107,8 @@ async function loadScene(){
     if(id !== SCENE_ID) return;            // a newer request took over
     showScene(first);
     if(STATE.pendingCentre){ const c = STATE.pendingCentre; STATE.pendingCentre = null; centreOn(c.pt, c.zoom); }
+    plChrome();
+    if(PL.autoNext){ PL.autoNext = false; if(first?.kind === "exposure") plPlay(); }
     if(first && !first.final){
       if(first.kind === "tiles"){          // tiles: alignment needs the full size, load it now
         status(`${$("#status").textContent} Loading full resolution…`);
@@ -1634,7 +1696,8 @@ function renderFilter(){
 function applyFilter(f){
   saveFilter(f);
   if(!SCENE) return renderFilter();
-  STATS = sceneStats(SCENE.layers);
+  if(PL.playing){ for(const fr of PL.frames) if(fr) fr.fkey = null; PL.pool = plPool(); STATS = {sorted: PL.pool}; }
+  else STATS = sceneStats(SCENE.layers);
   renderFilter(); renderContrast();
 }
 $("#lpOn").addEventListener("change", e => applyFilter({...filterSettings(), on: e.target.checked}));
@@ -1648,24 +1711,32 @@ function sceneStats(layers){
 }
 const pct = p => STATS.sorted[Math.min(STATS.sorted.length - 1, Math.max(0, Math.round(p * (STATS.sorted.length - 1))))];
 
-function renderContrast(){
-  if(!SCENE || !SCENE.layers.length) return;
+function contrastRange(){
   if($("#auto").checked){ $("#lo").value = 5; $("#hi").value = 995; }
   let lo = pct(+$("#lo").value / 1000), hi = pct(+$("#hi").value / 1000);
   if(hi <= lo) hi = lo + 1e-6;
-  $("#loOut").value = fmtVal(lo); $("#hiOut").value = fmtVal(hi);
-  const inv = $("#invert").checked, k = 255 / (hi - lo);
-  for(const l of SCENE.layers){
-    const {w, h} = l.img, data = layerData(l);
-    if(!l.canvas) l.canvas = Object.assign(document.createElement("canvas"), {width: w, height: h});
-    const ctx = l.canvas.getContext("2d"), id = ctx.createImageData(w, h), px = new Uint32Array(id.data.buffer);
-    for(let i = 0; i < data.length; i++){
-      let v = (data[i] - lo) * k; v = v < 0 ? 0 : v > 255 ? 255 : v | 0;
-      if(inv) v = 255 - v;
-      px[i] = 0xff000000 | (v << 16) | (v << 8) | v;           // grey, opaque (little-endian RGBA)
-    }
-    ctx.putImageData(id, 0, 0);
+  return {lo, hi, inv: $("#invert").checked};
+}
+// grey canvas of a layer for this contrast (and low-pass); repainted only when they change
+function paintLayer(l, lo, hi, inv){
+  const f = filterSettings(), key = `${lo}|${hi}|${inv}|${f.on}|${f.res}`;
+  if(l.canvas && l.ckey === key) return;
+  const {w, h} = l.img, data = layerData(l), k = 255 / (hi - lo);
+  if(!l.canvas) l.canvas = Object.assign(document.createElement("canvas"), {width: w, height: h});
+  const ctx = l.canvas.getContext("2d"), id = ctx.createImageData(w, h), px = new Uint32Array(id.data.buffer);
+  for(let i = 0; i < data.length; i++){
+    let v = (data[i] - lo) * k; v = v < 0 ? 0 : v > 255 ? 255 : v | 0;
+    if(inv) v = 255 - v;
+    px[i] = 0xff000000 | (v << 16) | (v << 8) | v;           // grey, opaque (little-endian RGBA)
   }
+  ctx.putImageData(id, 0, 0);
+  l.ckey = key;
+}
+function renderContrast(){
+  if(!SCENE || !SCENE.layers.length) return;
+  const {lo, hi, inv} = contrastRange();
+  $("#loOut").value = fmtVal(lo); $("#hiOut").value = fmtVal(hi);
+  for(const l of SCENE.layers) paintLayer(l, lo, hi, inv);
   drawHist(lo, hi);
   draw();
 }
@@ -1768,8 +1839,9 @@ function armSharpen(build, id){
   maybeSharpen();
 }
 function maybeSharpen(){
-  if(!SCENE?.sharpen) return;
+  if(!SCENE?.sharpen || PL.playing) return;
   const l = SCENE.layers[0], dpr = devicePixelRatio || 1;
+  if(!l.img.header) return;                                      // a Movie Player frame
   if(V.s * l.geo.ps * l.img.bin * dpr <= 1.25) return;
   const want = 1.25 / (V.s * l.geo.ps * dpr);                    // binning that would be sharp enough
   const tb = Math.max(1, 2 ** Math.floor(Math.log2(Math.max(1, want))));
@@ -1819,7 +1891,7 @@ function drawPositionAreas(ctx, p, selected, axisLine){
   for(const a of p.areas){
     if(!a.off) continue;
     const c = toScreen(areaStage(p, a.off)), first = a.k === 1;
-    const chosen = selected && STATE.task === "batch" && a.k === STATE.area;
+    const chosen = selected && posTask() && a.k === STATE.area;
     ring(c, AREA.exp, a.mrc ? 0.32 : 0.18, chosen ? 2.8 : first && selected ? 2.2 : 1.4);
     ctx.fillStyle = a.added || a.moved ? "#f0b429" : chosen ? "#ffffff" : AREA.exp; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
     ctx.fillText(`${p.id}.${a.k}${a.added ? " +" : a.moved ? " *" : ""}`, c[0] + beam * 0.55, c[1] - beam * 0.3); ctx.shadowBlur = 0;
@@ -1846,7 +1918,7 @@ function drawOverlay(ctx){
 }
 const MARK_COLOR = {Acquired: "#39e639", "In Progress": "#f0a030", Queued: "#f0a030", Refined: "#4fc3f7", Initialized: "#f0a030", Failed: "#ff5050"};
 const markColor = m => MARK_COLOR[(m.kind === "pos" ? m.pos.status : m.map.status).split(" ")[0]] || "#39e639";
-const markSelected = m => m.kind === "pos" ? STATE.task === "batch" && m.i === STATE.pos : m.i === STATE.sel;
+const markSelected = m => m.kind === "pos" ? posTask() && m.i === STATE.pos : m.i === STATE.sel;
 function markShape(m){       // screen polygon of a marker
   if(m.geo) return corners(m.geo).map(toScreen);
   const [x, y] = toScreen(m.point), r = m.kind === "pos" ? 5 : 6;
@@ -2004,7 +2076,7 @@ function setRating(mi, r){
   status(`${m.name}: ${m.rating ? `${m.rating} star${m.rating > 1 ? "s" : ""}` : "not rated"}. Save Session to keep it.`);
 }
 document.addEventListener("click", e => {
-  const st = e.target.closest(".stars.rate span[data-r]"); if(!st || !canRate()) return;
+  const st = e.target.closest(".stars.rate[data-map] span[data-r]"); if(!st || !canRate()) return;
   e.stopPropagation(); setRating(+st.parentElement.dataset.map, +st.dataset.r);
 }, true);
 document.addEventListener("click", e => {
@@ -2126,7 +2198,7 @@ $("#loadEdits").addEventListener("click", loadEdits);
    canvas and encoded by ffmpeg on the server (.mp4), or in this browser (.webm) without it. */
 const MV_KEY = "tomo5.movie";
 const MV_DEF = {size: "1920x1080", fps: 30, zoom: 0, tAtlas: 3, tToMap: 4, tMap: 2, tToTg: 4, hold: 2, tToView: 3, tPick: 0.8,
-  viewZoom: 1, tiltAxis: true, tiltFps: 10, order: "acq", schematic: true, lp: 60,
+  viewZoom: 1, tiltAxis: true, tiltFps: 10, order: "sweep", schematic: true, lp: 60, cfgV: 2,
   labels: [["Atlas", "Grid overview"], ["Search Map", ""], ["Acquisition position", ""], ["Tilt series", ""]],
   pLabels: [["Atlas", "Grid overview"], ["Search Map", ""], ["Target selection", ""], ["Tilt series acquisition", ""]]};
 let mv = null;
@@ -2136,6 +2208,7 @@ const rot2 = a => [[Math.cos(a), -Math.sin(a)], [Math.sin(a), Math.cos(a)]];
 const det2 = A => A[0][0] * A[1][1] - A[0][1] * A[1][0];
 function mvCfg(){
   let sv = {}; try{ sv = JSON.parse(localStorage.getItem(MV_KEY) || "{}") || {}; }catch{}
+  if((sv.cfgV || 1) < 2){ delete sv.order; sv.cfgV = 2; }       // new default order: start → lowest → highest → start
   const c = {...MV_DEF, ...sv, zoom: 0};
   const labs = key => MV_DEF[key].map((d, i) => Array.isArray(sv[key]?.[i]) ? [String(sv[key][i][0] ?? d[0]), String(sv[key][i][1] ?? d[1])] : d.slice());
   c.labels = labs("labels"); c.pLabels = labs("pLabels");
@@ -2224,13 +2297,17 @@ function mvOrder(secs, how, start){
 }
 function mvSchemeText(seq){
   if(!seq.length || !Number.isFinite(seq[0].a)) return `${seq.length} images`;
-  const lo = Math.min(...seq.map(x => x.a)), hi = Math.max(...seq.map(x => x.a));
-  // dose-symmetric: the angle changes sign most steps
-  let flips = 0; for(let i = 2; i < seq.length; i++) if(Math.sign(seq[i].a - seq[0].a) !== Math.sign(seq[i - 1].a - seq[0].a)) flips++;
-  if(flips > seq.length / 3) return `dose-symmetric from ${mvDeg(seq[0].a)}, ${mvDeg(lo)} to ${mvDeg(hi)}`;
-  const parts = [seq[0].a];
-  for(const v of [seq[Math.floor(seq.length / 2)].a, seq[seq.length - 1].a]) if(Math.abs(v - parts[parts.length - 1]) > 0.5) parts.push(v);
-  return parts.map(mvDeg).join(" → ");
+  // turning points of the angle: 0° → −60° → +60° → 0° for a sweep; many of them = dose-symmetric
+  const A = seq.map(x => x.a), pts = [A[0]];
+  let dir = 0;
+  for(let i = 1; i < A.length; i++){
+    const d = Math.sign(A[i] - A[i - 1]);
+    if(d && dir && d !== dir) pts.push(A[i - 1]);
+    if(d) dir = d;
+  }
+  if(A.length > 1 && A[A.length - 1] !== pts[pts.length - 1]) pts.push(A[A.length - 1]);
+  if(pts.length > 6) return `dose-symmetric from ${mvDeg(A[0])}, ${mvDeg(Math.min(...A))} to ${mvDeg(Math.max(...A))}`;
+  return pts.map(mvDeg).join(" → ");
 }
 const mvKey = (path, z, px) => `${path}|${z}|${px}`;
 async function mvTiltImg(ts, z, px){
@@ -2731,9 +2808,9 @@ function mvForm(){
     <h4>Tilt series playback</h4>
     <div class="mvfs">
       <label class="mvf full">Order<select id="mvOrder">
+        <option value="sweep" ${c.order === "sweep" ? "selected" : ""}>start → lowest → highest → start</option>
         <option value="acq" ${c.order === "acq" ? "selected" : ""}>as acquired (.mdoc time, else file order)</option>
-        <option value="angle" ${c.order === "angle" ? "selected" : ""}>by angle, lowest → highest</option>
-        <option value="sweep" ${c.order === "sweep" ? "selected" : ""}>start → lowest → highest → start</option></select></label>
+        <option value="angle" ${c.order === "angle" ? "selected" : ""}>by angle, lowest → highest</option></select></label>
       <label class="mvf">Images per second<input type="number" id="mvTfps" min="1" max="30" step="1" value="${c.tiltFps}"></label>
       <label class="mvf" title="Low-pass for the tilt images (Å); 0 = off">Low-pass (Å)<input type="number" id="mvLp" min="0" max="500" step="5" value="${c.lp}"></label>
       <label class="mvf">Lowest angle (°)<input type="number" id="mvLow" step="1" value="${c.low ?? -60}"></label>
@@ -2881,6 +2958,284 @@ function movieItems(item, head, pi, k){
     {disabled: p.areas.length < 2 || !withTs, hint: p.areas.length < 2 ? "only one area" : !withTs ? "no tilt series" : `${withTs} of ${p.areas.length} areas with a tilt series`});
 }
 
+/* ------------------------------------------------------------------ Movie Player
+   Plays a tilt series in the Exposure tab. Frames come from the preview cache when there is one
+   (<tilt series folder>/tiltseries_movie/Position_N[_k].mrc + .json, made by
+   `python3 tomo5_viewer.py --make-previews TILTDIR`): one 8-bit file, read in one request, so it
+   starts at once. Without it, each section is read from the tilt series and shrunk on the server
+   (live: limited by how fast the server reads the full-size stack). Paused, the full-resolution
+   section is shown again. The Movie Player task lists every tilt series of the session. */
+const PREVIEW_DIR = "tiltseries_movie", PLAY_PX = 512, TS_RATINGS = "tiltseries_ratings.xml";
+// star rating of a tilt series: clickable unless the server is --read-only (saved at once, no Save needed)
+function tsStars(m){
+  const n = m.a.tsRating || 0;
+  if(SERVER?.readOnly || !SERVER) return stars(n);
+  return `<span class="stars rate" data-ts="${m.pi}:${m.k}" title="Rate this tilt series: click a star, or press 1–5 (0 clears); saved to ${PREVIEW_DIR}/${TS_RATINGS}">` +
+    [1, 2, 3, 4, 5].map(r => `<span data-r="${r}"${r > n ? ' class="off"' : ""}>${r <= n ? "★" : "☆"}</span>`).join("") + "</span>";
+}
+async function rateTilt(pi, k, r, toggle = true){
+  const s = SESSION, p = s?.positions[pi], a = p?.areas.find(x => x.k === k);
+  if(!a?.mrc || SERVER?.readOnly) return;
+  const old = a.tsRating || 0, want = toggle && old === r ? 0 : r, name = a.mrc.split("/").pop();
+  if(want === old) return;
+  a.tsRating = want; renderTable(); updateChrome();
+  try{
+    const res = await fetch("api/rate-tilt", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({base: s.tsRateBase, name, rating: want})});
+    const j = await res.json(); if(!res.ok) throw new Error(j.error || res.statusText);
+    status(`${p.id}.${k} (${name}): ${want ? `${want} star${want > 1 ? "s" : ""}` : "not rated"} · saved in ${j.file}`);
+  }catch(e){
+    a.tsRating = old; renderTable(); updateChrome();
+    status(`Could not save the rating: ${e.message}`, true);
+  }
+}
+document.addEventListener("click", e => {
+  const st = e.target.closest(".stars.rate[data-ts] span[data-r]"); if(!st) return;
+  e.stopPropagation(); e.preventDefault();
+  const [pi, k] = st.parentElement.dataset.ts.split(":").map(Number);
+  rateTilt(pi, k, +st.dataset.r);
+}, true);
+const PL = {key: null, frames: [], order: [], idx: 0, playing: false, loading: false, timer: null, src: "", meta: null};
+// the tilt series of the session (each area with a stack), in position order
+function movieList(){ return SESSION ? SESSION.positions.flatMap((p, pi) => p.areas.filter(a => a.mrc).map(a => ({pi, k: a.k, p, a}))) : []; }
+const posTask = () => STATE.task === "batch" || STATE.task === "movie";
+const curIndex = () => STATE.task === "batch" ? STATE.pos : STATE.task === "movie" ? movieList().findIndex(m => m.pi === STATE.pos && m.k === STATE.area) : STATE.sel;
+
+// previews made by --make-previews, in <tilt folder>/tiltseries_movie and <session>/tiltseries_movie
+async function findPreviews(s){
+  let n = 0;
+  for(const p of s.positions) for(const a of p.areas){ a.preview = null; a.tsRating = 0; }
+  const dirs = [];
+  s.tsRateBase = null;
+  for(const d of new Set([s.tilt?.path, s.path].filter(Boolean))){           // only folders that exist (no 404s)
+    const l = await SRC.list(d).catch(() => null), sub = l?.dirs.find(x => x.name.toLowerCase() === PREVIEW_DIR);
+    if(sub) dirs.push([d, join(d, sub.name)]);
+  }
+  const byName = new Map(s.positions.flatMap(p => p.areas.filter(a => a.mrc).map(a => [a.mrc.split("/").pop(), a])));
+  for(const [base, dir] of dirs){
+    const l = await SRC.list(dir).catch(() => null);
+    if(!l) continue;
+    const names = new Set(l.files.map(f => f.name));
+    // star ratings of the tilt series (Movie Player): tiltseries_movie/tiltseries_ratings.xml
+    if(names.has(TS_RATINGS) && !s.tsRateBase){
+      s.tsRateBase = base;
+      try{
+        const doc = new DOMParser().parseFromString(await SRC.text(join(dir, TS_RATINGS)), "application/xml");
+        for(const el of doc.querySelectorAll("TiltSeries")){ const a = byName.get(el.getAttribute("name")), r = +el.getAttribute("rating"); if(a && r >= 1 && r <= 5) a.tsRating = r; }
+      }catch(e){ console.warn("ratings", e); }
+    }
+    const byId = new Map(s.positions.map(p => [p.id, p]));
+    for(const f of l.files){
+      const m = f.name.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i), stem = f.name.slice(0, -4);
+      if(!m || !names.has(stem + ".json")) continue;
+      const a = byId.get(+m[1])?.areas.find(a => a.k === (m[2] ? +m[2] : 1));
+      if(!a || !a.mrc || a.preview) continue;
+      a.preview = {mrc: join(dir, f.name), json: join(dir, stem + ".json"), mp4: names.has(stem + ".mp4") ? join(dir, stem + ".mp4") : null, dir};
+      n++;
+    }
+  }
+  // new ratings go next to the ratings file, else next to the previews, else into the tilt-series folder
+  s.tsRateBase = s.tsRateBase || dirs[0]?.[0] || s.tilt?.path || s.path;
+  s.previews = n;
+  return n;
+}
+
+// sections of the current tilt series: angle and time from the .mdoc (or the preview's .json)
+async function plSections(ex, nz, meta){
+  const md = ex.mdoc ? await getMdoc(ex.mdoc).catch(() => null) : null;
+  return Array.from({length: nz}, (_, z) => {
+    const s = md?.secs.find(x => x.z === z);
+    const a = s && Number.isFinite(s.tilt) ? s.tilt : Number.isFinite(meta?.angles?.[z]) ? meta.angles[z] : NaN;
+    const t = s ? mvTime(md.val(s.rows, "DateTime")) : mvTime(meta?.times?.[z]);
+    return {z, a, t};
+  });
+}
+function plOrder(){
+  const secs = PL.secs, how = $("#plOrder").value;
+  PL.order = mvOrder(secs, how === "angle" && secs.every(s => Number.isFinite(s.a)) ? "angle" : "acq", 0).map(s => s.z);
+}
+function plCurrent(){
+  const p = SESSION?.positions[STATE.pos], ex = p && exposureOf(p, STATE.area);
+  return ex && ex.kind === "tilt series" ? ex : null;
+}
+// load every frame: from the preview (one request) or live, section by section
+async function plLoad(ex){
+  const header = await getHeader(ex.path), geo = SCENE?.kind === "exposure" ? SCENE.layers[0].geo : null;
+  if(!geo) throw new Error("open the tilt series in the Exposure tab first");
+  const pv = ex.area.preview, key = ex.path;
+  PL.loading = true; PL.cancel = false; PL.key = null; PL.frames = []; PL.meta = null;
+  plChrome();
+  let meta = null, why = "";
+  if(pv){
+    try{
+      meta = JSON.parse(await SRC.text(pv.json));
+      const sh = meta.sourceShape || [], size = ex.area.mrcSize;
+      if(sh[2] !== header.nz || sh[0] !== header.nx || (size && meta.sourceSize && size !== meta.sourceSize)){ why = "the preview is out of date (rerun --make-previews)"; meta = null; }
+    }catch(e){ why = "the preview could not be read"; meta = null; }
+  }
+  PL.secs = await plSections(ex, header.nz, meta);
+  plOrder();
+  const frames = new Array(header.nz);
+  if(meta){
+    const ph = await getHeader(pv.mrc), w = ph.nx, h = ph.ny, n = w * h;
+    $("#plInfo").textContent = "Loading preview…";
+    const buf = await SRC.bytes(pv.mrc, 1024 + ph.nxt, 1024 + ph.nxt + n * ph.nz - 1);
+    const b = meta.bin || header.nx / w;
+    for(let z = 0; z < ph.nz && z < header.nz; z++) frames[z] = {img: {data: new Uint8Array(buf, z * n, n), w, h, bin: b}, geo};
+    PL.src = "preview";
+  } else {
+    // live: the order of play first, so it could start early; two requests at a time
+    let next = 0, done = 0;
+    const order = [...PL.order], t0 = performance.now();
+    const worker = async () => {
+      while(next < order.length && !PL.cancel){
+        const z = order[next++], img = await getImage(ex.path, PLAY_PX, z);
+        frames[z] = {img, geo};
+        done++;
+        const el = (performance.now() - t0) / 1000;
+        $("#plInfo").textContent = `Loading ${done}/${order.length} live… ${Math.round(el / done * (order.length - done))} s left`;
+      }
+    };
+    await Promise.all([worker(), worker()]);
+    if(PL.cancel){ PL.loading = false; plChrome(); return false; }
+    PL.src = "live" + (why ? ` (${why})` : "");
+  }
+  if(plCurrent()?.path !== key){ PL.loading = false; return false; }     // moved on meanwhile
+  PL.frames = frames; PL.key = key; PL.meta = meta; PL.loading = false;
+  PL.pool = plPool();
+  return true;
+}
+// one contrast for the whole series: a sample of every frame (after the low-pass)
+function plPool(){
+  const s = [];
+  for(const fr of PL.frames){ if(!fr) continue; const d = layerData(fr), st = Math.max(1, Math.floor(d.length / 20000)); for(let i = 0; i < d.length; i += st) if(Number.isFinite(d[i])) s.push(d[i]); }
+  return Float32Array.from(s).sort();
+}
+function plShow(i){
+  if(!PL.frames.length || !SCENE) return;
+  PL.idx = (i + PL.order.length) % PL.order.length;
+  const z = PL.order[PL.idx], fr = PL.frames[z];
+  if(!fr) return;
+  const {lo, hi, inv} = contrastRange();
+  paintLayer(fr, lo, hi, inv);
+  SCENE.layers = [fr]; draw();
+  const s = PL.secs[z];
+  $("#plPos").value = PL.idx;
+  $("#plInfo").textContent = `${Number.isFinite(s.a) ? mvDeg(s.a) + " · " : ""}${PL.idx + 1}/${PL.order.length} · ${PL.src}`;
+  if($("#secSel").querySelector(`option[value="${z}"]`)) $("#secSel").value = z;
+}
+async function plPlay(){
+  const ex = plCurrent();
+  if(!ex || PL.loading) return;
+  try{
+    if(PL.key !== ex.path && !(await plLoad(ex))) return;
+  }catch(e){ console.error(e); PL.loading = false; status(`Movie Player: ${e.message}`, true); plChrome(); return; }
+  if(plCurrent()?.path !== ex.path) return;
+  PL.playing = true;
+  STATS = {sorted: PL.pool};                // the player's contrast: the whole series
+  $("#plPos").max = PL.order.length - 1;
+  const start = PL.order.indexOf(STATE.z[ex.path]);
+  plShow(start >= 0 ? start : 0);
+  renderContrast();
+  plTimer(); plChrome();
+}
+function plTimer(){
+  clearInterval(PL.timer);
+  if(!PL.playing) return;
+  PL.timer = setInterval(() => {
+    if(!PL.playing) return;
+    if(PL.idx + 1 >= PL.order.length && $("#plNext").checked && STATE.task === "movie"){
+      const i = curIndex(), list = movieList();
+      if(i + 1 < list.length){ plStop(); PL.autoNext = true; select(i + 1); return; }
+    }
+    plShow(PL.idx + 1);
+  }, 1000 / (+$("#plFps").value || 10));
+}
+function plStop(){ clearInterval(PL.timer); PL.timer = null; PL.playing = false; plChrome(); }
+// pause: back to the full-resolution section where it stopped
+function plPause(){
+  const z = PL.order[PL.idx];
+  plStop();
+  if(PL.key && Number.isFinite(z)){ STATE.z[PL.key] = z; loadScene(); }
+}
+function plChrome(){
+  const ex = STATE.tab === "exposure" ? plCurrent() : null, nz = $("#secSel").options.length;
+  $("#playBar").hidden = !ex || nz < 2;
+  if($("#playBar").hidden) return;
+  $("#plPlay").textContent = PL.loading ? "Loading…" : PL.playing ? "❚❚ Pause" : "▶ Play";
+  $("#plPlay").disabled = false;
+  $("#plNextWrap").hidden = STATE.task !== "movie";
+  const pv = ex.area.preview;
+  if(!PL.playing && !PL.loading) $("#plInfo").textContent = PL.key === ex.path ? `${PL.order.length} frames · ${PL.src}` : pv ? "preview ready (tiltseries_movie)" : "live (no preview: see --make-previews)";
+  $("#plExport").disabled = PL.loading;
+}
+$("#plPlay").addEventListener("click", () => { if(PL.loading){ PL.cancel = true; return; } PL.playing ? plPause() : plPlay(); });
+$("#plFps").addEventListener("change", () => { saveOverlayPlayer(); plTimer(); });
+$("#plOrder").addEventListener("change", () => {
+  saveOverlayPlayer();
+  if(!PL.frames.length) return;
+  const z = PL.order[PL.idx]; plOrder(); $("#plPos").max = PL.order.length - 1;
+  if(PL.playing) plShow(Math.max(0, PL.order.indexOf(z)));
+});
+$("#plNext").addEventListener("change", saveOverlayPlayer);
+$("#plPos").addEventListener("input", e => {
+  if(PL.key === plCurrent()?.path && PL.frames.length){ if(PL.playing) plStop(), PL.scrub = true; STATS = {sorted: PL.pool}; plShow(+e.target.value); }
+});
+$("#plPos").addEventListener("change", e => {
+  if(PL.key === plCurrent()?.path && PL.frames.length){ STATE.z[PL.key] = PL.order[+e.target.value]; loadScene(); }
+});
+function saveOverlayPlayer(){ try{ localStorage.setItem("tomo5.player", JSON.stringify({fps: $("#plFps").value, order: $("#plOrder").value, next: $("#plNext").checked})); }catch{} }
+(() => { try{ const o = JSON.parse(localStorage.getItem("tomo5.player") || "{}"); if(o.fps) $("#plFps").value = o.fps; if(o.order) $("#plOrder").value = o.order; $("#plNext").checked = !!o.next; }catch{} })();
+
+// export the series as it plays (order, contrast, low-pass) to .mp4 (server ffmpeg) or .webm (browser)
+async function plExport(){
+  const ex = plCurrent(); if(!ex || PL.loading) return;
+  if(PL.key !== ex.path && !(await plLoad(ex).catch(e => (status(e.message, true), false)))) return;
+  const wasPlaying = PL.playing; if(wasPlaying) plStop();
+  const fps = +$("#plFps").value || 10, fr0 = PL.frames.find(Boolean), W = fr0.img.w + (fr0.img.w % 2), H = fr0.img.h + (fr0.img.h % 2);
+  const cv = Object.assign(document.createElement("canvas"), {width: W, height: H}), g = cv.getContext("2d");
+  const saved = STATS; STATS = {sorted: PL.pool};
+  const {lo, hi, inv} = contrastRange(); STATS = saved;
+  const name = `${ex.path.split("/").pop().replace(/\.mrc$/i, "")}_tilt_series`;
+  const frame = z => {
+    const fr = PL.frames[z]; paintLayer(fr, lo, hi, inv);
+    g.fillStyle = "#000"; g.fillRect(0, 0, W, H); g.drawImage(fr.canvas, 0, 0);
+    const a = PL.secs[z].a, k = H / 512;
+    g.font = `600 ${22 * k}px ${mvFont()}`; g.textBaseline = "top";
+    const t = `${Number.isFinite(a) ? mvDeg(a) : `z ${z}`}`, tw = g.measureText(t).width;
+    g.fillStyle = "rgba(0,0,0,0.6)"; g.fillRect(8 * k, 8 * k, tw + 16 * k, 32 * k); g.fillStyle = "#fff"; g.fillText(t, 16 * k, 13 * k);
+  };
+  const dl = (href, file) => { const a = Object.assign(document.createElement("a"), {href, download: file}); document.body.appendChild(a); a.click(); a.remove(); };
+  try{
+    $("#plExport").disabled = true;
+    if(SERVER?.ffmpeg){
+      const r = await fetch("api/movie/start", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({w: W, h: H, fps})});
+      const j = await r.json(); if(!r.ok) throw new Error(j.error || r.statusText);
+      for(let i = 0; i < PL.order.length; i++){
+        frame(PL.order[i]);
+        const blob = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.92));
+        const fr = await fetch(`api/movie/frame?id=${j.id}`, {method: "POST", headers: {"Content-Type": "image/jpeg"}, body: blob});
+        if(!fr.ok) throw new Error((await fr.json().catch(() => ({}))).error || fr.statusText);
+        $("#plInfo").textContent = `Exporting ${i + 1}/${PL.order.length}…`;
+      }
+      const e = await fetch(`api/movie/end?id=${j.id}`, {method: "POST"}), ej = await e.json(); if(!e.ok) throw new Error(ej.error || e.statusText);
+      dl(`api/movie/file?id=${j.id}`, name + ".mp4");
+      status(`Exported ${name}.mp4 (${PL.order.length} frames at ${fps} fps, ${(ej.size / 1e6).toFixed(1)} MB).`);
+    } else {
+      const bc = await mvBrowserCodec(W, H, fps);
+      if(!bc) throw new Error("no ffmpeg on the server and this browser cannot encode video");
+      const chunks = []; let failed = null;
+      const enc = new VideoEncoder({output: ch => { const d = new Uint8Array(ch.byteLength); ch.copyTo(d); chunks.push({t: ch.timestamp, key: ch.type === "key", data: d}); }, error: e => { failed = e; }});
+      enc.configure(bc.cfg);
+      PL.order.forEach((z, i) => { frame(z); const vf = new VideoFrame(cv, {timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps)}); enc.encode(vf, {keyFrame: i % (fps * 2) === 0}); vf.close(); });
+      await enc.flush(); enc.close(); if(failed) throw failed;
+      dl(URL.createObjectURL(mvWebm(chunks, bc.id, W, H, fps)), name + ".webm");
+      status(`Exported ${name}.webm (${PL.order.length} frames at ${fps} fps).`);
+    }
+  }catch(e){ console.error(e); status(`Export failed: ${e.message}`, true); }
+  finally{ $("#plExport").disabled = false; plChrome(); if(wasPlaying) plPlay(); }
+}
+$("#plExport").addEventListener("click", plExport);
+
 /* ------------------------------------------------------------------ right-click zoom menu
    Levels: Atlas › Overview › Search Map › Search › Exposure. Zoom in can jump to any deeper level
    for the item under the cursor; zoom out goes exactly one level up (like the previous tab).
@@ -2891,7 +3246,7 @@ const LEVEL_NAME = {atlas: "Atlas", overview: "Overview", searchmap: "Search Map
 async function navigate({tab, map, pos, area, centre, zoom = 1}){
   closeMenu();
   if(pos != null){
-    if(STATE.task !== "batch"){ STATE.task = "batch"; renderTasks(); }
+    if(!posTask()){ STATE.task = "batch"; renderTasks(); }
     STATE.pos = pos; STATE.area = area || 1;
     if(map == null){ const mi = await mapOfPosition(SESSION.positions[pos]); if(mi >= 0) STATE.sel = mi; }
   }
@@ -2981,7 +3336,7 @@ function menuItems(sx, sy){
   } else if(level === "atlas" && SCENE){
     head("Zoom in");
     item("Zoom in 2× here", () => { closeMenu(); zoomTo(V.s * 2, sx, sy); });
-  } else if(level === "search" && STATE.task === "batch"){
+  } else if(level === "search" && posTask()){
     const p = SESSION.positions[STATE.pos];
     if(p){ head(`Zoom in · ${p.name}`); exposures(p, STATE.pos, null, STATE.area); }
   } else if(level === "exposure"){
@@ -2997,7 +3352,7 @@ function menuItems(sx, sy){
   // acquisition movies: a sub-position (or its tilt series) of a batch position
   if(SESSION?.positions.length){
     if(level === "exposure" && STATE.pos >= 0) movieItems(item, head, STATE.pos, STATE.area);
-    else if(level === "search" && STATE.task === "batch" && STATE.pos >= 0) movieItems(item, head, hit ? hit.i : STATE.pos, hit?.k || STATE.area);
+    else if(level === "search" && posTask() && STATE.pos >= 0) movieItems(item, head, hit ? hit.i : STATE.pos, hit?.k || STATE.area);
     else if(hit && (level === "searchmap" || level === "overview")) movieItems(item, head, hit.i, hit.k || 1);
   }
   // edit mode (Batch Positions › Search, selected position): add / delete sub-positions
@@ -3014,7 +3369,7 @@ function menuItems(sx, sy){
   // zoom out: exactly one level up
   const up = LEVELS[LEVELS.indexOf(level) - 1];
   if(up){
-    const p = STATE.task === "batch" ? SESSION.positions[STATE.pos] : null;
+    const p = posTask() ? SESSION.positions[STATE.pos] : null;
     const upOk = !$(`.tab[data-tab=${up}]`).disabled;
     const centre = p ? (up === "searchmap" || up === "overview" ? p.plan?.stage : null) : null;
     head("Zoom out");
@@ -3030,7 +3385,7 @@ function menuItems(sx, sy){
   }, {hint: `${stage[0].toFixed(1)}, ${stage[1].toFixed(1)} µm`});
   if(mp && level === "atlas" && mp.i !== STATE.sel) item(`Select ${mp.map.name}`, async () => { closeMenu(); if(STATE.task !== "searchMaps"){ STATE.task = "searchMaps"; renderTasks(); renderTable(); } await select(mp.i); });
   if(hit) item(`Select ${hit.pos.name}${hit.k ? ` (area ${hit.pos.id}.${hit.k})` : ""}`, async () => {
-    closeMenu(); if(STATE.task !== "batch"){ STATE.task = "batch"; renderTasks(); }
+    closeMenu(); if(!posTask()){ STATE.task = "batch"; renderTasks(); }
     STATE.area = hit.k || STATE.area; if(hit.i !== STATE.pos) await select(hit.i, hit.k || 1); renderTable(); updateChrome(); draw();
   });
   else if(mp && level !== "atlas" && mp.i !== STATE.sel) item(`Select ${mp.map.name}`, async () => { closeMenu(); if(STATE.task !== "searchMaps"){ STATE.task = "searchMaps"; renderTasks(); renderTable(); } await select(mp.i); });
@@ -3082,8 +3437,8 @@ $("#mapTable tbody").addEventListener("click", async e => {
     if(STATE.tab === "exposure") await setTab("search"); else if(STATE.tab === "search") draw();
   }
 });
-$("#prevMap").addEventListener("click", () => select((STATE.task === "batch" ? STATE.pos : STATE.sel) - 1));
-$("#nextMap").addEventListener("click", () => select((STATE.task === "batch" ? STATE.pos : STATE.sel) + 1));
+$("#prevMap").addEventListener("click", () => select(curIndex() - 1));
+$("#nextMap").addEventListener("click", () => select(curIndex() + 1));
 $("#smMode").addEventListener("change", e => { STATE.smMode = e.target.value; loadScene(); });
 $("#secSel").addEventListener("change", e => {
   const ex = exposureOf(SESSION?.positions[STATE.pos], STATE.area);
@@ -3091,7 +3446,7 @@ $("#secSel").addEventListener("change", e => {
 });
 $("#tasksHead").addEventListener("click", e => { const b = e.currentTarget, open = b.getAttribute("aria-expanded") !== "true"; b.setAttribute("aria-expanded", open); $("#taskList").hidden = !open; });
 $$(".task.soon").forEach(b => b.addEventListener("click", () => status(`${b.firstChild.textContent.trim()}: coming later.`)));
-$$(".task[data-task=searchMaps], .task[data-task=batch]").forEach(b => b.addEventListener("click", () => setTask(b.dataset.task)));
+$$(".task[data-task=searchMaps], .task[data-task=batch], .task[data-task=movie]").forEach(b => b.addEventListener("click", () => setTask(b.dataset.task)));
 for(const id of ["#lo", "#hi"]) $(id).addEventListener("input", () => {
   $("#auto").checked = false;
   if(+$("#lo").value >= +$("#hi").value) $(id === "#lo" ? "#hi" : "#lo").value = id === "#lo" ? +$("#lo").value + 1 : +$("#hi").value - 1;
@@ -3105,8 +3460,12 @@ addEventListener("keydown", e => {
   if(e.key === "+" || e.key === "=") zoomTo(V.s * 1.5);
   else if(e.key === "-" || e.key === "_") zoomTo(V.s / 1.5);
   else if(e.key === "f" || e.key === "F") fit();
-  else if(e.key === "ArrowDown" || e.key === "ArrowRight"){ if(SESSION){ e.preventDefault(); select((STATE.task === "batch" ? STATE.pos : STATE.sel) + 1); } }
-  else if(e.key === "ArrowUp" || e.key === "ArrowLeft"){ if(SESSION){ e.preventDefault(); select((STATE.task === "batch" ? STATE.pos : STATE.sel) - 1); } }
+  else if(e.key === "ArrowDown" || e.key === "ArrowRight"){ if(SESSION){ e.preventDefault(); select(curIndex() + 1); } }
+  else if(e.key === "ArrowUp" || e.key === "ArrowLeft"){ if(SESSION){ e.preventDefault(); select(curIndex() - 1); } }
+  else if(e.key === " " && !$("#playBar").hidden){ e.preventDefault(); $("#plPlay").click(); }
+  else if(/^[0-5]$/.test(e.key) && STATE.tab === "exposure" && plCurrent() && !SERVER?.readOnly){
+    e.preventDefault(); rateTilt(STATE.pos, STATE.area, +e.key, false);   // 1–5 set, 0 clears
+  }
 });
 
 

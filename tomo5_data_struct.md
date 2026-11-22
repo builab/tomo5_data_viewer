@@ -137,6 +137,18 @@ Each tile has an `.mrc` image, an `.xml` metadata file and a `.jpg` preview.
 `SearchMap_2_20260924_093505/` has the same layout, with tiles `Tile_24587909_1`
 to `Tile_24587947_9`.
 
+## tiltseries_movie/ (made by `tomo5_viewer.py --make-previews`)
+
+Not part of Tomo5. Previews for the viewer's Movie Player, in the tilt-series folder (or the
+session folder):
+
+| File | Description |
+|---|---|
+| `Position_<N>[_<k>].mrc` | the tilt series binned to ≤ 512 px, 8-bit MRC (mode 0), sections in the original order |
+| `Position_<N>[_<k>].json` | `angles`, `times` (from the `.mdoc`), `pixelA`, `bin`, `shape`, `sourceShape`, `sourceSize`, `sourceMtime`, `range` |
+| `Position_<N>[_<k>].mp4` | optional (`--mp4`): the series by angle, low-passed |
+| `tiltseries_ratings.xml` | star ratings (1–5) set in the viewer's Movie Player: `<TiltSeries name="Position_1_2.mrc" position="1" area="2" rating="4" updated="…" />` per rated tilt series |
+
 ## Thumbnails/
 
 | File | Description |
