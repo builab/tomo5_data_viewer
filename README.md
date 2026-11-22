@@ -37,7 +37,7 @@ Give every folder you want to open (only those are reachable). Open the address 
 1. **Open Session Data…**: the session folder (with `Session.dm`, `Atlas/`, `SearchMaps/`, `Batch/`).
 2. **Tilt Series Folder…**: the folder with `Position_<N>[_<k>].mrc` and `.mdoc` (subfolders too).
 
-If the port is busy, the next free one is used (like Jupyter). The data on another machine? See
+If the port is busy, the next free one is used. The data on another machine? See
 [Remote workstation](#remote-workstation).
 
 ## Using the viewer
