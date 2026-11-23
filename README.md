@@ -114,6 +114,21 @@ start by default, low-pass, 720p / 1080p / 4K). **Make movie** encodes with ffmp
 (`.mp4`) or in the browser (`.webm`) and offers a download.
 
 
+## Scripts and AI agents
+
+`.claude/skills/tomo5-data/` is an [Agent Skill](https://agentskills.io): `SKILL.md` tells an AI
+coding agent (Claude Code loads it automatically in this repo) how to read Tomo5 data and which
+pitfalls to avoid, and `scripts/tomo5_io.py` does the work — also on its own, without an agent:
+
+```bash
+S=.claude/skills/tomo5-data/scripts/tomo5_io.py
+python3 $S positions /path/to/Session --tilt /path/to/tilt_series --csv areas.csv   # one row per area
+python3 $S tilts /path/to/Position_1.mrc /path/to/Position_1.mdoc                  # angle of every section
+python3 $S stitch /path/to/SearchMaps/SearchMap_7_… stitched.mrc --bin 4
+```
+
+Also `info FILE.xml|FILE.mrc` and `maps SESSION`, or `import tomo5_io` in your own Python.
+
 ## Server options
 
 ```text
@@ -134,7 +149,7 @@ python3 tomo5_viewer.py --make-previews TILTDIR [--mp4] [--workers 2] [--force] 
 ```bash
 pip install playwright && python3 -m playwright install chromium        # once
 make test SESSION=/path/to/Session TILT=/path/to/tilt_series             # clicks through everything
-make check                                                              # syntax only
+make check                                                              # syntax + unit tests
 ```
 
 `make test` runs `tests/smoke_test.py`: a read-only viewer on a free port, every task, tab, button,
