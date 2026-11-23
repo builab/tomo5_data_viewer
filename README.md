@@ -51,6 +51,9 @@ Then open **http://localhost:8766**.
 
 ## Using the viewer
 
+![Tomo5 Viewer Interface](docs/images/tomo5-viewer.png)
+
+
 The layout follows Tomo5.
 
 - **Left, Tasks:** *Search Maps*, *Batch Positions* and *Movie Player* choose the table on the right.
