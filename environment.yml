@@ -1,0 +1,11 @@
+# Optional conda environment (the plain-Python route in the README works just as well):
+#   conda env create -f environment.yml
+#   conda activate tomo5_viewer
+#   python tomo5_viewer.py /path/to/sessions
+name: tomo5_viewer
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.9
+  - numpy
+  - ffmpeg

@@ -1,279 +1,156 @@
 # tomo5_data_viewer
 
-A web-based interface to view Thermo Scientific Tomography 5 (Tomo5) data, in the spirit of the
-[SerialEM Grid Viewer](https://github.com/builab/serialEM_grid_viewer).
+A web viewer for Thermo Scientific Tomography 5 (Tomo5) sessions, in the spirit of the
+[SerialEM Grid Viewer](https://github.com/builab/serialEM_grid_viewer): one HTML page
+(`index.html`) and a small Python server (`tomo5_viewer.py`). It never changes Tomo5's files.
 
-It is one HTML page (`index.html`) plus a small Python server (`tomo5_viewer.py`) that serves your
-session folders to the browser, read-only.
+**v0.9** · atlas, search maps, batch positions, exposures, tilt series (Movie Player), acquisition
+movies · tested with Tomo5 5.26 · data layout: [tomo5_data_struct.md](tomo5_data_struct.md)
 
-**Status: v0.4, atlas, search maps and batch positions. Tested with Tomo5 5.26.**
-The session layout is described in [tomo5_data_struct.md](tomo5_data_struct.md).
+## Install
 
-## Quick start
-
-On the computer that has the data:
+The viewer runs on plain Python 3.7+. Two optional extras, installed with pip (no admin rights):
 
 ```bash
 git clone https://github.com/builab/tomo5_data_viewer.git
 cd tomo5_data_viewer
-python3 tomo5_viewer.py /path/to/Tomo5/sessions --port 8766
+pip install --user -r requirements.txt        # numpy + imageio-ffmpeg (optional)
 ```
 
-Then open **http://localhost:8766** in Chrome, Edge or Firefox, click **Open session…** and pick
-a session folder (the one that contains `Atlas/`, `Batch/` and `SearchMaps/`).
+- **numpy**: faster loading; needed for `--make-previews`.
+- **imageio-ffmpeg**: brings its own ffmpeg, so movies are `.mp4` (without it the browser makes `.webm`).
 
-If the data is on a remote workstation, see
-[Running on a remote workstation](#running-on-a-remote-workstation-port-forwarding).
-
-Without the server, you can also open `index.html` directly in the browser and use
-**Open folder from this computer…**. Only the files being shown are read.
-
-## Interface
-
-The layout follows Tomo5:
-
-- **Left, Tasks:** *Search Maps* and *Batch Positions* (acquired / total) switch the table on
-  the right. *Data Acquisition* and *Movie Player* are placeholders for now.
-- **Centre, viewer:** tabs **Atlas › Overview › Search Map › Search** (*Search* comes later).
-  The bar above the image shows the selected search map, with ‹ › to step through them.
-  Below the image: **−** / **+** and a zoom slider. Scroll to zoom, drag to pan, double-click
-  or **F** to fit. A scale bar is drawn on the image, and the stage X/Y under the cursor is shown
-  at the bottom right.
-- **Right:** the search-map table (Id, tilt, status, name, rating) or the batch-position table
-  (Id, tilt, status, name, exposure areas acquired / planned). Click a row, or use the arrow keys,
-  to select. The search-map rating (`StarRating` in `SearchMap.dm`) is shown as 5 stars, yellow for
-  the rating, also in the bar above the image. Below it, the **Histogram** (Auto Filter, black/white levels, invert) and
-  **Image Information** (size, pixel size, field of view, defocus, dose, exposure, magnification,
-  stage, tilt, camera, date, min/mean/max). *All XML fields* lists every field of the XML,
-  with a filter.
-
-### Tabs (with Search Maps selected)
-
-| Tab | Shows |
-|---|---|
-| Atlas | `Atlas/Atlas_<date>_<time>.mrc`, the stitched atlas, with every search map marked: green = acquired, orange = in progress / queued, white outline = selected. Click a marker to select that map; double-click to open its overview. |
-| Overview | `SearchMaps/SearchMap_<N>_<date>_<time>/Overview.mrc`, with the outline of every `Tile_*` drawn in green |
-| Search Map | The `Tile_*.mrc` images stitched in the browser (see below). The drop-down switches to the tiles at their stage positions without blending, or to `SearchMap.mrc`, the map as stitched by Tomo5. |
-
-### Loading speed
-
-Like the SerialEM Grid Viewer, the viewer shows something small first and loads detail only
-when it is needed:
-
-- Every image appears first as a **preview** of about 1024 px (stitched tiles: 384 px per tile,
-  blended at their stage positions), usually in well under a second.
-- The atlas, the overview and `SearchMap.mrc` load **more resolution only when you zoom in**
-  far enough to see the difference, and only as much as that zoom needs (2×, then full size;
-  at most about 4096 px for the atlas and `SearchMap.mrc`, 2048 px for the overview). On a
-  high-DPI screen this happens straight away.
-- The stitched tiles load at full display size right after the preview, because the overlap
-  alignment needs them.
-- While you look at one view, the **previews of the selected search map** (overview and tiles)
-  load in the background, so the next tab opens at once.
-- With numpy, the server bins images and sends **16-bit data** (half the bytes of float32).
-  Without numpy, the browser reads the full files and bins them itself, which is slower.
-
-Measured on a 5 MB/s link (a slow VPN): the atlas appears in about 1.5 s (2 MB) instead of
-about 10 s (67 MB); the overview opens at once.
-
-### Seamless stitching
-
-*Tiles, stitched here (aligned, blended)* works like the SerialEM Grid Viewer's montages:
-
-1. **Align.** The overlap of each pair of neighbouring tiles is cross-correlated (after a
-   high-pass filter, so ice gradients do not dominate), coarse at half size and then refined.
-   Least-squares tile positions are solved from all overlaps; a match that disagrees with the
-   others is dropped, and a failed match falls back to the stage positions.
-2. **Match brightness.** Each tile gets a gain so that tiles agree in their overlaps
-   (an offset instead, if the data are not positive counts).
-3. **Blend.** The tiles are merged into one image as a weighted average. Each tile fades out over
-   the overlap width, like IMOD's `blendmont`.
-
-The Image Information panel reports how many overlaps matched, the largest position correction,
-the range of tile gains and the fade width. On a 3 × 3 map of 2048 px tiles this takes about
-2 seconds in the browser.
-
-### Batch positions
-
-Read from `Batch/BatchPositionsList.xml` (Tomo5's list of positions) and the files in `Batch/` and
-the session folder. `Position_<N>` is one position; its exposure areas are N.1, N.2, … The status
-is Tomo5's own (`BatchPositionStatus`: Initialized, Acquired, Failed, …); without the list it comes
-from the files present:
-
-| Status | Files |
-|---|---|
-| Initialized | `Position_<N>_Search.mrc`, `Position_<N>_Search.xml` only |
-| Refined | also `Position_<N>_Exposure.mrc`, `Position_<N>_Tracking.mrc`, `Position_<N>_<k>_Exposure.mrc` |
-| Acquired | tilt series `Position_<N>[_<k>].mrc` and `.mdoc` in the session folder (*Acquired 1/3* when only some areas are done) |
-
-With *Batch Positions* selected, the **Search** tab shows `Position_<N>_Search.mrc` with the
-position's areas drawn as in Tomo5:
-
-- **green**: each exposure area N.k, with a square (camera field), a circle (beam) and an ellipse
-  (the beam at ±60° tilt: 1/cos 60° = 2× longer across the tilt axis); filled stronger once acquired;
-- **yellow**: the tracking area; **small blue square**: the focus area;
-- **red cross** on N.1, **blue line**: the tilt axis, thin lines from N.1 to the other areas.
-
-The areas are also drawn on the Overview and Search Map tabs for every position (as dots when
-zoomed out; dots on the Atlas). Click a position to select it, double-click to open its Search image.
-The Overview and Search Map tabs show the search map that holds the selected position.
-
-**Sizes.** The camera field is read from the exposure pixel size and image size (a tilt-series
-`.mdoc`, or the FEI extended header of an Exposure / tilt-series MRC; 0.81 µm by default). Tomo5 does
-not store the beam size, so the beam is drawn as **2× the camera field**. Both can be changed in the
-toolbar under the image (*Camera … µm*, *Beam … × camera*, shown on views that draw areas) and are
-remembered in the browser.
-
-### How tiles are placed
-
-Every Tomo5 image XML (`Overview.xml`, `Tile_*.xml`, …) has:
-
-- `microscopeData/stage/Position/X, Y`: the stage position of the image centre. For tiles,
-  Tomo5 folds the image shift into it, so each tile has its own position.
-- `SpatialScale/pixelSize/x`: the pixel size of the image.
-- `ReferenceTransformation/matrix`: a 2 × 2 matrix from image pixels to stage metres. It holds
-  the camera rotation and a flip, and differs slightly between magnifications (about 3° between
-  the overview and the tiles). It is given per unbinned camera pixel, so the viewer uses only its
-  direction and takes the size from the pixel size. **Its sign is the opposite of pixel → stage
-  as Tomo5 draws it**: the viewer uses −R. This was checked on real data (search maps on the
-  atlas, and tiles against `SearchMap.mrc`).
-
-So `stage = S − pixelSize · R · (pixel − centre)`. The pixel size always refers to the saved
-image, also for stitched images (the atlas, `SearchMap.mrc`) whose size differs from the camera
-readout. A search map is marked on the atlas with the footprint of `SearchMap.mrc`
-(`SearchMap.xml` position, pixel size and direction); a map without `SearchMap.mrc` yet is shown
-as a point at its overview centre. The view is turned so the main image (atlas,
-overview, or the first tile) looks as it does in Tomo5. If the tile XML files have no positions,
-the tiles are laid out as a grid in file order (grid size from `TileSetAcquisitionOptions.xml`),
-and a note says so.
-
-## Running on a remote workstation (port forwarding)
-
-This works the same way as running a Jupyter notebook on a remote machine. The viewer runs on
-the workstation that has the data and listens only on that machine. An SSH tunnel then brings
-its port to your own computer, so nothing is opened to the network.
-
-### 1. Start the viewer on the workstation
+## Quick start
 
 ```bash
-ssh user@workstation
-cd tomo5_data_viewer
-python3 tomo5_viewer.py /path/to/Tomo5/sessions --port 8766
+python3 tomo5_viewer.py /path/to/Tomo5/sessions /path/to/tilt_series
 ```
 
-When it starts, the viewer prints the tunnel command to run on your own computer:
+Give every folder you want to open (only those are reachable). Open the address it prints
+(default **http://localhost:8766**) in Chrome, Edge or Firefox, then:
 
-```text
-Tomo5 Data Viewer 0.1 on http://localhost:8766
-  Tested with Tomo5 5.26
-  sharing  sessions  ->  /path/to/Tomo5/sessions
-To view it from your own computer, run there:
-  ssh -N -L 8766:localhost:8766 user@workstation
-then open http://localhost:8766
-Press Ctrl+C to stop.
-```
+1. **Open Session Data…**: the session folder (with `Session.dm`, `Atlas/`, `SearchMaps/`, `Batch/`).
+2. **Tilt Series Folder…**: the folder with `Position_<N>[_<k>].mrc` and `.mdoc` (subfolders too).
 
-To keep the viewer running after you log out, start it inside `tmux` or `screen`:
+If the port is busy, the next free one is used.
+
+### Remote workstation
+
+If the data is on the server, run the viewer there and tunnel its port over SSH.
 
 ```bash
-tmux new -s tomo5                                   # start a session
-python3 tomo5_viewer.py /path/to/Tomo5/sessions --port 8766
-# detach with Ctrl+B then D; reattach later with:  tmux attach -t tomo5
-```
+# on the workstation (tmux or nohup keep it running after you log out)
+python3 tomo5_viewer.py /path/to/sessions /path/to/tilt_series
 
-or with `nohup`:
-
-```bash
-nohup python3 tomo5_viewer.py /path/to/Tomo5/sessions --port 8766 > tomo5_viewer.log 2>&1 &
-```
-
-### 2. Open the tunnel from your own computer
-
-In a new terminal **on your own computer** (macOS, Linux, or Windows PowerShell):
-
-```bash
+# on your local computer: the command the viewer printed, e.g.
 ssh -N -L 8766:localhost:8766 user@workstation
 ```
 
-- `-L 8766:localhost:8766` means: local port 8766 → port 8766 on the workstation.
-- `-N` opens the tunnel without starting a shell. The terminal looks frozen, which means it is working.
-  Leave it open while you use the viewer, and press Ctrl+C to close the tunnel.
-- Add `-f` (`ssh -N -f -L …`) to send the tunnel to the background instead.
+Then open **http://localhost:8766**.
 
-### 3. Open the viewer
 
-Open **http://localhost:8766** in Chrome, Edge or Firefox on your own computer.
+## Using the viewer
 
-### Common variations
+The layout follows Tomo5.
 
-**Port already in use on your computer** (for example, the SerialEM Grid Viewer on 8765, or
-another tunnel). Pick a different local port. Only the first number changes:
+- **Left, Tasks:** *Search Maps*, *Batch Positions* and *Movie Player* choose the table on the right.
+- **Centre:** tabs **Atlas › Overview › Search Map › Search › Exposure**. Scroll to zoom, drag to
+  pan, double-click or **F** to fit; ‹ › and the arrow keys step through the table (after the last
+  comes the first).
+- **Right:** the table (click ★ / Rating to sort highest first), **Histogram**, **Filter** (low-pass,
+  60 Å by default for exposures) and **Image Information** with every XML / `.mdoc` field.
+- **Right-click** the image to zoom in to a deeper level for what is under the cursor (e.g. Atlas ›
+  a position's Search image) or out one level, to copy the stage position, and to make movies.
+- **?** (top right, or the **?** key) lists all shortcuts.
+
+**Search maps.** The atlas marks every search map (green = acquired, orange = in progress); the
+Search Map tab shows the tiles stitched in the browser (aligned and blended) or Tomo5's
+`SearchMap.mrc`.
+
+**Batch positions.** Status is Tomo5's own (Initialized, Refined, Acquired, …). The Search tab draws
+each exposure area N.k as in Tomo5: camera square, beam circle and the ±60° ellipse in green, the
+tracking area in yellow, focus in blue, the tilt axis in blue. Tomo5 does not store the beam size,
+so it is drawn as 2× the camera field (adjustable under the image). The Exposure tab shows the tilt
+series of the area, or its refined exposure before acquisition.
+
+**Tilt angles.** Tomo5 saves the stack sorted by angle but the `.mdoc` in acquisition order, so the
+viewer takes each section's angle from the stack's FEI header (else from the `.mdoc` sorted by
+angle) and pairs it with the `.mdoc` block of that angle. Image Information shows the source.
+
+## Movie Player
+
+*Movie Player* lists every tilt series. Select one: it opens in the Exposure tab with a play bar.
+
+- **Play / Pause** (Space), slider, fps, order (*as acquired* or *by angle*). Paused, the
+  full-resolution section is shown.
+- **next series at end** goes through the whole list (and round again).
+- **★ rating** per tilt series: click the stars (top right or in the table) or press **1–5**
+  (**0** clears). Saved at once to `tiltseries_movie/tiltseries_ratings.xml`, no `--edit` needed.
+- **Export movie** downloads the series as it plays (`.mp4` or `.webm`).
+
+Without previews the frames are read live from the full stacks (playback starts after the first
+few frames). For instant playback, make the previews once:
 
 ```bash
-ssh -N -L 9000:localhost:8766 user@workstation      # then open http://localhost:9000
+python3 tomo5_viewer.py --make-previews /path/to/tilt_series --mp4
 ```
 
-**Port already in use on the workstation** (someone else runs the viewer there). Start the viewer
-on another port and tunnel that one:
+This writes, per tilt series, into `tilt_series/tiltseries_movie/`: a 512 px 8-bit `.mrc`, a
+`.json` (angles, times, pixel size, source size/date) and, with `--mp4`, an `.mp4`. Up-to-date
+previews are skipped on the next run.
+
+## Acquisition movies
+
+Right-click an area in **Batch Positions › Search** (or a position on the Search Map, or the
+Exposure tab):
+
+- **Make acquisition movie (N.k)…**: Atlas › Search Map › the area › its tilt series as an inset,
+  with the angle and a stage-tilt schematic.
+- **Make parallel acquisition movie (Position_N)…**: the areas picked one by one, then all their
+  tilt series playing side by side.
+
+The dialog has a preview and settings (titles, zoom, timing, order: start → lowest → highest →
+start by default, low-pass, 720p / 1080p / 4K). **Make movie** encodes with ffmpeg on the server
+(`.mp4`) or in the browser (`.webm`) and offers a download.
+
+
+## Scripts and AI agents
+
+`.claude/skills/tomo5-data/` is an [Agent Skill](https://agentskills.io): `SKILL.md` tells an AI
+coding agent (Claude Code loads it automatically in this repo) how to read Tomo5 data and which
+pitfalls to avoid, and `scripts/tomo5_io.py` does the work — also on its own, without an agent:
 
 ```bash
-python3 tomo5_viewer.py /path/to/sessions --port 8770        # on the workstation
-ssh -N -L 8770:localhost:8770 user@workstation               # on your computer
+S=.claude/skills/tomo5-data/scripts/tomo5_io.py
+python3 $S positions /path/to/Session --tilt /path/to/tilt_series --csv areas.csv   # one row per area
+python3 $S tilts /path/to/Position_1.mrc /path/to/Position_1.mdoc                  # angle of every section
+python3 $S stitch /path/to/SearchMaps/SearchMap_7_… stitched.mrc --bin 4
 ```
 
-**Through a gateway / login node** (the workstation is only reachable through another host):
-
-```bash
-ssh -N -J user@gateway -L 8766:localhost:8766 user@workstation
-```
-
-**Viewer on a compute node of a cluster** (the viewer runs on `node042`, which you reach from the
-login node). Start the viewer on the node with `--host 0.0.0.0`, then forward through the login node:
-
-```bash
-python3 tomo5_viewer.py /path/to/sessions --port 8766 --host 0.0.0.0   # on node042
-ssh -N -L 8766:node042:8766 user@login-node                             # on your computer
-```
-
-**Save it in `~/.ssh/config`** so the tunnel is one short command:
-
-```text
-Host tomo5
-    HostName workstation.example.org
-    User user
-    LocalForward 8766 localhost:8766
-    # ProxyJump user@gateway        # if needed
-```
-
-Then run `ssh -N tomo5`.
-
-**Windows without OpenSSH:** in PuTTY, go to *Connection → SSH → Tunnels*, set
-*Source port* `8766` and *Destination* `localhost:8766`, click *Add*, then connect as usual.
-
-**VS Code Remote-SSH:** if you started the viewer from a VS Code terminal connected to the
-workstation, VS Code usually forwards the port by itself (see the *Ports* tab).
-
-### Troubleshooting
-
-| Problem | Fix |
-|---|---|
-| `bind [127.0.0.1]:8766: Address already in use` | A tunnel or program already uses that local port. Close the old tunnel (`pkill -f "ssh -N"` on macOS/Linux) or use another local port. |
-| `OSError: [Errno 98] Address already in use` on the workstation | The viewer is already running there, or another program uses the port. Use `--port 8770`. |
-| The browser says "connection refused" | The viewer is not running on the workstation, or the tunnel points to the wrong port. Check both terminals. |
-| `channel 2: open failed: connect failed` in the tunnel terminal | The tunnel works but nothing listens on that port on the workstation. Check the viewer's port. |
-| The page loads but **Open session…** is missing | The page was opened as a file, not through `http://localhost:…`. |
+Also `info FILE.xml|FILE.mrc` and `maps SESSION`, or `import tomo5_io` in your own Python.
 
 ## Server options
 
 ```text
-python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--host 127.0.0.1] [--html index.html] [--verbose]
+python3 tomo5_viewer.py ROOT [ROOT ...] [--port 8766] [--port-retries 50] [--host 127.0.0.1]
+                        [--allow-host NAME] [--ffmpeg auto|PATH|none] [--read-only] [--verbose]
+python3 tomo5_viewer.py --make-previews TILTDIR [--mp4] [--workers 2] [--force] [...]
 ```
 
-- Only the listed folders are reachable, and nothing is ever written.
-- `--host 0.0.0.0` makes the server reachable from other machines. The default, `127.0.0.1`,
-  with an SSH tunnel is safer.
+- Only the listed folders are reachable. The only file written is the star ratings
+  (`tiltseries_movie/tiltseries_ratings.xml`); `--read-only` turns that off too.
+- Requests must be addressed to `localhost`, an IP address or this machine's name (protection
+  against DNS rebinding); `--allow-host` adds a name.
+- `--host 0.0.0.0` opens the server to the network; the default with an SSH tunnel is safer.
+- Movies are encoded in a temporary folder, deleted after an hour or when the server stops.
 
-## Requirements
+## Testing
 
-- Python 3.7+ (numpy optional, recommended).
-- A current Chrome, Edge or Firefox.
+```bash
+pip install playwright && python3 -m playwright install chromium        # once
+make test SESSION=/path/to/Session TILT=/path/to/tilt_series             # clicks through everything
+make check                                                              # syntax + unit tests
+```
+
+`make test` runs `tests/smoke_test.py`: a read-only viewer on a free port, every task, tab, button,
+menu item and shortcut in a headless browser, and a report of JavaScript and server errors.

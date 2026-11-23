@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<link rel="icon" href="data:,">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tomo5 Data Viewer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -56,8 +57,28 @@ header h1 small{font:400 12px var(--font-mono);color:var(--muted);margin-left:8p
 .spacer{flex:1}
 #status{font-size:12.5px;color:var(--muted);max-width:52ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #status.err{color:var(--err)}
+.editbar{display:inline-flex;align-items:center;gap:6px;margin-left:6px;padding-left:12px;border-left:1px solid var(--line)}
+.editbadge{font:600 11px var(--font-mono);letter-spacing:.08em;color:#1a1300;background:#f0b429;border-radius:4px;padding:3px 6px}
+#saveEdits.dirty{border-color:#f0b429;color:#f0b429}
+.stars.rate span[data-r]{cursor:pointer}
+.stars.rate span[data-r]:hover{color:#ffe08a}
+th.sortable{cursor:pointer}
+th.sortable.on{color:#f5c518}
+.edithint{font-size:11.5px;color:#f0b429;white-space:nowrap}
+.tiltinfo{font-size:12px;color:var(--muted);align-self:center;max-width:28ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tiltinfo.ok{color:var(--accent)}
 .credit{font-size:12px;color:var(--muted);text-decoration:none;white-space:nowrap;border-left:1px solid var(--line);padding-left:14px}
 .credit:hover{color:var(--accent);text-decoration:underline}
+.keysbtn{width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:none;color:var(--muted);font:600 13px var(--font-body);cursor:pointer;flex:none}
+.keysbtn:hover{color:var(--accent);border-color:var(--accent)}
+dialog.keys{width:min(560px,calc(100% - 24px));padding:18px 22px}
+dialog.keys h3{margin:0 0 10px;font:600 15px var(--font-body)}
+dialog.keys h4{margin:14px 0 6px;font:600 11px var(--font-body);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+dialog.keys dl{display:grid;grid-template-columns:max-content 1fr;gap:5px 16px;margin:0;font-size:13px}
+dialog.keys dt{white-space:nowrap}
+dialog.keys kbd{font:12px var(--font-mono);border:1px solid var(--line);border-bottom-width:2px;border-radius:4px;padding:1px 6px;background:var(--bg)}
+dialog.keys dd{margin:0;color:var(--muted)}
+dialog.keys .foot{display:flex;justify-content:flex-end;margin-top:14px}
 
 /* ---------- left: tasks */
 nav.tasks{background:var(--t-panel);border-right:3px solid var(--t-line);overflow:auto}
@@ -67,8 +88,6 @@ nav.tasks{background:var(--t-panel);border-right:3px solid var(--t-line);overflo
 .task{display:flex;align-items:center;width:100%;padding:6px 12px;background:none;border:none;border-bottom:1px solid var(--t-line);text-align:left;cursor:pointer;font-size:12.5px}
 .task:hover{background:var(--t-row)}
 .task.active{background:var(--t-sel);color:#fff}
-.task.soon{color:var(--t-muted);cursor:default}
-.task.soon:hover{background:none}
 .task .cnt{margin-left:auto;font:12px var(--font-mono);font-variant-numeric:tabular-nums;padding-right:16px}
 
 /* ---------- centre: tabs, viewer, toolbar */
@@ -98,6 +117,16 @@ nav.tasks{background:var(--t-panel);border-right:3px solid var(--t-line);overflo
 #welcome h2{margin:0 0 8px;font:600 17px var(--font-body)}
 #welcome p{margin:0 0 10px;color:var(--t-muted)}
 #welcome code{font:12px var(--font-mono);color:var(--t-ink)}
+.playbar{display:flex;align-items:center;gap:10px;height:34px;margin:6px 8px 0;padding:0 8px;background:var(--t-bar);font-size:12px;color:var(--t-muted)}
+.playbar #plPos{flex:1;min-width:80px;accent-color:var(--t-sel)}
+.playbar #plInfo{font:12px var(--font-mono);color:var(--t-ink);white-space:nowrap;min-width:150px}
+.playbar select{background:var(--t-tab);border:1px solid var(--t-line);border-radius:3px;padding:1px 4px;font-size:12px;color:var(--t-ink)}
+.playbar label{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.playbar input[type=checkbox]{accent-color:var(--t-sel);margin:0}
+.btn.small{padding:3px 9px;font-size:12px;color:var(--ink)}
+td.pv-ok{color:#39e639}
+.stars.frommap{color:#c9a227;opacity:.75}
+#mapTable td .stars{letter-spacing:0;font-size:12.5px}
 .toolbar{display:flex;align-items:center;gap:6px;height:36px;margin:0 8px 8px;padding:0 6px;background:var(--t-bar)}
 .zbtn{width:24px;height:24px;border:none;border-radius:2px;background:#3a4f64;cursor:pointer;font-size:16px;line-height:1;display:grid;place-items:center}
 .zbtn:hover{background:#4a6278}
@@ -115,6 +144,13 @@ table.grid tbody tr:nth-child(even){background:var(--t-row2)}
 table.grid tbody tr:hover{background:#34495e}
 table.grid tbody tr.sel{background:var(--t-sel);color:#fff}
 table.grid td.st-ok{color:#bfe3ff}
+.areas{display:inline-flex;gap:4px}
+.ar{width:20px;height:20px;border-radius:50%;border:none;padding:0;font:600 11px var(--font-body);cursor:pointer;background:#46607a;color:#e8eef3}
+.ar.none{background:#33475b;color:#8396a8;cursor:pointer}
+.ar.on{background:#fff;color:#1d4f73}
+table.grid tr.sel .ar{background:#1f6fa8}
+table.grid tr.sel .ar.none{background:#3d82b8;color:#bcd6ec}
+table.grid tr.sel .ar.on{background:#fff;color:#1d4f73}
 .stars{color:#f5c518;letter-spacing:1px;font-size:14px;white-space:nowrap}
 .stars .off{color:#7d90a3}
 table.grid tr.sel .stars .off{color:#d6e9f8}
@@ -151,6 +187,16 @@ details.xml>summary{cursor:pointer;color:var(--t-muted);font-size:12px}
 .meta td{padding:3px 6px;border-bottom:1px solid var(--t-line);vertical-align:top;overflow-wrap:anywhere}
 .meta td:first-child{color:var(--t-muted);width:58%}
 
+/* ---------- right-click zoom menu */
+.ctx{position:fixed;z-index:50;min-width:230px;max-width:320px;padding:4px 0;background:#22323f;border:1px solid #121b23;border-radius:6px;box-shadow:0 8px 24px rgba(0,0,0,.45);font-size:12.5px;color:var(--t-ink)}
+.ctx .hd{padding:6px 12px 2px;color:var(--t-muted);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.06em}
+.ctx .it{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:5px 12px 5px 20px;border:none;background:none;cursor:pointer}
+.ctx .it:hover:not(:disabled),.ctx .it:focus-visible{background:var(--t-sel);color:#fff;outline:none}
+.ctx .it:disabled{opacity:.42;cursor:default}
+.ctx .it small{margin-left:auto;color:var(--t-muted);font-size:11px}
+.ctx .it:hover:not(:disabled) small{color:#d8ecfa}
+.ctx .sep{height:1px;margin:4px 0;background:#3a4e61}
+
 /* ---------- folder picker */
 dialog{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:0;width:min(640px,92vw);font-size:14px}
 dialog::backdrop{background:rgba(0,0,0,.55)}
@@ -168,19 +214,50 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
 .fp-foot{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line)}
 .fp-note{font-size:12.5px;color:var(--muted)}
 .fp-note.ok{color:var(--accent)}
+/* acquisition movie dialog */
+dialog.mv{width:min(1240px,calc(100% - 24px));max-height:calc(100vh - 24px)}
+.mvgrid{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:16px;padding:14px;max-height:calc(100vh - 40px)}
+.mvmain{display:flex;flex-direction:column;gap:8px;min-width:0}
+.mvmain h3{margin:0;font:600 14.5px/1.3 var(--font-body)}
+#mvCanvas{width:100%;height:auto;aspect-ratio:16/9;background:#000;border-radius:6px}
+.mvbar{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;font:12px var(--font-mono)}
+.mvbar input[type=range]{accent-color:var(--accent)}
+.mvmeta{font-size:12px;color:var(--muted)}
+.mvmain .msg{font-size:12.5px;min-height:18px}.mvmain .msg.err{color:var(--warn)}
+.mvmain progress{width:100%}
+.mvfoot{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.mvfoot a.btn{text-decoration:none}
+.mvside{overflow:auto;font-size:12.5px;padding-right:4px;max-height:calc(100vh - 70px)}
+.mvside h4{margin:12px 0 6px;font:600 11px/1.2 var(--font-body);text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.mvside select,.mvside input[type=number],.mvside input[type=text]{background:var(--bg);border:1px solid var(--line);border-radius:5px;padding:4px 6px;font:12.5px var(--font-body);width:100%;min-width:0;color:var(--ink)}
+.mvfs{display:grid;grid-template-columns:1fr 1fr;gap:6px 8px}
+.mvf{display:grid;gap:3px;font-size:11.5px;color:var(--muted)}
+.mvf.full,.mvc.full{grid-column:1/-1}
+.mvc{display:flex;gap:6px;align-items:center;font-size:12px}
+.mvc input{accent-color:var(--accent);margin:0}
+.mvlab{display:grid;gap:3px;margin-bottom:8px}.mvlab span{font-size:11.5px;color:var(--muted)}
+.mvnote{margin:0;color:var(--muted)}
+@media (max-width:900px){.mvgrid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
-    <h1>Tomo5 Data Viewer<small>v0.4</small></h1>
+    <h1>Tomo5 Data Viewer<small>v0.9</small></h1>
     <div class="opens">
-      <button class="btn primary" id="openServer" hidden>Open session…</button>
-      <button class="btn" id="openLocal">Open folder from this computer…</button>
-      <input type="file" id="localDir" webkitdirectory directory multiple hidden>
+      <button class="btn primary" id="openServer" hidden title="The session folder: Session.dm, Atlas/, SearchMaps/, Batch/, Thumbnails/">Open Session Data…</button>
+      <button class="btn" id="openTilt" disabled hidden title="The folder with the tilt series Position_N[_k].mrc and their .mdoc files">Tilt Series Folder…</button>
+      <span class="editbar" id="editBar" hidden>
+        <span class="editbadge" title="Started with --edit (experimental). Edits are saved to the session's Batch/Edit folder; Tomo5's files are never changed.">EDIT</span>
+        <button class="btn" id="loadEdits" disabled title="Load the edits saved in Batch/Edit">Load Session</button>
+        <button class="btn" id="saveEdits" disabled title="Save edits to Batch/Edit (the previous save is kept in Batch/Edit/history)">Save Session</button>
+      </span>
+      <span class="tiltinfo" id="tiltInfo"></span>
+
     </div>
     <span class="spacer"></span>
     <span id="status"></span>
+    <button class="keysbtn" id="keysBtn" title="Keyboard and mouse shortcuts (?)" aria-label="Shortcuts">?</button>
     <a class="credit" href="https://github.com/builab/tomo5_data_viewer" target="_blank" rel="noopener">Vibe-coded by Builab@McGill</a>
   </header>
 
@@ -190,8 +267,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
     <div id="taskList">
       <button class="task active" data-task="searchMaps">Search Maps<span class="cnt" id="cntMaps">–</span></button>
       <button class="task" data-task="batch">Batch Positions<span class="cnt" id="cntBatch">–</span></button>
-      <button class="task soon" data-task="acq" title="Coming later">Data Acquisition</button>
-      <button class="task soon" data-task="movie" title="Coming later">Movie Player</button>
+      <button class="task" data-task="movie" title="Every tilt series of the session, to play one after another">Movie Player<span class="cnt" id="cntMovie">–</span></button>
     </div>
   </nav>
 
@@ -202,6 +278,7 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
       <button class="tab" data-tab="overview" role="tab" disabled>Overview</button>
       <button class="tab" data-tab="searchmap" role="tab" disabled>Search Map</button>
       <button class="tab" data-tab="search" role="tab" disabled>Search</button>
+      <button class="tab" data-tab="exposure" role="tab" disabled>Exposure</button>
     </div>
     <div class="subbar">
       <button class="nav" id="prevMap" title="Previous" disabled>‹</button>
@@ -209,6 +286,8 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
         <option value="tiles">Tiles, stitched here (aligned, blended)</option>
         <option value="stitched">SearchMap.mrc (stitched by Tomo5)</option>
       </select>
+      <select id="secSel" hidden title="Tilt-series section"></select>
+      <span class="edithint" id="editHint" hidden>Edit: drag sub-positions 2+ · right-click to add</span>
       <span class="title" id="subTitle"></span>
       <button class="nav" id="nextMap" title="Next" disabled>›</button>
     </div>
@@ -220,10 +299,19 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
         <div class="card">
           <h2>Open a Tomo5 session</h2>
           <p>Pick the session folder (the one with <code>Atlas/</code>, <code>Batch/</code> and <code>SearchMaps/</code>).</p>
-          <p id="welcomeServer" hidden>Folders shared by the server are listed under <b>Open session…</b>.</p>
-          <p id="welcomeLocal">Without the server, use <b>Open folder from this computer…</b>. Only the files being shown are read.</p>
+          <p id="welcomeServer" hidden>Folders shared by the server are listed under <b>Open Session Data…</b>. If the tilt series are in a separate folder, add it with <b>Tilt Series Folder…</b>.</p>
+          <p id="welcomeLocal">This page needs the viewer server. Start it on the computer with the data, e.g. <code>python3 tomo5_viewer.py /path/to/sessions /path/to/tilt_series</code>, then open <code>http://localhost:8766</code>.</p>
         </div>
       </div>
+    </div>
+    <div class="playbar" id="playBar" hidden>
+      <button class="btn small" id="plPlay" title="Play the tilt series (Space)">▶ Play</button>
+      <input type="range" id="plPos" min="0" max="0" value="0" aria-label="Frame">
+      <span id="plInfo"></span>
+      <label title="Frames per second">fps <select id="plFps"><option>5</option><option selected>10</option><option>15</option><option>20</option><option>30</option></select></label>
+      <label>Order <select id="plOrder"><option value="acq">as acquired</option><option value="angle">by angle</option></select></label>
+      <label id="plNextWrap" title="At the end, go on with the next tilt series in the list"><input type="checkbox" id="plNext"> next series at end</label>
+      <button class="btn small" id="plExport" title="Save this tilt series as a movie (.mp4 with ffmpeg on the server, else .webm), as it plays: order, contrast, low-pass">Export movie</button>
     </div>
     <div class="toolbar">
       <button class="zbtn" id="zoomOut" title="Zoom out (−)">−</button>
@@ -261,6 +349,16 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
       </div>
     </details>
     <details class="panel" open>
+      <summary>Filter</summary>
+      <div class="pbody">
+        <div class="checks"><label><input type="checkbox" id="lpOn">Low-pass</label><span class="ovsrc" id="lpFor"></span></div>
+        <div class="ctl">
+          <label for="lpRes">Resolution</label><input type="range" id="lpRes" min="0" max="1000"><output id="lpOut"></output>
+        </div>
+        <p class="note" id="lpNote"></p>
+      </div>
+    </details>
+    <details class="panel" open>
       <summary>Image Information</summary>
       <div class="pbody">
         <dl class="info" id="info"><dt style="color:var(--t-muted)">Nothing shown yet.</dt><dd></dd></dl>
@@ -275,13 +373,53 @@ dialog::backdrop{background:rgba(0,0,0,.55)}
   </section>
 </div>
 
+<div class="ctx" id="ctxMenu" hidden role="menu"></div>
+
 <dialog id="picker">
-  <div class="fp-head"><h3>Open a Tomo5 session</h3><div class="fp-crumbs" id="fpCrumbs"></div></div>
+  <div class="fp-head"><h3 id="fpTitle">Open Session Data</h3><div class="fp-crumbs" id="fpCrumbs"></div></div>
   <div class="fp-list" id="fpList"></div>
   <div class="fp-foot">
     <span class="fp-note" id="fpNote"></span><span class="spacer"></span>
     <button class="btn" id="fpCancel">Cancel</button>
     <button class="btn primary" id="fpUse">Open this folder</button>
+  </div>
+</dialog>
+
+<dialog class="keys" id="keysDlg" aria-labelledby="keysTitle">
+  <h3 id="keysTitle">Shortcuts</h3>
+  <h4>Keyboard</h4>
+  <dl>
+    <dt><kbd>→</kbd> <kbd>↓</kbd> / <kbd>←</kbd> <kbd>↑</kbd></dt><dd>next / previous in the table (after the last comes the first)</dd>
+    <dt><kbd>+</kbd> <kbd>−</kbd></dt><dd>zoom in / out</dd>
+    <dt><kbd>F</kbd></dt><dd>fit to window</dd>
+    <dt><kbd>Space</kbd></dt><dd>play / pause the tilt series (Exposure tab)</dd>
+    <dt><kbd>1</kbd> … <kbd>5</kbd>, <kbd>0</kbd></dt><dd>rate the tilt series shown, 0 clears (Exposure tab)</dd>
+    <dt><kbd>?</kbd></dt><dd>this list; <kbd>Esc</kbd> closes it</dd>
+  </dl>
+  <h4>Mouse</h4>
+  <dl>
+    <dt>drag · wheel</dt><dd>pan · zoom at the cursor</dd>
+    <dt>click a marker</dt><dd>select that search map or position</dd>
+    <dt>double-click</dt><dd>open the marker under the cursor (else fit to window)</dd>
+    <dt>right-click</dt><dd>zoom in / out between Atlas › Overview › Search Map › Search › Exposure; acquisition movies</dd>
+    <dt>click ★</dt><dd>rate (the same star again clears)</dd>
+  </dl>
+  <div class="foot"><button class="btn" type="button" id="keysClose">Close</button></div>
+</dialog>
+
+<dialog class="mv" id="mvDlg" aria-labelledby="mvTitle">
+  <div class="mvgrid">
+    <div class="mvmain">
+      <h3 id="mvTitle">Acquisition movie</h3>
+      <canvas id="mvCanvas" width="1920" height="1080" aria-label="Movie preview"></canvas>
+      <div class="mvbar"><button class="btn" type="button" id="mvPlay">Play</button><input type="range" id="mvTime" min="0" max="1" step="0.01" value="0" aria-label="Time"><span id="mvClock"></span></div>
+      <div class="mvmeta" id="mvInfo"></div>
+      <div class="mvmeta" id="mvEnc"></div>
+      <progress id="mvProg" max="1" value="0" hidden></progress>
+      <div class="msg" id="mvStatus" role="status"></div>
+      <div class="mvfoot"><span id="mvOut"></span><span class="spacer" style="flex:1"></span><button class="btn" type="button" id="mvClose">Close</button><button class="btn primary" type="button" id="mvRender">Make movie</button></div>
+    </div>
+    <div class="mvside" id="mvSide"></div>
   </div>
 </dialog>
 
@@ -347,29 +485,6 @@ const ServerSource = {
     return {data, w, h};
   },
 };
-
-function LocalSource(fileList){
-  // a folder picked with <input webkitdirectory>: files are known by their relative path
-  const files = new Map();
-  for(const f of fileList) files.set(f.webkitRelativePath || f.name, f);
-  return {
-    kind: "local",
-    async list(path){
-      const pre = path ? path + "/" : "", dirs = new Set(), out = [];
-      for(const [p, f] of files){
-        if(!p.startsWith(pre)) continue;
-        const rest = p.slice(pre.length), i = rest.indexOf("/");
-        if(i < 0) out.push({name: rest, size: f.size}); else dirs.add(rest.slice(0, i));
-      }
-      return {path, dirs: [...dirs].sort().map(name => ({name})), files: out.sort((a, b) => a.name.localeCompare(b.name))};
-    },
-    file(path){ const f = files.get(path); if(!f) throw new Error(`${path} not found`); return f; },
-    async text(path){ return this.file(path).text(); },
-    async bytes(path, start, end){ return this.file(path).slice(start, end + 1).arrayBuffer(); },
-    async section(){ return null; },
-    root(){ const first = files.keys().next().value || ""; return first.split("/")[0]; },
-  };
-}
 
 /* ------------------------------------------------------------------ MRC */
 function parseMrcHeader(buf){
@@ -475,19 +590,58 @@ const CACHE = new Map();
 function cached(key, fn){ if(!CACHE.has(key)){ const p = fn(); CACHE.set(key, p); p.catch(() => CACHE.delete(key)); } return CACHE.get(key); }
 const getXml = path => cached("x:" + path, async () => { const rows = flattenXml(await SRC.text(path)); return {rows, info: xmlInfo(rows)}; });
 const getHeader = path => cached("h:" + path, async () => parseMrcHeader(await SRC.bytes(path, 0, 1023)));
-const getImage = (path, maxDim) => cached(`i:${maxDim}:${path}`, async () => {
+/* Decoded images: kept for reuse up to IMG_MAX bytes, least recently used dropped first, so paging
+   through tilt series for hours does not fill the browser's memory. */
+const IMG = new Map();
+let IMG_MAX = 1024 * 1024 * 1024;           // bytes of decoded images kept
+let IMG_BYTES = 0;
+function trimImages(keep){
+  for(const [k, e] of IMG){
+    if(IMG_BYTES <= IMG_MAX) break;
+    if(k === keep || !e.bytes) continue;
+    IMG.delete(k); IMG_BYTES -= e.bytes;
+  }
+}
+function clearImages(){ IMG.clear(); IMG_BYTES = 0; }
+function getImage(path, maxDim, z = 0){
+  const key = `${maxDim}:${z}:${path}`;
+  let e = IMG.get(key);
+  if(e){ IMG.delete(key); IMG.set(key, e); return e.p; }       // most recently used last
+  e = {p: loadImage(path, maxDim, z), bytes: 0};
+  IMG.set(key, e);
+  e.p.then(img => { if(IMG.get(key) !== e) return; e.bytes = img.data.byteLength; IMG_BYTES += e.bytes; trimImages(key); },
+           () => { if(IMG.get(key) === e) IMG.delete(key); });
+  return e.p;
+}
+const loadImage = async (path, maxDim, z) => {
   const h = await getHeader(path);
+  if(z < 0 || z >= h.nz) throw new Error(`Section ${z} is outside ${path.split("/").pop()} (${h.nz} sections).`);
   const bin = binFor(h, maxDim);
-  let img = await SRC.section(path, 0, bin);
+  let img = await SRC.section(path, z, bin);
   if(!img){
-    const n = h.nx * h.ny * h.bytesPer, start = 1024 + h.nxt;
+    const n = h.nx * h.ny * h.bytesPer, start = 1024 + h.nxt + z * n;        // only this section is read
     const a = typedSection(await SRC.bytes(path, start, start + n - 1), h);
     if(a.length < h.nx * h.ny) throw new Error(`${path.split("/").pop()} is shorter than its header says.`);
     img = bin > 1 ? binImage(a, h.nx, h.ny, bin) : {data: Float32Array.from(a), w: h.nx, h: h.ny};
   }
   return {header: h, bin, ...img};
-});
+};
 const tryXml = async path => { try{ return await getXml(path); }catch{ return null; } };
+/* SerialEM-style .mdoc: global "Key = value" lines, then one [ZValue = n] block per section */
+const getMdoc = path => cached("m:" + path, async () => {
+  const head = [], secs = [];
+  let cur = null;
+  for(const line of (await SRC.text(path)).split(/\r?\n/)){
+    const z = line.match(/^\s*\[\s*ZValue\s*=\s*(\d+)\s*\]/i);
+    if(z){ cur = {z: +z[1], rows: []}; secs.push(cur); continue; }
+    if(/^\s*\[/.test(line)){ cur = null; continue; }
+    const kv = line.match(/^\s*([^=]+?)\s*=\s*(.*)$/);
+    if(kv) (cur ? cur.rows : head).push([kv[1], kv[2].trim()]);
+  }
+  const val = (rows, k) => rows.find(r => r[0].toLowerCase() === k.toLowerCase())?.[1];
+  for(const s of secs) s.tilt = parseFloat(val(s.rows, "TiltAngle"));
+  return {head, secs, val, pixelA: parseFloat(val(head, "PixelSpacing") ?? val(secs[0]?.rows || [], "PixelSpacing"))};
+});
 
 /* metres per original pixel: XML first, MRC header as fallback (1 Å in the header means "not set") */
 function pixelOf(xml, header){
@@ -513,12 +667,16 @@ const corners = g => [[0, 0], [g.nx, 0], [g.nx, g.ny], [0, g.ny]].map(([x, y]) =
 
 /* ------------------------------------------------------------------ session discovery */
 let SESSION = null;
-const STATE = {task: "searchMaps", tab: "atlas", sel: -1, pos: -1, smMode: "tiles"};
+const STATE = {task: "searchMaps", tab: "atlas", sel: -1, pos: -1, area: 1, z: {}, smMode: "tiles", sort: {}};
+const sortOn = () => !!STATE.sort[STATE.task];          // "highest rated first", per task
 const MAP_RE = /^SearchMap_(\d+)_(\d{8}_\d{6})$/i;
 
 async function openSession(src, path, want = {}){
-  SRC = src; SESSION = null; CACHE.clear();
-  STATE.tab = "atlas"; STATE.sel = -1; STATE.pos = -1; STATE.task = want.task === "batch" ? "batch" : "searchMaps";
+  if(EDIT_STATE.dirty && !confirm("Discard unsaved edits?")) return;
+  setDirty(false); EDIT_STATE.loaded = false;
+  SRC = src; SESSION = null; CACHE.clear(); clearImages();
+  $("#tiltInfo").textContent = ""; $("#openTilt").disabled = true;
+  STATE.tab = "atlas"; STATE.sel = -1; STATE.pos = -1; STATE.task = want.task === "batch" || want.task === "movie" ? want.task : "searchMaps";
   showScene(null);
   status(`Opening ${path || "folder"}…`);
   try{
@@ -560,8 +718,13 @@ async function openSession(src, path, want = {}){
         const bl = await src.list(join(path, "Batch"));
         const lf = bl.files.find(f => /^BatchPositions?List\.xml$/i.test(f.name));
         let list = null;
-        if(lf){ try{ list = parseBatchList(await src.text(join(path, `Batch/${lf.name}`))); }catch(e){ console.warn("BatchPositionsList", e); } }
-        s.positions = findPositions(bl.files.map(f => f.name), top.files.map(f => f.name), join(path, "Batch"), path, list);
+        if(lf){ try{ s.batchListText = await src.text(join(path, `Batch/${lf.name}`)); s.batchListName = lf.name; list = parseBatchList(s.batchListText); }catch(e){ console.warn("BatchPositionsList", e); } }
+        // edits saved by the viewer (--edit): <session>/Batch/Edit/edit_session.json
+        if(SERVER?.edit){
+          try{ const t = await src.text(join(path, `${SERVER.editDirs.batch}/edit_session.json`)); s.editSaved = JSON.parse(t); }catch{ s.editSaved = null; }
+        }
+        const names = fl => fl.filter(f => f.size !== 0).map(f => f.name);      // an empty file is not data
+        s.positions = findPositions(names(bl.files), names(top.files), join(path, "Batch"), path, list);
         s.batchList = !!list;
       }catch(e){ console.warn("Batch", e); }
     }
@@ -580,16 +743,25 @@ async function openSession(src, path, want = {}){
     renderTasks(); renderTable();
     if(!s.atlas && !s.maps.length && !s.positions.length){ status("No Atlas_*.xml, SearchMaps/ or Batch/ found in this folder.", true); return; }
     status(`${s.info?.name ? `${s.info.name}: ` : ""}${s.maps.length} search map${s.maps.length === 1 ? "" : "s"}, ${s.positions.length} batch position${s.positions.length === 1 ? "" : "s"}${s.atlas ? ", atlas" : ""} found.`);
+    $("#openTilt").disabled = false;
+    if(SERVER?.edit){
+      $("#saveEdits").disabled = false; $("#loadEdits").disabled = !s.editSaved;
+      if(s.editSaved) setTimeout(() => status(`Saved edits found (${(s.editSaved.saved || "").replace("T", " ").slice(0, 16)}). Click Load Session to continue them.`), 1500);
+    }
+    if(want.tilt) await setTiltFolder(want.tilt, true);
+    else await findPreviews(s).catch(() => 0);          // tilt series kept in the session folder
     fillTilts();
 
     const pick = want.map ? s.maps.findIndex(m => m.id === +want.map) : -1;
     STATE.sel = pick >= 0 ? pick : s.maps.length ? Math.max(0, s.maps.findIndex(m => m.status === "Acquired")) : -1;
     const pp = want.pos ? s.positions.findIndex(p => p.id === +want.pos) : -1;
+    STATE.area = +want.area || 1;
     STATE.pos = pp >= 0 ? pp : s.positions.length ? 0 : -1;
-    if(STATE.task === "batch" && !s.positions.length) STATE.task = "searchMaps";
-    if(STATE.task === "batch" && STATE.pos >= 0){ const mi = await mapOfPosition(s.positions[STATE.pos]); if(mi >= 0) STATE.sel = mi; }
+    if(posTask() && !s.positions.length) STATE.task = "searchMaps";
+    if(posTask() && STATE.pos >= 0){ const mi = await mapOfPosition(s.positions[STATE.pos]); if(mi >= 0) STATE.sel = mi; }
     renderTasks(); renderTable();
-    const tabs = ["atlas", "overview", "searchmap", "search"];
+    const tabs = ["atlas", "overview", "searchmap", "search", "exposure"];
+    if(want.tab === "exposure" && !exposureOf(s.positions[STATE.pos], STATE.area)) want.tab = "search";
     await setTab(want.tab && tabs.includes(want.tab) ? want.tab : STATE.task === "batch" ? "search" : s.atlas ? "atlas" : "overview");
   }catch(e){ console.error(e); status(e.message, true); }
 }
@@ -643,8 +815,8 @@ function findPositions(batchNames, topNames, batchDir, topDir, list){
   }
   for(const f of topNames){
     let m;
-    if((m = f.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i))) area(get(+m[1]), m[2] ? +m[2] : 1).mrc = join(topDir, f);
-    else if((m = f.match(/^Position_(\d+)(?:_(\d+))?(?:\.mrc)?\.mdoc$/i))) area(get(+m[1]), m[2] ? +m[2] : 1).mdoc = join(topDir, f);
+    if((m = f.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i))) Object.assign(area(get(+m[1]), m[2] ? +m[2] : 1), {mrc: join(topDir, f), mrcFrom: "session"});
+    else if((m = f.match(/^Position_(\d+)(?:_(\d+))?(?:\.mrc)?\.mdoc$/i))) Object.assign(area(get(+m[1]), m[2] ? +m[2] : 1), {mdoc: join(topDir, f), mrcFrom: "session"});
   }
   // positions and areas planned in BatchPositionsList.xml
   for(const [n, plan] of list || []){
@@ -653,14 +825,59 @@ function findPositions(batchNames, topNames, batchDir, topDir, list){
   }
   return [...P.values()].sort((a, b) => a.id - b.id).map(p => {
     p.areas = [...p.areas.values()].sort((a, b) => a.k - b.k);
-    const acq = p.areas.filter(a => a.mrc).length, refined = p.tracking || p.areas.some(a => a.exposure);
-    p.acquired = acq;
-    const fileStatus = acq ? (acq < p.areas.length ? `Acquired ${acq}/${p.areas.length}` : "Acquired") : refined ? "Refined" : "Initialized";
-    // Tomo5's own status when the list has it (it also knows e.g. Failed); file-based otherwise
-    p.status = p.plan?.status ? (p.plan.status === "Acquired" && acq && acq < p.areas.length ? fileStatus : p.plan.status) : fileStatus;
+    positionStatus(p);
     if(p.plan && Number.isFinite(p.plan.tiltA)) p.tilt = p.plan.tiltA * 180 / Math.PI;
     return p;
   });
+}
+function positionStatus(p){
+  const acq = p.areas.filter(a => a.mrc).length, refined = p.tracking || p.areas.some(a => a.exposure);
+  p.acquired = acq;
+  const fileStatus = acq ? (acq < p.areas.length ? `Acquired ${acq}/${p.areas.length}` : "Acquired") : refined ? "Refined" : "Initialized";
+  // Tomo5's own status when the list has it (it also knows e.g. Failed); file-based otherwise
+  p.status = p.plan?.status ? (p.plan.status === "Acquired" && acq && acq < p.areas.length ? fileStatus : p.plan.status) : fileStatus;
+}
+
+/* Tilt series folder: Position_<N>[_<k>].mrc and .mdoc (also .mrc.mdoc), in the folder or one level
+   of subfolders. They replace any tilt series found in the session folder. */
+async function setTiltFolder(path, quiet = false){
+  const s = SESSION;
+  if(!s) return;
+  status(`Reading tilt series folder ${path.split("/").pop()}…`);
+  try{
+    const top = await SRC.list(path);
+    const entries = top.files.map(f => ({...f, path: join(path, f.name)}));
+    const subs = top.dirs.filter(d => d.name.toLowerCase() !== PREVIEW_DIR).slice(0, 300);
+    const lists = await Promise.all(subs.map(d => SRC.list(join(path, d.name)).catch(() => null)));
+    lists.forEach((l, i) => l && entries.push(...l.files.map(f => ({...f, path: join(path, `${subs[i].name}/${f.name}`)}))));
+    let stacks = 0, mdocs = 0;
+    const byId = new Map(s.positions.map(p => [p.id, p]));
+    for(const p of s.positions) for(const a of p.areas){ if(a.mrcFrom !== "session"){ a.mrc = a.mrcFrom === "tilt" ? null : a.mrc; a.mdoc = a.mrcFrom === "tilt" ? null : a.mdoc; } }
+    for(const f of entries){
+      if(f.size === 0) continue;
+      let m, kind;
+      if((m = f.name.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i))) kind = "mrc";
+      else if((m = f.name.match(/^Position_(\d+)(?:_(\d+))?(?:\.mrc)?\.mdoc$/i))) kind = "mdoc";
+      else continue;
+      const p = byId.get(+m[1]); if(!p) continue;
+      const k = m[2] ? +m[2] : 1;
+      let a = p.areas.find(a => a.k === k);
+      if(!a){ a = {k, exposure: null, mrc: null, mdoc: null}; p.areas.push(a); p.areas.sort((x, y) => x.k - y.k); }
+      a[kind] = f.path; a.mrcFrom = "tilt";
+      if(kind === "mrc") a.mrcSize = f.size;
+      kind === "mrc" ? stacks++ : mdocs++;
+    }
+    for(const p of s.positions) positionStatus(p);
+    s.tilt = {path, stacks, mdocs};
+    const pv = await findPreviews(s);
+    $("#tiltInfo").textContent = `${path.split("/").pop()}: ${stacks} tilt series`;
+    $("#tiltInfo").title = path; $("#tiltInfo").classList.toggle("ok", stacks > 0);
+    $("#tiltInfo").textContent += pv ? ` · ${pv} preview${pv === 1 ? "" : "s"}` : "";
+    if(!quiet || !stacks) status(stacks ? `Tilt series folder: ${stacks} tilt series, ${mdocs} .mdoc${pv ? `, ${pv} previews in ${PREVIEW_DIR}` : `; no previews (make them with --make-previews)`}.` : "No Position_N[_k].mrc tilt series found in that folder.", !stacks);
+    s.overlay = null; await overlaySizes(s);
+    renderTasks(); renderTable(); updateChrome();
+    if(STATE.tab === "exposure" || STATE.tab === "search") await loadScene();
+  }catch(e){ console.error(e); status(e.message, true); }
 }
 
 // fill the ∠ and Rating columns from the XML / .dm files, in the background
@@ -674,7 +891,7 @@ async function fillTilts(){
       if(m.names.has("SearchMap.dm")){
         const dm = await tryXml(join(m.dir, "SearchMap.dm"));
         const r = dm?.rows.find(([p]) => /(^|\/)StarRating$/i.test(p));
-        if(r) m.rating = Math.max(0, Math.min(5, parseInt(r[1]) || 0));
+        if(r && !m.ratingChanged){ m.rating = Math.max(0, Math.min(5, parseInt(r[1]) || 0)); m.ratingOriginal = m.rating; }
       }
     }),
     ...s.positions.map(async p => {
@@ -683,6 +900,7 @@ async function fillTilts(){
       if(x && Number.isFinite(x.info.stage.a)) p.tilt = x.info.stage.a * 180 / Math.PI;
     }),
     overlaySizes(s),
+    ...s.positions.map(p => mapOfPosition(p).catch(() => -1)),      // for the zoom menu
   ]);
   if(SESSION === s){ renderTable(); updateChrome(); }
 }
@@ -693,6 +911,48 @@ async function fillTilts(){
 const OVERLAY_DEFAULT = {cam: 0.81, beamX: 2};
 function savedOverlay(){ try{ return JSON.parse(localStorage.getItem("tomo5.overlay") || "{}"); }catch{ return {}; } }
 function saveOverlay(k, v){ const o = savedOverlay(); o[k] = v; try{ localStorage.setItem("tomo5.overlay", JSON.stringify(o)); }catch{} }
+/* Tilt angle (and .mdoc values) of every section of a tilt series, by section number z.
+   Tomo5 saves Position_N[_k].mrc sorted by angle (−60 … +60) but writes the .mdoc in acquisition
+   order ([ZValue = 0] 0°, [ZValue = 1] −3°, …), so the .mdoc's ZValue is not the section number.
+   1. The FEI extended header has each section's own stage tilt (alpha, degrees): used when present
+      (and varying), and each section gets the .mdoc block with the nearest angle (dose, time, …).
+   2. Else, from the .mdoc: if its angles go up (or down) with ZValue, ZValue is the section; if not,
+      the stack is taken as sorted by angle, so section z gets the z-th smallest .mdoc angle.
+   → {secs: [{z, a, t, rows, mz}], from} with secs[z] for z = 0 … nz − 1. */
+const getTiltSections = (path, mdocPath) => cached(`t:${path}|${mdocPath || ""}`, async () => {
+  const h = await getHeader(path), md = mdocPath ? await getMdoc(mdocPath).catch(() => null) : null;
+  const msecs = (md?.secs || []).filter(s => Number.isFinite(s.tilt));
+  const time = s => s ? mvTime(md.val(s.rows, "DateTime")) : NaN;
+  const make = (angles, pick, from) => ({from, secs: angles.map((a, z) => { const s = pick(z, a); return {z, a, t: time(s), rows: s?.rows || null, mz: s?.z}; })});
+  // 1. FEI extended header: one block per section, alpha tilt (degrees) at byte 100
+  if(h.nxt >= 480 && h.nz > 1){
+    try{
+      const blk = new DataView(await SRC.bytes(path, 1024, 1031)).getInt32(0, true);
+      if(blk >= 164 && blk * h.nz <= h.nxt){
+        const e = new DataView(await SRC.bytes(path, 1024, 1024 + blk * h.nz - 1));
+        const A = Array.from({length: h.nz}, (_, z) => e.getInt32(z * blk + 4, true) >= 1 ? e.getFloat64(z * blk + 100, true) : NaN);
+        if(A.every(a => Number.isFinite(a) && Math.abs(a) <= 91) && Math.max(...A) - Math.min(...A) > 1){
+          const used = new Set();                // each .mdoc block once, the nearest angle within 1.5°
+          return make(A, (z, a) => {
+            let best = null;
+            for(const s of msecs) if(!used.has(s) && Math.abs(s.tilt - a) <= 1.5 && (!best || Math.abs(s.tilt - a) < Math.abs(best.tilt - a))) best = s;
+            if(best) used.add(best);
+            return best;
+          }, "FEI header");
+        }
+      }
+    }catch(e){ console.warn("FEI header", e); }
+  }
+  // 2. the .mdoc
+  if(msecs.length === h.nz && h.nz > 1){
+    const byZ = [...msecs].sort((a, b) => a.z - b.z), d = byZ.slice(1).map((s, i) => Math.sign(s.tilt - byZ[i].tilt));
+    if(d.every(x => x >= 0) || d.every(x => x <= 0)) return make(byZ.map(s => s.tilt), z => byZ[z], ".mdoc");
+    const sorted = [...msecs].sort((a, b) => a.tilt - b.tilt);
+    return make(sorted.map(s => s.tilt), z => sorted[z], ".mdoc, sorted by angle");
+  }
+  const byZ = new Map(msecs.map(s => [s.z, s]));
+  return make(Array.from({length: h.nz}, (_, z) => byZ.get(z)?.tilt ?? NaN), z => byZ.get(z), msecs.length ? ".mdoc (incomplete)" : "");
+});
 async function feiHeader(path){                // FEI extended header (metadata version ≥ 2), first section
   const h = await getHeader(path);
   if(h.nxt < 480) return null;
@@ -739,11 +999,24 @@ for(const [id, k, min] of [["#ovCam", "cam", 0.05], ["#ovBeamX", "beamX", 0.5]])
   });
 }
 
-// 5 stars: yellow for the rating, empty for the rest (no rating = 5 empty stars)
-function stars(n){
-  n = Number.isFinite(n) ? n : 0;
-  return `<span class="stars" title="${n ? `Rated ${n} of 5` : "Not rated"}">${"★".repeat(n)}<span class="off">${"☆".repeat(5 - n)}</span></span>`;
+// exposure areas as numbered circles (like Tomo5); white = the area shown, dim = nothing to show yet
+function areaButtons(p, selRow){
+  const areas = p.areas.length ? p.areas : [{k: 1}];
+  return `<span class="areas" title="${p.acquired} of ${areas.length} areas acquired">` + areas.map(a => {
+    const has = !!exposureOf(p, a.k), on = selRow && a.k === STATE.area;
+    return `<button class="ar ${on ? "on" : has ? "" : "none"}" data-k="${a.k}" title="Area ${p.id}.${a.k}: ${a.mrc ? "tilt series" : a.exposure ? "refined exposure" : "no image yet"}">${a.k}</button>`;
+  }).join("") + "</span>";
 }
+
+// 5 stars: yellow for the rating, empty for the rest (no rating = 5 empty stars)
+// attr (e.g. 'data-map="3"') makes them clickable: each star sets the rating, the same star again clears it
+function starsHtml(n, attr = "", title = ""){
+  n = Number.isFinite(n) ? n : 0;
+  if(!attr) return `<span class="stars" title="${esc(title || (n ? `Rated ${n} of 5` : "Not rated"))}">${"★".repeat(n)}<span class="off">${"☆".repeat(5 - n)}</span></span>`;
+  return `<span class="stars rate" ${attr} title="${esc(title || "Click to rate (click the same star again to clear)")}">` +
+    [1, 2, 3, 4, 5].map(r => `<span data-r="${r}"${r > n ? ' class="off"' : ""}>${r <= n ? "★" : "☆"}</span>`).join("") + "</span>";
+}
+const stars = (n, rateMap = null) => starsHtml(n, rateMap == null ? "" : `data-map="${rateMap}"`);    // search maps (edit mode)
 // the search map whose footprint holds a position (for the Overview / Search Map tabs)
 async function positionStage(p){
   if(p.plan && Number.isFinite(p.plan.stage[0])) return p.plan.stage;
@@ -763,39 +1036,79 @@ async function mapOfPosition(p){
   return (p.map = (inside[0] || near[0])?.i ?? -1);
 }
 
+/* Exposure tab: the area's tilt series Position_<N>[_<k>].mrc, or its refined exposure image
+   (Position_<N>[_<k>]_Exposure.mrc) before acquisition. Nothing for an Initialized position. */
+function exposureOf(p, k){
+  if(!p || /^Initialized/i.test(p.status)) return null;
+  const a = p.areas.find(a => a.k === k);
+  if(!a) return null;
+  if(a.mrc) return {path: a.mrc, mdoc: a.mdoc, kind: "tilt series", area: a};
+  if(a.exposure) return {path: a.exposure, mdoc: null, kind: "refined exposure", area: a};
+  return null;
+}
 function renderTasks(){
   const s = SESSION;
   $("#cntMaps").textContent = s ? `${s.maps.filter(m => m.status === "Acquired").length} / ${s.maps.length}` : "–";
   $("#cntBatch").textContent = s ? `${s.positions.filter(p => p.status === "Acquired").length} / ${s.positions.length}` : "–";
+  $("#cntMovie").textContent = s ? `${movieList().length}` : "–";
   for(const b of $$(".task[data-task]")) b.classList.toggle("active", b.dataset.task === STATE.task);
 }
 async function setTask(task){
   if(!SESSION || task === STATE.task) return;
   STATE.task = task;
-  if(task === "batch"){
+  if(task === "movie"){
+    // keep the selected area if it has a tilt series, else the first tilt series
+    const list = movieList();
+    if(list.length && curIndex() < 0){ STATE.pos = list[0].pi; STATE.area = list[0].k; }
+  }
+  if(task === "batch" || task === "movie"){
     const p = SESSION.positions[STATE.pos];
     if(p){ const mi = await mapOfPosition(p); if(mi >= 0) STATE.sel = mi; }
   }
   renderTasks(); renderTable();
-  const tab = task === "batch" ? (SESSION.positions.length ? "search" : STATE.tab) : (STATE.tab === "search" ? (SESSION.atlas ? "atlas" : "overview") : STATE.tab);
+  if(task === "movie"){
+    const p = SESSION.positions[STATE.pos];
+    if(!movieList().length) status("No tilt series yet: choose the Tilt Series Folder… at the top.", true);
+    return setTab(p && exposureOf(p, STATE.area) ? "exposure" : p ? "search" : STATE.tab);
+  }
+  const tab = task === "batch" ? (SESSION.positions.length ? "search" : STATE.tab) : (["search", "exposure"].includes(STATE.tab) ? (SESSION.atlas ? "atlas" : "overview") : STATE.tab);
   await setTab(tab);
 }
 
+/* The right-hand table of the current task: one column set per task, the same sorting (highest
+   rated first, per task), selection and scrolling. */
 function renderTable(){
-  const tb = $("#mapTable tbody"), s = SESSION, batch = STATE.task === "batch";
-  const list = s ? (batch ? s.positions : s.maps) : [];
+  const s = SESSION, task = STATE.task, so = sortOn() ? " on" : "";
   const tilt = v => Number.isFinite(v) ? Math.round(v) : "–";
-  $("#tableHead").innerHTML = batch
-    ? '<tr><th>Id</th><th title="Tilt angle">∠</th><th>Status</th><th>Name</th><th title="Exposure areas (acquired / planned)">Areas</th></tr>'
-    : '<tr><th>Id</th><th title="Tilt angle">∠</th><th>Status</th><th>Name</th><th>Rating</th></tr>';
-  $("#mapEmpty").hidden = list.length > 0;
-  $("#mapEmpty").textContent = !s ? "No session open." : batch ? "No batch positions in this session." : "No search maps in this session.";
-  const sel = batch ? STATE.pos : STATE.sel;
-  tb.innerHTML = list.map((m, i) => `<tr data-i="${i}" class="${i === sel ? "sel" : ""}">
-    <td>${m.id}</td><td>${tilt(m.tilt)}</td>
-    <td class="${m.status.startsWith("Acquired") ? "st-ok" : ""}">${m.status}</td><td>${esc(m.name)}</td>
-    <td>${batch ? `${m.acquired} / ${Math.max(1, m.areas.length)}` : stars(m.rating)}</td></tr>`).join("");
-  const row = tb.querySelector("tr.sel"); if(row) row.scrollIntoView({block: "nearest"});
+  const status = st => `<td class="${st.startsWith("Acquired") ? "st-ok" : ""}">${st}</td>`;
+  const sortTh = (label, title) => `<th class="sortable${so}" id="sortRating" title="${title}; click to sort highest first">${label}</th>`;
+  // batch ★: the best rating of the position's tilt series, else the rating of its search map
+  const posRating = p => { const t = Math.max(0, ...p.areas.map(a => a.tsRating || 0)); return t ? {n: t, from: "tilt series"} : {n: p.map >= 0 ? s.maps[p.map]?.rating || 0 : 0, from: "search map"}; };
+  const T = {
+    movie: {list: s ? movieList() : [], sel: curIndex(), empty: "No tilt series found. Choose the Tilt Series Folder… at the top.",
+      head: `<th>Id</th><th title="Tilt angle of the position">∠</th><th>Status</th><th>Tilt series</th><th title="Preview made with --make-previews (in tiltseries_movie): starts at once">Preview</th>` +
+            sortTh("★", `Star rating of each tilt series (saved in ${PREVIEW_DIR}/${TS_RATINGS})`),
+      rating: m => m.a.tsRating || 0,
+      row: m => `<td>${m.p.id}.${m.k}</td><td>${tilt(m.p.tilt)}</td>${status(m.p.status)}<td title="${esc(m.a.mrc)}">${esc(m.a.mrc.split("/").pop().replace(/\.mrc$/i, ""))}</td>
+        <td class="${m.a.preview ? "pv-ok" : ""}" title="${m.a.preview ? esc(m.a.preview.mrc) : "Live from the tilt series"}">${m.a.preview ? "✓" : "live"}</td><td>${tsStars(m)}</td>`},
+    batch: {list: s ? s.positions : [], sel: STATE.pos, empty: "No batch positions in this session.",
+      head: `<th>Id</th><th title="Tilt angle">∠</th><th>Status</th><th>Name</th>` + sortTh("★", "Best rating of the position's tilt series, else of its search map") + `<th title="Exposure areas (acquired / planned)">Areas</th>`,
+      rating: p => posRating(p).n,
+      row: (p, i) => { const r = posRating(p); return `<td>${p.id}</td><td>${tilt(p.tilt)}</td>${status(p.status)}<td>${esc(p.name)}${p.edited ? ' <span class="edithint" title="Edited">✎</span>' : ""}</td>
+        <td>${r.n ? `<span class="stars${r.from === "search map" ? " frommap" : ""}" title="${r.n} of 5 (${r.from})">${r.n}★</span>` : "–"}</td><td>${areaButtons(p, i === STATE.pos)}</td>`; }},
+    searchMaps: {list: s ? s.maps : [], sel: STATE.sel, empty: "No search maps in this session.",
+      head: `<th>Id</th><th title="Tilt angle">∠</th><th>Status</th><th>Name</th>` + sortTh("Rating", "Rating of the search map"),
+      rating: m => m.rating || 0,
+      row: (m, i) => `<td>${m.id}</td><td>${tilt(m.tilt)}</td>${status(m.status)}<td>${esc(m.name)}</td><td>${stars(m.rating, canRate() ? i : null)}</td>`},
+  }[task] || {list: [], head: "", empty: ""};
+  $("#tableHead").innerHTML = `<tr>${T.head}</tr>`;
+  $("#mapEmpty").hidden = T.list.length > 0;
+  $("#mapEmpty").textContent = !s ? "No session open." : T.empty;
+  const order = T.list.map((m, i) => i);
+  if(sortOn()) order.sort((a, b) => T.rating(T.list[b]) - T.rating(T.list[a]) || a - b);
+  const tb = $("#mapTable tbody");
+  tb.innerHTML = order.map(i => `<tr data-i="${i}" class="${i === T.sel ? "sel" : ""}">${T.row(T.list[i], i)}</tr>`).join("");
+  tb.querySelector("tr.sel")?.scrollIntoView({block: "nearest"});
 }
 
 /* ------------------------------------------------------------------ tabs and selection */
@@ -804,31 +1117,50 @@ async function setTab(tab){
   updateChrome();
   await loadScene();
 }
-async function select(i){
+// the list of the current task (search maps, positions or tilt series), stepped through in a circle
+const listLength = () => !SESSION ? 0 : STATE.task === "movie" ? movieList().length : STATE.task === "batch" ? SESSION.positions.length : SESSION.maps.length;
+function step(d){
+  const n = listLength(), k = curIndex();
+  if(n < 1) return;
+  return select(k < 0 ? (d > 0 ? 0 : n - 1) : (k + d + n) % n);
+}
+async function select(i, areaK){
+  if(STATE.task === "movie"){
+    const list = movieList(), m = list[i];
+    if(!m || i === curIndex()) return;
+    STATE.pos = m.pi; STATE.area = m.k;
+    const mi = await mapOfPosition(m.p); if(mi >= 0) STATE.sel = mi;
+    renderTable(); updateChrome();
+    // stay on the tab you are on (every tab can show a tilt series' position)
+    return STATE.tab === "atlas" ? draw() : loadScene();
+  }
   const batch = STATE.task === "batch", list = SESSION ? (batch ? SESSION.positions : SESSION.maps) : null;
   if(!list || i < 0 || i >= list.length || i === (batch ? STATE.pos : STATE.sel)) return;
   if(batch){
-    STATE.pos = i;
+    STATE.pos = i; STATE.area = areaK || 1;
     const mi = await mapOfPosition(list[i]);
     if(mi >= 0) STATE.sel = mi;
+    if(STATE.tab === "exposure" && !exposureOf(list[i], STATE.area)) STATE.tab = "search";
   } else STATE.sel = i;
   renderTable(); updateChrome();
   if(STATE.tab !== "atlas") await loadScene(); else draw();
 }
 function updateChrome(){
-  const s = SESSION, batch = STATE.task === "batch";
+  const s = SESSION, batch = posTask();
   const map = s && STATE.sel >= 0 ? s.maps[STATE.sel] : null, pos = s && batch && STATE.pos >= 0 ? s.positions[STATE.pos] : null;
   for(const b of $$(".tab")){
     const t = b.dataset.tab;
-    b.disabled = !s || (t === "atlas" ? !s.atlas : t === "search" ? !pos : !map);
-    b.title = t === "search" && s && !batch ? "Select Batch Positions on the left to see a position's Search image" : "";
+    const ex = pos && exposureOf(pos, STATE.area);
+    b.disabled = !s || (t === "atlas" ? !s.atlas : t === "search" ? !pos : t === "exposure" ? !ex : !map);
+    b.title = !s ? "" : t === "search" && !batch ? "Select Batch Positions on the left to see a position's Search image"
+      : t === "exposure" ? (!pos ? "Select a batch position" : ex ? `Area ${pos.id}.${STATE.area}: ${ex.kind}`
+        : /^Initialized/i.test(pos.status) ? "The position is only initialized: no exposure yet" : `Area ${pos.id}.${STATE.area} has no image yet`) : "";
     b.classList.toggle("active", t === STATE.tab);
     b.setAttribute("aria-selected", t === STATE.tab);
   }
-  const n = !s ? 0 : batch ? s.positions.length : s.maps.length, k = batch ? STATE.pos : STATE.sel;
-  const stepping = s && STATE.tab !== "atlas" && n > 0;
-  $("#prevMap").disabled = !stepping || k <= 0;
-  $("#nextMap").disabled = !stepping || k >= n - 1;
+  const stepping = s && STATE.tab !== "atlas" && listLength() > 1;          // circular: after the last comes the first
+  $("#prevMap").disabled = !stepping;
+  $("#nextMap").disabled = !stepping;
   $("#smMode").hidden = STATE.tab !== "searchmap" || !map;
   if(map){
     $("#smMode").querySelector('[value="tiles"]').disabled = !map.tiles.length;
@@ -838,11 +1170,16 @@ function updateChrome(){
     $("#smMode").value = want;
   }
   const posTitle = p => `<b>${p.id} : ${esc(p.name)}</b><small>${esc(p.status)}</small>`;
+  const ex = pos && exposureOf(pos, STATE.area);
+  $("#secSel").hidden = STATE.tab !== "exposure" || !ex || $("#secSel").options.length < 2;
   $("#subTitle").innerHTML = !s ? "" : STATE.tab === "atlas" ? (s.atlas ? `<b>${esc(s.atlas.stem)}</b>` : "")
     : STATE.tab === "search" ? (pos ? posTitle(pos) : "")
-    : map ? `${pos ? `<small>${esc(pos.name)} ·</small>` : ""}<b>${map.id} : ${esc(map.name)}</b>${stars(map.rating)}` : "";
+    : STATE.tab === "exposure" ? (pos ? `<b>${pos.id}.${STATE.area} : ${esc(ex ? ex.path.split("/").pop() : pos.name)}</b><small>${ex ? ex.kind : ""}</small>${ex?.kind === "tilt series" ? tsStars({pi: STATE.pos, k: STATE.area, a: ex.area}) : ""}` : "")
+    : map ? `${pos ? `<small>${esc(pos.name)} ·</small>` : ""}<b>${map.id} : ${esc(map.name)}</b>${stars(map.rating, canRate() && STATE.tab !== "atlas" ? STATE.sel : null)}` : "";
+  $("#editHint").hidden = !canEditAreas();
+  plChrome();
   if(s && s.path && SRC.kind === "server")
-    history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}${batch && pos ? `&task=batch&pos=${pos.id}` : ""}&tab=${STATE.tab}`);
+    history.replaceState(null, "", `#session=${encodeURIComponent(s.path)}${map ? `&map=${map.id}` : ""}${batch && pos ? `&task=${STATE.task}&pos=${pos.id}&area=${STATE.area}` : ""}${s.tilt ? `&tilt=${encodeURIComponent(s.tilt.path)}` : ""}&tab=${STATE.tab}`);
 }
 
 /* ------------------------------------------------------------------ scenes
@@ -854,12 +1191,14 @@ function updateChrome(){
 let SCENE = null, SCENE_ID = 0;
 
 async function loadScene(){
+  if(PL.playing) plStop();
   const id = ++SCENE_ID, s = SESSION, tab = STATE.tab, map = s?.maps[STATE.sel];
   showMessage(""); $("#welcome").hidden = !!s;
   if(!s) return;
   const build = async q => {
     if(tab === "atlas") return atlasScene(s.atlas, id, q);
     if(tab === "search") return searchScene(s.positions[STATE.pos], id, q);
+    if(tab === "exposure") return exposureScene(s.positions[STATE.pos], STATE.area, id, q);
     if(tab === "overview") return overviewScene(map, id, q);
     if(map && !map.tiles.length && !map.names.has("SearchMap.mrc")) throw new Error(`${map.name} has no tiles or SearchMap.mrc yet.`);
     const mode = $("#smMode").value;
@@ -869,6 +1208,9 @@ async function loadScene(){
     const first = await addPositionMarks(await build("preview"));
     if(id !== SCENE_ID) return;            // a newer request took over
     showScene(first);
+    if(STATE.pendingCentre){ const c = STATE.pendingCentre; STATE.pendingCentre = null; centreOn(c.pt, c.zoom); }
+    plChrome();
+    if(PL.autoNext){ PL.autoNext = false; if(first?.kind === "exposure") plPlay(); }
     if(first && !first.final){
       if(first.kind === "tiles"){          // tiles: alignment needs the full size, load it now
         status(`${$("#status").textContent} Loading full resolution…`);
@@ -928,13 +1270,68 @@ async function atlasScene(a, id, q){
 
 // batch positions as points (centre of their Search image), on every map but the Search tab
 async function addPositionMarks(sc){
-  if(!sc || !SESSION?.positions.length || sc.kind === "search") return sc;
+  if(!sc || !SESSION?.positions.length || sc.kind === "search" || sc.kind === "exposure") return sc;
   const marks = await Promise.all(SESSION.positions.map(async (p, i) => {
     const pt = await positionStage(p);
     return pt ? {kind: "pos", i, pos: p, point: pt} : null;
   }));
   sc.marks = [...(sc.marks || []), ...marks.filter(Boolean)];
   return sc;
+}
+
+// Exposure tab: one section of the area's tilt series (or its refined exposure image)
+async function exposureScene(p, k, id, q){
+  const ex = exposureOf(p, k);
+  if(!ex) throw new Error(`Area ${p?.id}.${k} has no exposure image.`);
+  const name = ex.path.split("/").pop();
+  status(`Loading ${name}…`);
+  const [header, mdoc] = await Promise.all([getHeader(ex.path), ex.mdoc ? getMdoc(ex.mdoc).catch(() => null) : null]);
+  // sections and their angles (FEI header, else the .mdoc; see getTiltSections); start nearest 0°
+  const tilt = header.nz > 1 ? await getTiltSections(ex.path, ex.mdoc) : {secs: [], from: ""};
+  const secs = tilt.secs;
+  const byTilt = secs.length === header.nz && secs.every(s => Number.isFinite(s.a));
+  let z = STATE.z[ex.path];
+  if(!(z >= 0 && z < header.nz)) z = byTilt ? secs.reduce((a, b) => Math.abs(b.a) < Math.abs(a.a) ? b : a).z : Math.floor(header.nz / 2);
+  STATE.z[ex.path] = z;
+  const opts = byTilt ? [...secs].sort((a, b) => a.a - b.a).map(s => [s.z, `${s.a.toFixed(1)}°  (z ${s.z})`])
+                      : Array.from({length: header.nz}, (_, i) => [i, `section ${i}`]);
+  $("#secSel").innerHTML = opts.map(([v, t]) => `<option value="${v}"${v === z ? " selected" : ""}>${t}</option>`).join("");
+  updateChrome();
+  const dim = q === "preview" ? PREVIEW : q === "full" ? MAX_ATLAS : Math.min(q, MAX_ATLAS);
+  const img = await getImage(ex.path, dim, z);
+  if(stale(id)) return null;
+  // pixel size: .mdoc PixelSpacing (Å), else the FEI extended header, else the MRC header
+  let pxM = mdoc?.pixelA > 0 ? mdoc.pixelA * 1e-10 : NaN, pxFrom = "mdoc";
+  if(!(pxM > 0)){ const fei = await feiHeader(ex.path).catch(() => null); if(fei?.pixel > 0){ pxM = fei.pixel; pxFrom = "FEI header"; } }
+  if(!(pxM > 0)){ const h = pixelOf(null, header); pxM = h.m; pxFrom = "MRC header"; }
+  // placed at the area's stage position, turned like the Search image (same camera)
+  const sx = p.searchXml ? await tryXml(p.searchXml) : null;
+  const st = p.plan ? areaStage(p, ex.area.off || [0, 0]) : sx && Number.isFinite(sx.info.stage.x) ? [sx.info.stage.x * 1e6, sx.info.stage.y * 1e6] : [0, 0];
+  const geo = {S: st, R: sx?.info.R || IDENT, ps: pxM > 0 ? pxM * 1e6 : 1, nx: header.nx, ny: header.ny};
+  const sec = secs[z];
+  const g = k => sec?.rows && mdoc.val(sec.rows, k);
+  const rows = [["Area", `${p.id}.${k} (${ex.kind})`], ["File", esc(name)]];
+  if(header.nz > 1) rows.push(["Section", `${z + 1} / ${header.nz}${byTilt ? "" : " (no tilt angles)"}`]);
+  if(sec && Number.isFinite(sec.a)) rows.push(["Tilt Angle", `${sec.a.toFixed(2)}° <span class="ovsrc">(${esc(tilt.from)})</span>`]);
+  rows.push(["Image Size", `${header.nx} × ${header.ny}${header.nz > 1 ? ` × ${header.nz}` : ""}`]);
+  if(img.bin > 1) rows.push(["Shown at", `bin ${img.bin} (${img.w} × ${img.h})`]);
+  rows.push(["Pixel Size", pxM > 0 ? `${fmtNum(pxM * 1e10, 3)} Å (${pxFrom})` : '<span class="warn">unknown</span>']);
+  if(pxM > 0) rows.push(["Field Of View", `${fmtNum(header.nx * pxM * 1e6, 3)} µm`]);
+  for(const [k2, label, f] of [["ExposureDose", "Dose", v => `${v} e/Å²`], ["Defocus", "Defocus", v => `${v} µm`], ["ExposureTime", "Exposure Time", v => `${v} s`],
+                               ["Magnification", "Magnification", v => `${v}×`], ["DateTime", "Acquired", v => v]]){
+    const v = g(k2); if(v !== undefined && v !== "") rows.push([label, esc(f(v))]);
+  }
+  if(ex.area.defocus !== undefined && Number.isFinite(ex.area.defocus)) rows.push(["Target Defocus", `${fmtNum(ex.area.defocus, 2)} µm`]);
+  rows.push(...statRows([img]));
+  // the .mdoc block that belongs to this section (its own ZValue can differ from z, see getTiltSections)
+  const xmlRows = mdoc ? [...mdoc.head, ...(sec?.rows ? sec.rows.map(([a, b]) => [`[ZValue = ${sec.mz}] ${a}`, b]) : [])] : [];
+  status(`${p.name} area ${p.id}.${k}: ${name}${header.nz > 1 ? `, section ${z + 1} of ${header.nz}` : ""}.`);
+  return {
+    kind: "exposure", layers: [{img, geo}], outlines: [], Q: transpose(geo.R), scaled: pxM > 0,
+    final: binFor(header, dim) === binFor(header, MAX_ATLAS),
+    info: {rows, notes: !mdoc && ex.kind === "tilt series" ? ["No .mdoc found next to the tilt series, so the sections have no tilt angles."] : []},
+    xmlName: ex.mdoc ? ex.mdoc.split("/").pop() : "", xmlRows,
+  };
 }
 
 // a batch position's Search image, with its exposure areas and tracking region
@@ -1041,34 +1438,48 @@ function half(a, w, h){              // 2× smaller, by averaging
   for(let y = 0; y < H; y++) for(let x = 0; x < W; x++){ const i = 2 * y * w + 2 * x; o[y * W + x] = (a[i] + a[i + 1] + a[i + w] + a[i + w + 1]) / 4; }
   return {a: o, w: W, h: H};
 }
-// best shift s (|s| ≤ lim) so that tile B, placed at D + s relative to tile A, matches A over region R (in A's pixels)
-function matchShift(A, B, w, h, D, R, lim, start = [0, 0]){
+// best shift s (|s - start| ≤ lim) so that tile B, placed at D + s relative to tile A, matches A over
+// region R (in A's pixels). Also returns the best score at least `excl` px away from the peak.
+// Shifts where the tiles overlap by fewer than minN pixels are ignored: tiny overlaps correlate
+// strongly by chance.
+function matchShift(A, B, w, h, D, R, lim, start = [0, 0], excl = 0, minN = 64){
   let best = -Infinity, bs = start;
+  const all = excl ? [] : null;
   for(let sy = start[1] - lim; sy <= start[1] + lim; sy++) for(let sx = start[0] - lim; sx <= start[0] + lim; sx++){
     const ox = Math.round(D[0] + sx), oy = Math.round(D[1] + sy);
+    // only the pixels where B actually overlaps A (within R)
+    const y0 = Math.max(R.y0, oy), y1 = Math.min(R.y1, oy + h), x0 = Math.max(R.x0, ox), x1 = Math.min(R.x1, ox + w);
+    if(x1 <= x0 || y1 <= y0 || (x1 - x0) * (y1 - y0) < Math.max(64, minN)) continue;
     let n = 0, sa = 0, sb = 0, saa = 0, sbb = 0, sab = 0;
-    for(let y = R.y0; y < R.y1; y++){
-      const by = y - oy; if(by < 0 || by >= h) continue;
-      for(let x = R.x0; x < R.x1; x++){
-        const bx = x - ox; if(bx < 0 || bx >= w) continue;
-        const va = A[y * w + x], vb = B[by * w + bx];
-        n++; sa += va; sb += vb; saa += va * va; sbb += vb * vb; sab += va * vb;
+    for(let y = y0; y < y1; y++){
+      const ra = y * w, rb = (y - oy) * w - ox;
+      for(let x = x0; x < x1; x++){
+        const va = A[ra + x], vb = B[rb + x];
+        sa += va; sb += vb; saa += va * va; sbb += vb * vb; sab += va * vb;
       }
+      n += x1 - x0;
     }
-    if(n < 64) continue;
     const den = (saa - sa * sa / n) * (sbb - sb * sb / n);
     if(den <= 1e-12) continue;
     const v = (sab - sa * sb / n) / Math.sqrt(den);
+    if(all) all.push([sx, sy, v]);
     if(v > best){ best = v; bs = [sx, sy]; }
   }
-  return {s: bs, score: best};
+  let second = -Infinity;
+  if(all) for(const [sx, sy, v] of all) if(Math.hypot(sx - bs[0], sy - bs[1]) >= excl && v > second) second = v;
+  return {s: bs, score: best, second};
 }
 function stitchTiles(layers, opts = {align: true}){
   const n = layers.length, {w, h, bin} = layers[0].img, g0 = layers[0].geo, Rt = transpose(g0.R);
-  // nominal tile centres in the first tile's binned pixel frame
-  const nom = layers.map(l => { const d = mul(Rt, [l.geo.S[0] - g0.S[0], l.geo.S[1] - g0.S[1]]); return [w / 2 + d[0] / (g0.ps * bin), h / 2 + d[1] / (g0.ps * bin)]; });
+  /* Nominal tile centres in the first tile's binned pixel frame. Best: Tomo5's own grid from
+     SearchMap.dm (AtlasPixelPosition, axis-aligned in camera pixels, within ~50 px). Otherwise the
+     tile XML stage positions, which are off by ~100 px and slightly rotated (image-shift calibration). */
+  const L = opts.layout;
+  const nom = L ? L.map(t => { const k = g0.nx / L[0].w / bin; return [w / 2 + (t.cx - L[0].cx) * k, h / 2 + (t.cy - L[0].cy) * k]; })
+               : layers.map(l => { const d = mul(Rt, [l.geo.S[0] - g0.S[0], l.geo.S[1] - g0.S[1]]); return [w / 2 + d[0] / (g0.ps * bin), h / 2 + d[1] / (g0.ps * bin)]; });
   const hp = opts.align ? layers.map(l => highPass(l.img.data, w, h, 6)) : null;
   const hp2 = hp ? hp.map(a => half(a, w, h)) : null;
+  const LIM = Math.max(8, Math.round(120 / bin));      // search ±120 full-size px: < half the hole spacing
 
   // 1. pairwise matches of neighbouring tiles
   const cons = [];
@@ -1077,14 +1488,20 @@ function stitchTiles(layers, opts = {align: true}){
     const ow = w - Math.abs(D[0]), oh = h - Math.abs(D[1]);
     if(ow < 16 || oh < 16 || !(ow >= 0.5 * w || oh >= 0.5 * h)) continue;     // side neighbours only
     if(!opts.align){ cons.push({i, j, D, t: D, score: 0, ok: true}); continue; }
-    const narrow = Math.min(ow, oh), lim = Math.max(4, Math.min(40, Math.round(0.4 * narrow)));
-    // overlap in A's pixels, shrunk by the search range so the region stays inside B
-    const R = {x0: Math.max(0, Math.round(D[0])), x1: Math.min(w, Math.round(D[0]) + w), y0: Math.max(0, Math.round(D[1])), y1: Math.min(h, Math.round(D[1]) + h)};
-    const c = matchShift(hp2[i].a, hp2[j].a, hp2[i].w, hp2[i].h, [D[0] / 2, D[1] / 2],
-                         {x0: R.x0 >> 1, x1: R.x1 >> 1, y0: R.y0 >> 1, y1: R.y1 >> 1}, Math.ceil(lim / 2));
-    const f = matchShift(hp[i], hp[j], w, h, D, R, 2, [c.s[0] * 2, c.s[1] * 2]);
-    const atEdge = Math.abs(f.s[0]) >= lim || Math.abs(f.s[1]) >= lim;
-    cons.push({i, j, D, t: [D[0] + f.s[0], D[1] + f.s[1]], score: f.score, ok: f.score > 0.2 && !atEdge});
+    const lim = LIM;
+    // where B can overlap A within the search range (pixels outside B are skipped per shift)
+    const R = {x0: Math.max(0, Math.round(D[0]) - lim), x1: Math.min(w, Math.round(D[0]) + w + lim),
+               y0: Math.max(0, Math.round(D[1]) - lim), y1: Math.min(h, Math.round(D[1]) + h + lim)};
+    const sub = (r, k) => ({x0: r.x0 >> k, x1: r.x1 >> k, y0: r.y0 >> k, y1: r.y1 >> k});
+    // coarse at 1/2 size over the whole range (overlaps can be only ~50 px, too thin at 1/4),
+    // then the full (display) size ±2 px
+    const minN = 0.25 * ow * oh;                   // at least a quarter of the expected overlap
+    const c = matchShift(hp2[i].a, hp2[j].a, hp2[i].w, hp2[i].h, [D[0] / 2, D[1] / 2], sub(R, 1), Math.ceil(lim / 2), [0, 0], 4, minN / 4);
+    const f = matchShift(hp[i], hp[j], w, h, D, R, 2, [c.s[0] * 2, c.s[1] * 2], 0, minN);
+    const atEdge = Math.abs(f.s[0]) >= lim - 1 || Math.abs(f.s[1]) >= lim - 1;
+    // low-dose tiles correlate weakly (~0.1), so judge by how clearly the peak stands out
+    const distinct = c.score > 0 && c.second < 0.7 * c.score;
+    cons.push({i, j, D, t: [D[0] + f.s[0], D[1] + f.s[1]], score: f.score, ok: f.score > 0.02 && distinct && !atEdge});
   }
   // least-squares positions (Gauss-Seidel); failed matches keep the nominal offset with a small weight
   const solve = (skip, iters) => {
@@ -1170,10 +1587,28 @@ function stitchTiles(layers, opts = {align: true}){
   return {
     layer: {img: {data: acc, w: W, h: H, bin, header: layers[0].img.header}, geo},
     bin, feather: F,
-    align: {good: cons.filter(c => c.ok).length, total: cons.length, maxShift, skipped: !opts.align,
+    align: {good: cons.filter(c => c.ok).length, total: cons.length, maxShift, skipped: !opts.align, layout: L ? "SearchMap.dm" : "tile XML",
             shifts: pos.map((p, i) => [(p[0] - nom[i][0]) * bin, (p[1] - nom[i][1]) * bin])},   // full-size px, first tile's frame
     gain: {kind: positive ? "multiplicative" : "additive", min: Math.min(...gains), max: Math.max(...gains)},
   };
+}
+
+// Tomo5's tile grid: AtlasPixelPosition of each tile in SearchMap.dm (pixels of the stitched SearchMap.mrc)
+async function tileGrid(map, tiles){
+  if(!map.names.has("SearchMap.dm")) return null;
+  const dm = await tryXml(join(map.dir, "SearchMap.dm"));
+  if(!dm) return null;
+  const T = new Map();
+  for(const [p, v] of dm.rows){
+    const m = p.match(/TileSetTileXml(?:\[(\d+)\])?\/(?:AtlasPixelPosition\/(x|y|width|height)|TileImageReference\/(BaseFileName))$/);
+    if(!m) continue;
+    const k = m[1] || "1"; if(!T.has(k)) T.set(k, {});
+    T.get(k)[m[2] || "name"] = m[2] ? parseFloat(v) : v;
+  }
+  const byName = new Map([...T.values()].filter(t => t.name && Number.isFinite(t.x) && t.width > 0).map(t => [t.name, t]));
+  const out = tiles.map(t => byName.get(t.stem));
+  if(out.some(t => !t)) return null;
+  return out.map(t => ({cx: t.x + t.width / 2, cy: t.y + t.height / 2, w: t.width}));
 }
 
 async function tilesScene(map, id, seamless = true, q = "full"){
@@ -1204,7 +1639,8 @@ async function tilesScene(map, id, seamless = true, q = "full"){
   if(seamless && layers.length > 1){
     status(`${map.name}: aligning tile overlaps…`);
     await new Promise(r => setTimeout(r));          // let the status show
-    stitch = stitchTiles(layers, {align: final});   // the preview is blended at the stage positions
+    const layout = await tileGrid(map, lay.tiles);
+    stitch = stitchTiles(layers, {align: final, layout});   // the preview is blended without alignment
     if(stale(id)) return null;
   }
   // size of the stitched area, in the view frame
@@ -1216,6 +1652,7 @@ async function tilesScene(map, id, seamless = true, q = "full"){
   if(scaled) rows.push(["Field Of View", `${fmtNum(W, 2)} × ${fmtNum(H, 2)} µm`]);
   if(stitch){
     const a = stitch.align;
+    rows.push(["Layout", a.layout === "SearchMap.dm" ? "Tomo5's tile grid (SearchMap.dm), refined" : "tile XML positions, refined"]);
     rows.push(["Alignment", a.skipped ? "preview, not aligned yet" : a.total ? `${a.good} / ${a.total} overlaps matched, largest correction ${fmtNum(a.maxShift * stitch.bin, 1)} px` : "no overlaps found"]);
     rows.push(["Tile gains", `${fmtNum(stitch.gain.min, 3)} – ${fmtNum(stitch.gain.max, 3)} (${stitch.gain.kind})`]);
     rows.push(["Blending", `${Math.round(stitch.feather * stitch.bin)} px fade across overlaps`]);
@@ -1279,6 +1716,7 @@ function renderInfo(){
     $("#info").insertAdjacentHTML("beforeend", `<dt>Camera Field</dt><dd>${fmtNum(o.cam, 2)} µm <span class="ovsrc">(${esc(o.camFrom)})</span></dd>` +
       `<dt>Beam (drawn)</dt><dd>${fmtNum(o.beam, 2)} µm <span class="ovsrc">(${fmtNum(o.beamX, 1)} × camera; not stored by Tomo5)</span></dd>`);
   }
+  $("#editHint").hidden = !canEditAreas();
   $("#ovSet").hidden = !(SESSION?.positions.length && ["search", "overview", "tiles", "searchmap"].includes(sc.kind));
   renderMeta();
 }
@@ -1293,31 +1731,116 @@ function renderMeta(){
 
 /* ------------------------------------------------------------------ contrast (shared by all layers of a scene) */
 let STATS = null;
+/* ------------------------------------------------------------------ low-pass filter
+   A Gaussian low-pass, set by resolution in Å: the image keeps detail down to about that size.
+   Counted low-dose exposures (tens of electrons per pixel) are dominated by shot noise and are
+   unreadable unfiltered, so the Exposure tab has it on by default (60 Å); other views off.
+   Gaussian blur in real space, σ = 0.187 · resolution / pixel (half-height at 1/resolution),
+   approximated by three box blurs (fast at any σ). Display only: values in the panel are unfiltered. */
+const FILTER_DEFAULT = {exposure: {on: true, res: 60}, other: {on: false, res: 60}};
+const filterKey = () => SCENE?.kind === "exposure" ? "exposure" : "other";
+function filterSettings(){
+  let saved = {}; try{ saved = JSON.parse(localStorage.getItem("tomo5.filter") || "{}"); }catch{}
+  const k = filterKey(); return {...FILTER_DEFAULT[k], ...(saved[k] || {})};
+}
+function saveFilter(f){
+  let saved = {}; try{ saved = JSON.parse(localStorage.getItem("tomo5.filter") || "{}"); }catch{}
+  saved[filterKey()] = f; try{ localStorage.setItem("tomo5.filter", JSON.stringify(saved)); }catch{}
+}
+const resFromSlider = v => 10 * Math.pow(50, v / 1000);          // 10 … 500 Å, logarithmic
+const sliderFromRes = r => Math.round(Math.log(r / 10) / Math.log(50) * 1000);
+function boxBlur1D(src, dst, w, h, r, horizontal){              // running-sum box blur, edges clamped
+  const n = horizontal ? w : h, lines = horizontal ? h : w, inv = 1 / (2 * r + 1);
+  for(let L = 0; L < lines; L++){
+    const at = i => horizontal ? L * w + Math.min(n - 1, Math.max(0, i)) : Math.min(n - 1, Math.max(0, i)) * w + L;
+    let acc = 0;
+    for(let i = -r; i <= r; i++) acc += src[at(i)];
+    for(let i = 0; i < n; i++){
+      dst[horizontal ? L * w + i : i * w + L] = acc * inv;
+      acc += src[at(i + r + 1)] - src[at(i - r)];
+    }
+  }
+}
+function gaussBlur(data, w, h, sigma){
+  // three box blurs with widths chosen to approximate a Gaussian of this sigma
+  const nb = 3, wIdeal = Math.sqrt(12 * sigma * sigma / nb + 1);
+  let wl = Math.floor(wIdeal); if(wl % 2 === 0) wl--;
+  const m = Math.round((12 * sigma * sigma - nb * wl * wl - 4 * nb * wl - 3 * nb) / (-4 * wl - 4));
+  let a = Float32Array.from(data), b = new Float32Array(data.length);
+  for(let i = 0; i < nb; i++){
+    const r = ((i < m ? wl : wl + 2) - 1) / 2;
+    if(r < 1) continue;
+    boxBlur1D(a, b, w, h, r, true); boxBlur1D(b, a, w, h, r, false);
+  }
+  return a;
+}
+// the data a layer is drawn from: filtered when the low-pass is on and coarser than its pixels
+function layerData(l){
+  const f = filterSettings(), pxA = l.geo.ps * 1e4 * l.img.bin;          // Å per loaded pixel
+  const sigma = f.on && SCENE.scaled ? 0.187 * f.res / pxA : 0;
+  if(sigma < 0.5) return l.img.data;
+  const key = `${f.res}`;
+  if(l.fkey !== key){ l.fdata = gaussBlur(l.img.data, l.img.w, l.img.h, sigma); l.fkey = key; }
+  return l.fdata;
+}
+function renderFilter(){
+  const f = filterSettings(), on = !!SCENE;
+  $("#lpOn").checked = f.on; $("#lpOn").disabled = !on; $("#lpRes").disabled = !on || !f.on;
+  $("#lpRes").value = sliderFromRes(f.res); $("#lpOut").value = `${Math.round(f.res)} Å`;
+  $("#lpFor").textContent = on ? (filterKey() === "exposure" ? "(exposures)" : "(maps and search images)") : "";
+  let note = "";
+  if(SCENE && f.on){
+    const l = SCENE.layers[0], pxA = l.geo.ps * 1e4 * l.img.bin;
+    note = !SCENE.scaled ? "Pixel size unknown, so the filter is off." :
+      0.187 * f.res / pxA < 0.5 ? `Finer than the displayed pixels (${fmtNum(pxA, 1)} Å): no effect at this resolution.` :
+      `Gaussian σ ≈ ${fmtNum(0.187 * f.res / pxA, 1)} displayed px (${fmtNum(pxA, 1)} Å each). Display only.`;
+  }
+  $("#lpNote").textContent = note;
+}
+function applyFilter(f){
+  saveFilter(f);
+  if(!SCENE) return renderFilter();
+  if(PL.playing){ for(const fr of PL.frames) if(fr) fr.fkey = null; PL.pool = plPool(); STATS = {sorted: PL.pool}; }
+  else STATS = sceneStats(SCENE.layers);
+  renderFilter(); renderContrast();
+}
+$("#lpOn").addEventListener("change", e => applyFilter({...filterSettings(), on: e.target.checked}));
+$("#lpRes").addEventListener("input", e => { $("#lpOut").value = `${Math.round(resFromSlider(+e.target.value))} Å`; });
+$("#lpRes").addEventListener("change", e => applyFilter({...filterSettings(), res: Math.round(resFromSlider(+e.target.value))}));
+
 function sceneStats(layers){
   const total = layers.reduce((n, l) => n + l.img.data.length, 0), step = Math.max(1, Math.floor(total / 600000)), s = [];
-  for(const l of layers){ const d = l.img.data; for(let i = 0; i < d.length; i += step){ const v = d[i]; if(Number.isFinite(v)) s.push(v); } }
+  for(const l of layers){ const d = layerData(l); for(let i = 0; i < d.length; i += step){ const v = d[i]; if(Number.isFinite(v)) s.push(v); } }
   return {sorted: Float32Array.from(s).sort()};
 }
 const pct = p => STATS.sorted[Math.min(STATS.sorted.length - 1, Math.max(0, Math.round(p * (STATS.sorted.length - 1))))];
 
-function renderContrast(){
-  if(!SCENE || !SCENE.layers.length) return;
+function contrastRange(){
   if($("#auto").checked){ $("#lo").value = 5; $("#hi").value = 995; }
   let lo = pct(+$("#lo").value / 1000), hi = pct(+$("#hi").value / 1000);
   if(hi <= lo) hi = lo + 1e-6;
-  $("#loOut").value = fmtVal(lo); $("#hiOut").value = fmtVal(hi);
-  const inv = $("#invert").checked, k = 255 / (hi - lo);
-  for(const l of SCENE.layers){
-    const {w, h, data} = l.img;
-    if(!l.canvas) l.canvas = Object.assign(document.createElement("canvas"), {width: w, height: h});
-    const ctx = l.canvas.getContext("2d"), id = ctx.createImageData(w, h), px = new Uint32Array(id.data.buffer);
-    for(let i = 0; i < data.length; i++){
-      let v = (data[i] - lo) * k; v = v < 0 ? 0 : v > 255 ? 255 : v | 0;
-      if(inv) v = 255 - v;
-      px[i] = 0xff000000 | (v << 16) | (v << 8) | v;           // grey, opaque (little-endian RGBA)
-    }
-    ctx.putImageData(id, 0, 0);
+  return {lo, hi, inv: $("#invert").checked};
+}
+// grey canvas of a layer for this contrast (and low-pass); repainted only when they change
+function paintLayer(l, lo, hi, inv){
+  const f = filterSettings(), key = `${lo}|${hi}|${inv}|${f.on}|${f.res}`;
+  if(l.canvas && l.ckey === key) return;
+  const {w, h} = l.img, data = layerData(l), k = 255 / (hi - lo);
+  if(!l.canvas) l.canvas = Object.assign(document.createElement("canvas"), {width: w, height: h});
+  const ctx = l.canvas.getContext("2d"), id = ctx.createImageData(w, h), px = new Uint32Array(id.data.buffer);
+  for(let i = 0; i < data.length; i++){
+    let v = (data[i] - lo) * k; v = v < 0 ? 0 : v > 255 ? 255 : v | 0;
+    if(inv) v = 255 - v;
+    px[i] = 0xff000000 | (v << 16) | (v << 8) | v;           // grey, opaque (little-endian RGBA)
   }
+  ctx.putImageData(id, 0, 0);
+  l.ckey = key;
+}
+function renderContrast(){
+  if(!SCENE || !SCENE.layers.length) return;
+  const {lo, hi, inv} = contrastRange();
+  $("#loOut").value = fmtVal(lo); $("#hiOut").value = fmtVal(hi);
+  for(const l of SCENE.layers) paintLayer(l, lo, hi, inv);
   drawHist(lo, hi);
   draw();
 }
@@ -1343,7 +1866,7 @@ function showScene(scene, keepView = false){
   const had = !!SCENE;
   SCENE = scene && scene.layers.length ? scene : null;
   STATS = SCENE ? sceneStats(SCENE.layers) : null;
-  renderInfo();
+  renderInfo(); renderFilter();
   if(SCENE){ if(!(keepView && had)) fit(); renderContrast(); } else { drawHist(); draw(); }
   $("#scalebar").hidden = !SCENE || !SCENE.scaled;
 }
@@ -1361,6 +1884,15 @@ function sceneBounds(sc){
   for(const g of [...sc.layers, ...sc.outlines].map(l => l.geo))
     for(const c of corners(g)){ const [x, y] = mul(sc.Q, c); x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
   return {x0, y0, x1, y1};
+}
+// centre the view on a stage point, at `zoom` × the fit-to-window scale
+function centreOn(pt, zoom = 1){
+  if(!SCENE || !pt) return;
+  fit();
+  V.s = V.fitS * zoom;
+  const v = toView(pt);
+  V.tx = view.clientWidth / 2 - v[0] * V.s; V.ty = view.clientHeight / 2 - v[1] * V.s;
+  draw();
 }
 function fit(){
   if(!SCENE) return;
@@ -1411,8 +1943,9 @@ function armSharpen(build, id){
   maybeSharpen();
 }
 function maybeSharpen(){
-  if(!SCENE?.sharpen) return;
+  if(!SCENE?.sharpen || PL.playing) return;
   const l = SCENE.layers[0], dpr = devicePixelRatio || 1;
+  if(!l.img.header) return;                                      // a Movie Player frame
   if(V.s * l.geo.ps * l.img.bin * dpr <= 1.25) return;
   const want = 1.25 / (V.s * l.geo.ps * dpr);                    // binning that would be sharp enough
   const tb = Math.max(1, 2 ** Math.floor(Math.log2(Math.max(1, want))));
@@ -1462,9 +1995,10 @@ function drawPositionAreas(ctx, p, selected, axisLine){
   for(const a of p.areas){
     if(!a.off) continue;
     const c = toScreen(areaStage(p, a.off)), first = a.k === 1;
-    ring(c, AREA.exp, a.mrc ? 0.32 : 0.18, first && selected ? 2.5 : 1.4);
-    ctx.fillStyle = AREA.exp; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
-    ctx.fillText(`${p.id}.${a.k}`, c[0] + beam * 0.55, c[1] - beam * 0.3); ctx.shadowBlur = 0;
+    const chosen = selected && posTask() && a.k === STATE.area;
+    ring(c, AREA.exp, a.mrc ? 0.32 : 0.18, chosen ? 2.8 : first && selected ? 2.2 : 1.4);
+    ctx.fillStyle = a.added || a.moved ? "#f0b429" : chosen ? "#ffffff" : AREA.exp; ctx.shadowColor = "#000"; ctx.shadowBlur = 3;
+    ctx.fillText(`${p.id}.${a.k}${a.added ? " +" : a.moved ? " *" : ""}`, c[0] + beam * 0.55, c[1] - beam * 0.3); ctx.shadowBlur = 0;
   }
   if(selected){                                   // red cross on N.1
     const r = Math.max(6, cam * 0.5);
@@ -1488,7 +2022,7 @@ function drawOverlay(ctx){
 }
 const MARK_COLOR = {Acquired: "#39e639", "In Progress": "#f0a030", Queued: "#f0a030", Refined: "#4fc3f7", Initialized: "#f0a030", Failed: "#ff5050"};
 const markColor = m => MARK_COLOR[(m.kind === "pos" ? m.pos.status : m.map.status).split(" ")[0]] || "#39e639";
-const markSelected = m => m.kind === "pos" ? STATE.task === "batch" && m.i === STATE.pos : m.i === STATE.sel;
+const markSelected = m => m.kind === "pos" ? posTask() && m.i === STATE.pos : m.i === STATE.sel;
 function markShape(m){       // screen polygon of a marker
   if(m.geo) return corners(m.geo).map(toScreen);
   const [x, y] = toScreen(m.point), r = m.kind === "pos" ? 5 : 6;
@@ -1514,11 +2048,11 @@ function drawMarks(ctx){
     ctx.fillText(m.kind === "pos" ? `P${m.pos.id}` : String(m.map.id), x + 3, y + 9); ctx.shadowBlur = 0;
   }
 }
-function markAt(sx, sy){      // marker under a screen point
+function markAt(sx, sy, kind){      // marker under a screen point (optionally only of one kind)
   if(!SCENE?.marks) return null;
   const inside = (pts, x, y) => { let c = false; for(let i = 0, j = pts.length - 1; i < pts.length; j = i++){ const [xi, yi] = pts[i], [xj, yj] = pts[j]; if((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) c = !c; } return c; };
   // positions (small dots) first, so one inside a search-map outline can still be picked
-  for(const m of [...SCENE.marks].sort((a, b) => (b.kind === "pos") - (a.kind === "pos"))){
+  for(const m of [...SCENE.marks].filter(m => !kind || m.kind === kind).sort((a, b) => (b.kind === "pos") - (a.kind === "pos"))){
     let pts = markShape(m);
     const cx = pts.reduce((a, p) => a + p[0], 0) / 4, cy = pts.reduce((a, p) => a + p[1], 0) / 4;
     pts = pts.map(([x, y]) => [cx + Math.max(1, 8 / Math.hypot(x - cx, y - cy)) * (x - cx), cy + Math.max(1, 8 / Math.hypot(x - cx, y - cy)) * (y - cy)]);  // at least ~8 px to hit
@@ -1547,33 +2081,1475 @@ $("#zoomOut").addEventListener("click", () => zoomTo(V.s / 1.5));
 $("#zoom").addEventListener("input", e => zoomTo(V.fitS * 2 ** (Z_MIN + e.target.value / 1000 * Z_SPAN)));
 
 let drag = null;
-view.addEventListener("pointerdown", e => { if(!SCENE) return; drag = {x: e.clientX, y: e.clientY, tx: V.tx, ty: V.ty}; view.setPointerCapture(e.pointerId); view.classList.add("drag"); });
+view.addEventListener("pointerdown", e => {
+  if(!SCENE || e.button === 2) return;
+  const r = view.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const grab = editableAreaAt(sx, sy);
+  if(grab){                                       // edit mode: move a sub-position (2 and up)
+    const st = screenToStage(sx, sy), c = areaStage(grab.p, grab.a.off);
+    areaDrag = {p: grab.p, a: grab.a, d: [c[0] - st[0], c[1] - st[1]], moved: false};
+    view.setPointerCapture(e.pointerId); return;
+  }
+  drag = {x: e.clientX, y: e.clientY, tx: V.tx, ty: V.ty}; view.setPointerCapture(e.pointerId); view.classList.add("drag");
+});
 view.addEventListener("click", e => {
   if(!SCENE?.marks || (drag0 && Math.hypot(e.clientX - drag0.x, e.clientY - drag0.y) > 4)) return;
   const r = view.getBoundingClientRect(), m = markAt(e.clientX - r.left, e.clientY - r.top);
   if(m) selectMark(m);
 });
+// Movie Player row of a position's area (else of its first tilt series), -1 if it has none
+function movieIndexOf(pi, k){
+  const l = movieList();
+  const i = l.findIndex(m => m.pi === pi && m.k === k);
+  return i >= 0 ? i : l.findIndex(m => m.pi === pi);
+}
 async function selectMark(m){
+  if(m.kind === "pos" && STATE.task === "movie"){            // stay in Movie Player when the position has a tilt series
+    const i = movieIndexOf(m.i, m.i === STATE.pos ? STATE.area : 1);
+    if(i >= 0){ await select(i); renderTable(); updateChrome(); draw(); return; }
+  }
   const task = m.kind === "pos" ? "batch" : "searchMaps";
   if(STATE.task !== task){ STATE.task = task; renderTasks(); renderTable(); }
   await select(m.i); renderTable(); updateChrome(); draw();
 }
 view.addEventListener("pointermove", e => {
+  if(areaDrag){
+    const r = view.getBoundingClientRect(), st = screenToStage(e.clientX - r.left, e.clientY - r.top), p = areaDrag.p;
+    const c = [st[0] + areaDrag.d[0], st[1] + areaDrag.d[1]];
+    areaDrag.a.off = [p.plan.stage[0] - c[0], p.plan.stage[1] - c[1]];      // area = StagePosition − offset
+    if(!areaDrag.a.added) areaDrag.a.moved = true;
+    areaDrag.moved = true; draw(); return;
+  }
   if(drag){ V.tx = drag.tx + e.clientX - drag.x; V.ty = drag.ty + e.clientY - drag.y; draw(); }
   if(!SCENE) return;
   const r = view.getBoundingClientRect();
-  const over = !drag && SCENE.marks && markAt(e.clientX - r.left, e.clientY - r.top);
-  view.style.cursor = over ? "pointer" : "";
-  view.title = !over ? "" : over.kind === "pos" ? `${over.pos.name} (${over.pos.status}): click to select, double-click to open its Search image`
-    : `${over.map.name} (${over.map.status}): click to select, double-click to open its overview`;
+  if(!drag && editableAreaAt(e.clientX - r.left, e.clientY - r.top)){ view.style.cursor = "move"; view.title = "Drag to move this sub-position"; }
+  else{
+    const over = !drag && SCENE.marks && markAt(e.clientX - r.left, e.clientY - r.top);
+    view.style.cursor = over ? "pointer" : "";
+    view.title = !over ? "" : over.kind === "pos" ? `${over.pos.name} (${over.pos.status}): click to select, double-click to open its Search image`
+      : `${over.map.name} (${over.map.status}): click to select, double-click to open its overview`;
+  }
   const st = mul(transpose(SCENE.Q), [(e.clientX - r.left - V.tx) / V.s, (e.clientY - r.top - V.ty) / V.s]);
   $("#readout").textContent = SCENE.scaled ? `stage X ${fmtNum(st[0], 2)}  Y ${fmtNum(st[1], 2)} µm` : "";
 });
 let drag0 = null;       // where the last drag started, to tell a click from a pan
-const endDrag = () => { drag0 = drag; drag = null; view.classList.remove("drag"); };
+let areaDrag = null;
+const endDrag = () => {
+  if(areaDrag){ if(areaDrag.moved){ markEdited(areaDrag.p); renderInfo(); } areaDrag = null; drag0 = {x: -1e9, y: -1e9}; return; }
+  drag0 = drag; drag = null; view.classList.remove("drag");
+};
 view.addEventListener("pointerup", endDrag); view.addEventListener("pointercancel", endDrag);
 view.addEventListener("pointerleave", () => { $("#readout").textContent = ""; });
 view.addEventListener("wheel", e => { if(!SCENE) return; e.preventDefault(); const r = view.getBoundingClientRect(); zoomTo(V.s * Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0015)), e.clientX - r.left, e.clientY - r.top); }, {passive: false});
+/* ------------------------------------------------------------------ edit mode (--edit, experimental)
+   Sub-positions: only in Batch Positions › Search, for the selected position; N.1 is fixed.
+   Ratings: Search Maps, or Batch Positions › Search Map. Saved to <session>/Batch/Edit by the server;
+   Tomo5's own files are never changed. */
+const EDIT_STATE = {dirty: false, loaded: false};
+const canEditAreas = () => !!(SERVER?.edit && SESSION && STATE.task === "batch" && STATE.tab === "search" && SCENE?.kind === "search" && SESSION.positions[STATE.pos]?.plan);
+const canRate = () => !!(SERVER?.edit && SESSION && (STATE.task === "searchMaps" || (STATE.task === "batch" && STATE.tab === "searchmap")));
+const screenToStage = (sx, sy) => mul(transpose(SCENE.Q), [(sx - V.tx) / V.s, (sy - V.ty) / V.s]);
+function editableAreaAt(sx, sy){
+  if(!canEditAreas()) return null;
+  const hit = positionAt(sx, sy);
+  if(!hit || hit.i !== STATE.pos || !(hit.k >= 2)) return null;
+  const p = SESSION.positions[STATE.pos], a = p.areas.find(a => a.k === hit.k);
+  if(!a?.off) return null;
+  if(!a.offOriginal && !a.added) a.offOriginal = a.off.slice();
+  return {p, a};
+}
+function markEdited(p){
+  if(p) p.edited = p.areas.some(a => a.added || a.moved) || !!p.deleted?.length;
+  setDirty(true); renderTable(); updateChrome();
+}
+function setDirty(d){
+  EDIT_STATE.dirty = d;
+  $("#saveEdits").classList.toggle("dirty", d);
+  $("#saveEdits").textContent = d ? "Save Session •" : "Save Session";
+}
+addEventListener("beforeunload", e => { if(EDIT_STATE.dirty){ e.preventDefault(); e.returnValue = ""; } });
+function addArea(p, stage){
+  const k = Math.max(1, ...p.areas.map(a => a.k)) + 1;
+  p.areas.push({k, off: [p.plan.stage[0] - stage[0], p.plan.stage[1] - stage[1]], defocus: p.plan.defocus, exposure: null, mrc: null, mdoc: null, added: true});
+  p.areas.sort((a, b) => a.k - b.k);
+  status(`Added sub-position ${p.id}.${k}. Save Session to keep it.`);
+  markEdited(p); draw();
+}
+function deleteArea(p, a){
+  p.areas = p.areas.filter(x => x !== a);
+  if(STATE.area === a.k) STATE.area = 1;
+  status(`Deleted sub-position ${p.id}.${a.k}.`);
+  markEdited(p); draw();
+}
+function setRating(mi, r){
+  const m = SESSION.maps[mi]; if(!m) return;
+  m.rating = m.rating === r ? 0 : r;
+  m.ratingChanged = m.rating !== (m.ratingOriginal ?? 0);
+  setDirty(true); renderTable(); updateChrome();
+  status(`${m.name}: ${m.rating ? `${m.rating} star${m.rating > 1 ? "s" : ""}` : "not rated"}. Save Session to keep it.`);
+}
+document.addEventListener("click", e => {
+  const st = e.target.closest(".stars.rate[data-map] span[data-r]"); if(!st || !canRate()) return;
+  e.stopPropagation(); setRating(+st.parentElement.dataset.map, +st.dataset.r);
+}, true);
+document.addEventListener("click", e => {
+  if(!e.target.closest("#sortRating")) return;
+  STATE.sort[STATE.task] = !sortOn(); renderTable();
+});
+
+// Tomo5-style number, e.g. 2.0356256413833762E-07
+const tomoNum = v => { const t = (+v).toExponential(16).replace(/0+e/, "e").replace(/\.e/, ".0e"); return t.replace(/e([+-])(\d)$/, "E$10$2").replace(/e([+-])(\d\d+)$/, "E$1$2"); };
+/* BatchPositionsList.xml with the edited sub-positions. Text-level edits only: everything else stays
+   byte-for-byte as Tomo5 wrote it. New areas copy the layout of Tomo5's own entries:
+     <ExposureTemplateAreaParameters><Comment /><Defocus>…</Defocus><Name>Position_N_k</Name>
+       <PositionX>…</PositionX><PositionY>…</PositionY></ExposureTemplateAreaParameters>       */
+function editedBatchList(){
+  const s = SESSION, base = s.batchListEditedText || s.batchListText;
+  const setVal = (el, tag, v) => el.replace(new RegExp(`(<${tag}>)[^<]*(</${tag}>)`), `$1${v}$2`);
+  const nl = base.includes("\r\n") ? "\r\n" : "\n";          // keep Tomo5's line endings (CRLF)
+  return base.replace(/<BatchPositionParameters>[\s\S]*?<\/BatchPositionParameters>/g, blk => {
+    const nm = blk.match(/<Name>Position_(\d+)<\/Name>/);
+    const p = nm && s.positions.find(p => p.id === +nm[1]);
+    if(!p || !p.plan || !(p.edited || p.fromEdit)) return blk;
+    const box = blk.match(/([ \t]*)<AdditionalExposureTemplateAreas\s*\/>|([ \t]*)<AdditionalExposureTemplateAreas>([\s\S]*?)<\/AdditionalExposureTemplateAreas>/);
+    const ind = box ? (box[1] ?? box[2] ?? "") : "      ";
+    const existing = new Map();
+    for(const el of (box?.[3] || "").match(/<ExposureTemplateAreaParameters>[\s\S]*?<\/ExposureTemplateAreaParameters>/g) || []){
+      const n = el.match(/<Name>([^<]*)<\/Name>/); if(n) existing.set(n[1], el);
+    }
+    const items = p.areas.filter(a => a.k >= 2 && a.off).map(a => {
+      const name = `Position_${p.id}_${a.k}`, x = tomoNum(a.off[0] * 1e-6), y = tomoNum(a.off[1] * 1e-6);
+      const el = existing.get(name);
+      if(el) return setVal(setVal(el, "PositionX", x), "PositionY", y);
+      const i2 = ind + "    ";
+      return `<ExposureTemplateAreaParameters>${nl}${i2}<Comment />${nl}${i2}<Defocus>${a.defocus ?? p.plan.defocus}</Defocus>${nl}${i2}<Name>${name}</Name>${nl}` +
+             `${i2}<PositionX>${x}</PositionX>${nl}${i2}<PositionY>${y}</PositionY>${nl}${ind}  </ExposureTemplateAreaParameters>`;
+    });
+    const out = items.length ? `${ind}<AdditionalExposureTemplateAreas>${items.map(e => `${nl}${ind}  ${e}`).join("")}${nl}${ind}</AdditionalExposureTemplateAreas>`
+                             : `${ind}<AdditionalExposureTemplateAreas />`;
+    return box ? blk.replace(box[0], out) : blk.replace(/(<BatchPositionParameters>\r?\n)/, `$1${out}${nl}`);
+  });
+}
+// SearchMap.dm with the new rating: only the StarRating value changes
+async function editedDm(m){
+  const base = m.dmEditedText || await SRC.text(join(m.dir, "SearchMap.dm"));
+  const re = /(<(?:[\w.-]+:)?StarRating>)\s*\d*\s*(<\/(?:[\w.-]+:)?StarRating>)/;
+  if(!re.test(base)) throw new Error(`${m.name}: no StarRating in SearchMap.dm`);
+  return base.replace(re, `$1${m.rating || 0}$2`);
+}
+async function saveEdits(){
+  const s = SESSION; if(!s) return;
+  const files = [], changed = s.positions.filter(p => p.edited || p.fromEdit);
+  try{
+    if(changed.length && s.batchListText) files.push({target: "batch", path: "BatchPositionsList.xml", content: editedBatchList()});
+    const rated = s.maps.filter(m => m.ratingChanged && m.names.has("SearchMap.dm"));
+    for(const m of rated) files.push({target: "maps", path: `${m.dir.split("/").pop()}/SearchMap.dm`, content: await editedDm(m)});
+    const manifest = {
+      tool: "tomo5_data_viewer", version: SERVER.version, saved: new Date().toISOString(), session: s.path,
+      source: {batchList: s.batchListName ? `Batch/${s.batchListName}` : null},
+      positionsEdited: changed.filter(p => p.edited).map(p => p.name),
+      subPositions: Object.fromEntries(changed.filter(p => p.edited).map(p => [p.name, p.areas.filter(a => a.k >= 2).map(a => ({k: a.k, added: !!a.added, moved: !!a.moved, offsetUm: a.off}))])),
+      ratings: Object.fromEntries(rated.map(m => [m.name, m.rating])),
+      folders: SERVER.editDirs,
+    };
+    files.push({target: "batch", path: "edit_session.json", content: JSON.stringify(manifest, null, 2)});
+    const r = await fetch("api/save", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({session: s.path, files})});
+    const j = await r.json(); if(!r.ok) throw new Error(j.error || r.statusText);
+    s.editSaved = manifest; setDirty(false); $("#loadEdits").disabled = false;
+    const used = [...new Set(j.saved.map(p => p.split("/").slice(0, 2).join("/")))], hist = Object.values(j.history || {});
+    status(`Saved ${j.saved.length} file(s) to ${used.join(" and ")}${hist.length ? ` (previous save kept in ${hist.join(", ")})` : ""}.`);
+  }catch(e){ console.error(e); status(`Save failed: ${e.message}`, true); }
+}
+async function loadEdits(){
+  const s = SESSION; if(!s) return;
+  if(EDIT_STATE.dirty && !confirm("Discard unsaved edits and load the saved session?")) return;
+  const dir = join(s.path, SERVER.editDirs.batch), mapsDir = join(s.path, SERVER.editDirs.maps);
+  try{
+    const listing = await SRC.list(dir).catch(() => ({dirs: [], files: []}));
+    let n = 0;
+    if(listing.files.some(f => f.name === "BatchPositionsList.xml")){
+      const text = await SRC.text(join(dir, "BatchPositionsList.xml")), list = parseBatchList(text);
+      s.batchListEditedText = text;
+      for(const [id, plan] of list || []){
+        const p = s.positions.find(p => p.id === id); if(!p || !p.plan) continue;
+        const files = new Map(p.areas.map(a => [a.k, a]));
+        const orig = new Map((p.planOriginal || p.plan).areas.map(a => [a.k, a.off]));
+        p.planOriginal = p.planOriginal || p.plan;
+        p.areas = plan.areas.map(a => {
+          const f = files.get(a.k) || {k: a.k, exposure: null, mrc: null, mdoc: null};
+          const o = orig.get(a.k);
+          return {...f, off: a.off, defocus: a.defocus, added: !o, moved: !!o && Math.hypot(o[0] - a.off[0], o[1] - a.off[1]) > 1e-4, offOriginal: o ? o.slice() : undefined};
+        });
+        p.plan = {...p.plan, areas: plan.areas};
+        p.fromEdit = true; p.edited = p.areas.some(a => a.added || a.moved);
+        positionStatus(p); if(p.edited) n++;
+      }
+    }
+    let r = 0;
+    const sm = await SRC.list(mapsDir).catch(() => ({dirs: []}));
+    for(const d of sm.dirs){
+      const m = s.maps.find(m => m.dir.split("/").pop() === d.name); if(!m) continue;
+      try{
+        const text = await SRC.text(join(mapsDir, `${d.name}/SearchMap.dm`));
+        const v = flattenXml(text).find(([p]) => /(^|\/)StarRating$/i.test(p));
+        if(v){ m.dmEditedText = text; m.rating = Math.max(0, Math.min(5, parseInt(v[1]) || 0)); m.ratingChanged = m.rating !== (m.ratingOriginal ?? 0); r++; }
+      }catch{}
+    }
+    EDIT_STATE.loaded = true; setDirty(false);
+    renderTasks(); renderTable(); updateChrome(); await loadScene();
+    status(`Loaded saved edits${s.editSaved?.saved ? ` from ${s.editSaved.saved.replace("T", " ").slice(0, 16)}` : ""}: ${n} position(s), ${r} rating(s).`);
+  }catch(e){ console.error(e); status(`Load failed: ${e.message}`, true); }
+}
+$("#saveEdits").addEventListener("click", saveEdits);
+$("#loadEdits").addEventListener("click", loadEdits);
+
+/* ------------------------------------------------------------------ acquisition movies (like the SerialEM Grid Viewer)
+   Acquisition movie:          Atlas › Search Map › the sub-position N.k › its tilt series.
+   Parallel acquisition movie: Atlas › Search Map › the Search image with every sub-position of
+                               Position N picked in turn › all their tilt series playing in step.
+   Everything is placed in stage µm with the same geometry as the viewer; frames are drawn on a
+   canvas and encoded by ffmpeg on the server (.mp4), or in this browser (.webm) without it. */
+const MV_KEY = "tomo5.movie";
+const MV_DEF = {size: "1920x1080", fps: 30, zoom: 0, tAtlas: 3, tToMap: 4, tMap: 2, tToTg: 4, hold: 2, tToView: 3, tPick: 0.8,
+  viewZoom: 1, tiltAxis: true, tiltFps: 10, order: "sweep", schematic: true, lp: 60, cfgV: 2,
+  labels: [["Atlas", "Grid overview"], ["Search Map", ""], ["Acquisition position", ""], ["Tilt series", ""]],
+  pLabels: [["Atlas", "Grid overview"], ["Search Map", ""], ["Target selection", ""], ["Tilt series acquisition", ""]]};
+let mv = null;
+const mvEase = t => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+const mvFont = () => getComputedStyle(document.body).fontFamily || "sans-serif";
+const rot2 = a => [[Math.cos(a), -Math.sin(a)], [Math.sin(a), Math.cos(a)]];
+const det2 = A => A[0][0] * A[1][1] - A[0][1] * A[1][0];
+function mvCfg(){
+  let sv = {}; try{ sv = JSON.parse(localStorage.getItem(MV_KEY) || "{}") || {}; }catch{}
+  if((sv.cfgV || 1) < 2){ delete sv.order; sv.cfgV = 2; }       // new default order: start → lowest → highest → start
+  const c = {...MV_DEF, ...sv, zoom: 0};
+  const labs = key => MV_DEF[key].map((d, i) => Array.isArray(sv[key]?.[i]) ? [String(sv[key][i][0] ?? d[0]), String(sv[key][i][1] ?? d[1])] : d.slice());
+  c.labels = labs("labels"); c.pLabels = labs("pLabels");
+  return c;
+}
+function mvSaveCfg(){                     // not saved: start, angle range and zoom belong to one tilt series
+  const keep = {...mv.cfg}; for(const k of ["start", "low", "high", "zoom"]) delete keep[k];
+  try{ localStorage.setItem(MV_KEY, JSON.stringify(keep)); }catch{}
+}
+const mvDeg = a => { const v = Math.round(a); return v === 0 ? "0°" : `${v > 0 ? "+" : "−"}${Math.abs(v)}°`; };
+
+// ---- images: a layer {img, geo} as a grey canvas, own contrast (0.5–99.5 %), optional low-pass and edge fade
+function mvCanvas(l, {lpA = 0, fade = 0} = {}){
+  const {w, h} = l.img, pxA = l.geo.ps * 1e4 * l.img.bin, sigma = lpA > 0 && pxA > 0 ? 0.187 * lpA / pxA : 0;
+  const data = sigma >= 0.5 ? gaussBlur(l.img.data, w, h, sigma) : l.img.data;
+  const st = Math.max(1, Math.floor(data.length / 200000)), smp = [];
+  for(let i = 0; i < data.length; i += st) if(Number.isFinite(data[i])) smp.push(data[i]);
+  const a = Float32Array.from(smp).sort(), q = f => a[Math.min(a.length - 1, Math.max(0, Math.round(f * (a.length - 1))))];
+  const lo = q(0.005), hi = Math.max(q(0.995), lo + 1e-6), k = 255 / (hi - lo);
+  const cv = Object.assign(document.createElement("canvas"), {width: w, height: h}), g = cv.getContext("2d");
+  const id = g.createImageData(w, h), px = new Uint32Array(id.data.buffer);
+  for(let i = 0; i < data.length; i++){ let v = (data[i] - lo) * k; v = v < 0 ? 0 : v > 255 ? 255 : v | 0; px[i] = 0xff000000 | (v << 16) | (v << 8) | v; }
+  g.putImageData(id, 0, 0);
+  if(fade > 0){                       // fade the edges out, so a close-up melts into the map under it
+    g.globalCompositeOperation = "destination-in";
+    for(const [x1, y1] of [[w, 0], [0, h]]){
+      const q2 = g.createLinearGradient(0, 0, x1, y1), e = Math.min(0.49, fade);
+      q2.addColorStop(0, "rgba(0,0,0,0)"); q2.addColorStop(e, "#000"); q2.addColorStop(1 - e, "#000"); q2.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = q2; g.fillRect(0, 0, w, h);
+    }
+    g.globalCompositeOperation = "source-over";
+  }
+  return {cv, geo: l.geo, bin: l.img.bin};
+}
+// ---- camera: screen = centre + s · Q · (stage − c)
+const mvPt = (cam, p) => { const v = mul(cam.Q, [p[0] - cam.c[0], p[1] - cam.c[1]]); return [cam.W / 2 + cam.s * v[0], cam.H / 2 + cam.s * v[1]]; };
+function mvDrawImg(g, cam, L, alpha = 1){
+  if(!L || alpha <= 0) return;
+  const G = L.geo, QR = mmul(cam.Q, G.R), k = cam.s * G.ps, b = L.bin, o = mvPt(cam, G.S), oc = mul(QR, [G.nx / 2, G.ny / 2]);
+  g.save(); g.globalAlpha = alpha;
+  g.setTransform(k * b * QR[0][0], k * b * QR[1][0], k * b * QR[0][1], k * b * QR[1][1], o[0] - k * oc[0], o[1] - k * oc[1]);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+  g.drawImage(L.cv, 0, 0); g.restore();
+}
+function mvFit(geos, Q, W, H, frac){
+  const v = geos.flatMap(G => corners(G)).map(p => mul(Q, p));
+  const x0 = Math.min(...v.map(p => p[0])), x1 = Math.max(...v.map(p => p[0])), y0 = Math.min(...v.map(p => p[1])), y1 = Math.max(...v.map(p => p[1]));
+  return {c: mul(transpose(Q), [(x0 + x1) / 2, (y0 + y1) / 2]), s: frac * Math.min(W / (x1 - x0), H / (y1 - y0))};
+}
+// turn from Q0 to Q1 (both orientations of the same camera family: a pure rotation between them)
+function mvTurn(Q0, Q1){
+  const D = mmul(Q1, transpose(Q0));
+  if(det2(D) < 0) return () => Q1;
+  const th = Math.atan2(D[1][0], D[0][0]);
+  return e => mmul(rot2(th * e), Q0);
+}
+function mvZoomCam(u, c0, z0, c1, z1){           // zoom whose speed feels even, and keeps the target steady
+  const e = mvEase(u), w0 = 1 / z0, w1 = 1 / z1, w = w0 * Math.pow(w1 / w0, e), kk = w0 !== w1 ? (w - w1) / (w0 - w1) : 0;
+  return {c: [c1[0] + (c0[0] - c1[0]) * kk, c1[1] + (c0[1] - c1[1]) * kk], s: 1 / w};
+}
+
+// ---- tilt series of an area: sections, angles, acquisition order
+function mvTime(v){
+  const m = String(v || "").match(/(\d{1,2})-(\w{3})-(\d{2,4})\s+(\d{1,2}):(\d{2}):(\d{2})/);
+  if(m){ const mon = "janfebmaraprmayjunjulaugsepoctnovdec".indexOf(m[2].toLowerCase()) / 3; const y = +m[3] < 100 ? 2000 + +m[3] : +m[3]; return new Date(y, mon, +m[1], +m[4], +m[5], +m[6]).getTime(); }
+  const t = Date.parse(v); return Number.isFinite(t) ? t : NaN;
+}
+async function mvSeries(p, a){
+  const h = await getHeader(a.mrc), md = a.mdoc ? await getMdoc(a.mdoc).catch(() => null) : null;
+  const tilt = await getTiltSections(a.mrc, a.mdoc);
+  let secs = tilt.secs.map(s => ({z: s.z, a: s.a, t: s.t}));
+  const angles = secs.length === h.nz && secs.every(s => Number.isFinite(s.a));
+  if(!angles) secs = Array.from({length: h.nz}, (_, z) => ({z, a: NaN, t: NaN}));
+  let pxM = md?.pixelA > 0 ? md.pixelA * 1e-10 : NaN;
+  if(!(pxM > 0)){ const fei = await feiHeader(a.mrc).catch(() => null); if(fei?.pixel > 0) pxM = fei.pixel; }
+  const ps = pxM > 0 ? pxM * 1e6 : overlay().cam / Math.max(h.nx, h.ny);
+  const sx = p.searchXml ? await tryXml(p.searchXml) : null;
+  const geo = {S: areaStage(p, a.off || [0, 0]), R: sx?.info.R || IDENT, ps, nx: h.nx, ny: h.ny};
+  return {k: a.k, path: a.mrc, nz: h.nz, secs, angles, geo, timed: secs.every(s => Number.isFinite(s.t))};
+}
+// order of playback: acquisition order (mdoc DateTime, else file order), by angle, or start → low → high → start
+function mvOrder(secs, how, start){
+  if(how === "angle") return [...secs].sort((p, q) => p.a - q.a);
+  if(how === "sweep" && secs.every(s => Number.isFinite(s.a))){
+    const A = [...secs].sort((p, q) => p.a - q.a); if(!A.length) return A;
+    let is = 0; A.forEach((x, i) => { if(Math.abs(x.a - start) < Math.abs(A[is].a - start)) is = i; });
+    return [...A.slice(0, is + 1).reverse(), ...A.slice(1), ...A.slice(is, A.length - 1).reverse()];
+  }
+  return [...secs].sort((p, q) => secs.every(s => Number.isFinite(s.t)) ? p.t - q.t : p.z - q.z);
+}
+function mvSchemeText(seq){
+  if(!seq.length || !Number.isFinite(seq[0].a)) return `${seq.length} images`;
+  // turning points of the angle: 0° → −60° → +60° → 0° for a sweep; many of them = dose-symmetric
+  const A = seq.map(x => x.a), pts = [A[0]];
+  let dir = 0;
+  for(let i = 1; i < A.length; i++){
+    const d = Math.sign(A[i] - A[i - 1]);
+    if(d && dir && d !== dir) pts.push(A[i - 1]);
+    if(d) dir = d;
+  }
+  if(A.length > 1 && A[A.length - 1] !== pts[pts.length - 1]) pts.push(A[A.length - 1]);
+  if(pts.length > 6) return `dose-symmetric from ${mvDeg(A[0])}, ${mvDeg(Math.min(...A))} to ${mvDeg(Math.max(...A))}`;
+  return pts.map(mvDeg).join(" → ");
+}
+const mvKey = (path, z, px) => `${path}|${z}|${px}`;
+async function mvTiltImg(ts, z, px){
+  const self = mv, key = mvKey(ts.path, z, px);
+  if(self.timg.has(key)) return self.timg.get(key);
+  const img = await getImage(ts.path, px, z);
+  const L = mvCanvas({img, geo: ts.geo}, {lpA: self.cfg.lp});
+  self.timg.set(key, L);
+  while(self.timg.size > (self.cacheMax || 400)) self.timg.delete(self.timg.keys().next().value);
+  return L;
+}
+
+// ---- open
+async function mvOpen(pi, k, kind = "single"){
+  if(mv?.busy) return;
+  closeMenu();
+  const s = SESSION, p = s.positions[pi];
+  if(!p) return;
+  mv = {kind, pi, p, k, cfg: mvCfg(), t: 0, ready: false, timg: new Map(), loading: new Set(), canvas: $("#mvCanvas"), lastImg: new Map()};
+  mv.g = mv.canvas.getContext("2d");
+  $("#mvTitle").textContent = kind === "parallel" ? `Parallel acquisition movie · ${p.name}` : `Acquisition movie · ${p.name} area ${p.id}.${k}`;
+  mvForm(); mvEncoderNote();
+  if(!$("#mvDlg").open) $("#mvDlg").showModal();
+  const self = mv;
+  try{
+    mvSay("Reading the tilt series…");
+    const areas = kind === "parallel" ? p.areas.filter(a => a.off || a.k === 1) : p.areas.filter(a => a.k === k);
+    self.series = [];
+    for(const a of areas){ if(a.mrc) self.series.push(await mvSeries(p, a).catch(e => (console.warn(e), null))); }
+    self.series = self.series.filter(Boolean);
+    self.targets = areas.map(a => ({k: a.k, stage: areaStage(p, a.off || [0, 0]) || null, ts: self.series.find(x => x.k === a.k) || null})).filter(x => x.stage);
+    if(kind === "single" && !self.series.length) throw new Error(`area ${p.id}.${k} has no tilt series. Choose the Tilt Series Folder first.`);
+    if(!self.targets.length) throw new Error(`${p.name} has no planned areas (Batch/BatchPositionsList.xml).`);
+    mvAngles();
+    await mvPrepare(self);
+    if(mv !== self) return;
+    self.ready = true; mvPlan();
+    const notes = [];
+    if(!self.atlas) notes.push("No atlas image: the movie starts at the search map.");
+    if(!self.search) notes.push(`No Search image for ${p.name}: the close-up uses the search map.`);
+    if(kind === "parallel"){
+      const miss = self.targets.filter(x => !x.ts).map(x => `${p.id}.${x.k}`);
+      if(miss.length) notes.push(`No tilt series for ${miss.join(", ")}: picked, but left out of the parallel tilt series.`);
+      if(!self.series.length) notes.push("None of the areas has a tilt series yet, so the movie ends after the areas are picked.");
+    }
+    if(self.series.some(x => !x.angles)) notes.push("No tilt angles (.mdoc) for some tilt series: they play in file order without the angle track.");
+    mvSay(notes.join(" "));
+    mvShow(kind === "parallel" ? self.plan.tP + 0.4 : self.plan.tD + self.plan.ZT + 0.9);
+  }catch(e){ console.error(e); if(mv === self) mvSay(`Cannot make the movie: ${e.message}`, true); }
+}
+function mvAngles(){
+  const c = mv.cfg, withA = mv.series.filter(x => x.angles);
+  const all = withA.flatMap(x => x.secs.map(s => s.a));
+  const first = mv.series[0];
+  const startSec = first ? (first.timed ? first.secs.reduce((p, q) => q.t < p.t ? q : p) : first.secs.reduce((p, q) => Math.abs(q.a) < Math.abs(p.a) ? q : p, first.secs[0])) : null;
+  Object.assign(c, {start: startSec && Number.isFinite(startSec.a) ? Math.round(startSec.a) : 0,
+    low: all.length ? Math.floor(Math.min(...all)) : -60, high: all.length ? Math.ceil(Math.max(...all)) : 60});
+}
+// one list of steps: single = the sections in order; parallel = merged angles, each area's section nearest each angle
+function mvSteps(){
+  const c = mv.cfg, inRange = s => !Number.isFinite(s.a) || (s.a >= c.low - 0.5 && s.a <= c.high + 0.5);
+  if(mv.kind === "single"){
+    const ts = mv.series[0];
+    mv.seq = mvOrder(ts.secs.filter(inRange), c.order, c.start).map(s => ({a: s.a, z: new Map([[ts.k, s.z]])}));
+    return;
+  }
+  const lead = mv.series.find(x => x.angles) || mv.series[0];
+  if(!lead){ mv.seq = []; return; }
+  // the angles of the first area with a tilt series, in its order; the others follow at the nearest angle (within 1°)
+  const steps = mvOrder(lead.secs.filter(inRange), c.order, c.start);
+  const last = new Map();
+  mv.seq = steps.map(st => {
+    const z = new Map();
+    for(const ts of mv.series){
+      let best = null;
+      if(ts.angles && Number.isFinite(st.a)){ for(const s of ts.secs) if(Math.abs(s.a - st.a) <= 1 && (!best || Math.abs(s.a - st.a) < Math.abs(best.a - st.a))) best = s; }
+      else best = ts.secs.find(s => s.z === st.z) || null;
+      if(best) last.set(ts.k, best.z);
+      z.set(ts.k, best ? best.z : last.get(ts.k) ?? ts.secs[0]?.z ?? 0);
+    }
+    return {a: st.a, z};
+  });
+}
+// atlas, search map and Search image, as the viewer shows them (same loaders and geometry)
+async function mvPrepare(self){
+  const s = SESSION, p = self.p, id = SCENE_ID, again = "The view changed while loading; try again.";
+  const mi = await mapOfPosition(p), map = s.maps[mi];
+  if(!map) throw new Error(`${p.name} is not on any search map with an image.`);
+  self.mapName = map.name;
+  if(s.atlas?.mrc){
+    mvSay("Loading the atlas…");
+    const sc = await atlasScene(s.atlas, id, "full").catch(() => null);
+    if(sc){ self.atlas = mvCanvas(sc.layers[0]); self.Qa = sc.Q; }
+  }
+  mvSay(`Loading ${map.name}…`);
+  let msc = null;
+  if(map.tiles.length) msc = await tilesScene(map, id, true, "full");
+  else if(map.names.has("SearchMap.mrc")) msc = await searchMapImageScene(map, id, "full");
+  if(!msc && stale(id)) throw new Error(again);
+  if(!msc) throw new Error(`${map.name} has no tiles or SearchMap.mrc.`);
+  self.maps = msc.layers.map(l => mvCanvas(l)); self.Qm = msc.Q;
+  self.mapGeos = msc.layers.map(l => l.geo);
+  if(p.search){
+    mvSay(`Loading the Search image of ${p.name}…`);
+    const ssc = await searchScene(p, id, "full").catch(() => null);
+    if(ssc){ self.search = mvCanvas(ssc.layers[0], {fade: 0.08}); self.Qs = ssc.Q; }
+  }
+  // the first tilt image of each series, so the preview has something to show
+  mvSteps();
+  for(const ts of self.series) if(mv.seq.length) await mvTiltImg(ts, mv.seq[0].z.get(ts.k) ?? ts.secs[0].z, 1024).catch(() => {});
+  status(`Movie: ${p.name} ready.`);
+}
+
+// ---- plan: camera path and timeline
+function mvPlan(){
+  const c = mv.cfg, [MW, MH] = c.size.split("x").map(Number);
+  if(mv.canvas.width !== MW || mv.canvas.height !== MH){ mv.canvas.width = MW; mv.canvas.height = MH; }
+  const k = MH / 1080, Qend = mv.Qs || mv.Qm, Q0 = mv.Qa || mv.Qm;
+  const full = mv.atlas ? mvFit([mv.atlas.geo], Q0, MW, MH, 0.98) : null;
+  const fm = mvFit(mv.mapGeos, mv.Qm, MW, MH, 0.97);
+  const turnAM = mvTurn(Q0, mv.Qm), turnMS = mvTurn(mv.Qm, Qend);
+  const TB = Math.max(0.5, c.tToMap), TS = Math.max(0.5, c.tMap), hasAtlas = !!mv.atlas;
+  const tB = hasAtlas ? Math.max(0.5, c.tAtlas) : 0, tC = hasAtlas ? tB + TB : 0, tD = tC + TS;
+  mvSteps();
+  const base = {MW, MH, k, full, mapC: fm.c, zMap: fm.s, Q0, Qend, turnAM, turnMS, TB, TS, hasAtlas, tB, tC, tD};
+  if(mv.kind === "parallel") return mvPlanPar(base);
+  const ts = mv.series[0], cam = overlay().cam, footW = Math.max(ts.geo.nx, ts.geo.ny) * ts.geo.ps || cam;
+  if(!c.zoom) c.zoom = Math.max(3, Math.min(80, Math.round(MH / 6 / (footW * fm.s))));
+  const zTg = fm.s * c.zoom, ZT = Math.max(0.5, c.tToTg);
+  const camEnd = {c: ts.geo.S, s: zTg, Q: Qend, W: MW, H: MH};
+  // inset: from the footprint on the map to half the frame, turned upright (as in the Exposure tab)
+  const QR = mmul(Qend, ts.geo.R), th0 = det2(QR) > 0 ? Math.atan2(QR[1][0], QR[0][0]) : 0;
+  const ins = {p0: mvPt(camEnd, ts.geo.S), s0: zTg, th0, flip: det2(QR) < 0, s1: Math.min(0.5 * MW, 0.55 * MH) / footW, p1: [MW / 2 - (c.schematic ? 190 * k : 0), MH / 2 - 10 * k], foot: footW};
+  const tE = tD + ZT + 0.8 + Math.max(0, c.hold), tF = tE + 2;
+  const total = tF + mv.seq.length / Math.max(1, c.tiltFps) + 1.5;
+  mv.plan = {...base, zTg, ZT, camEnd, ins, tE, tF, total};
+  mv.bgEnd = null;
+  mvTimeline(total, `${mv.seq.length} tilt images (${mvSchemeText(mv.seq)})`);
+}
+function mvPlanPar(B){
+  const {MW, MH, k} = B, c = mv.cfg, ov = overlay();
+  // the View: every area's beam (and the tracking area) fits in the frame below the title
+  const pts = mv.targets.map(x => x.stage), tr = mv.p.plan?.tracking ? areaStage(mv.p, mv.p.plan.tracking) : null;
+  if(tr) pts.push(tr);
+  const r = ov.beam * 0.75, v = pts.flatMap(q => [[q[0] - r, q[1] - r], [q[0] + r, q[1] + r], [q[0] - r, q[1] + r], [q[0] + r, q[1] - r]]).map(q => mul(B.Qend, q));
+  const x0 = Math.min(...v.map(q => q[0])), x1 = Math.max(...v.map(q => q[0])), y0 = Math.min(...v.map(q => q[1])), y1 = Math.max(...v.map(q => q[1]));
+  const zV = Math.max(0.05, c.viewZoom || 1) * Math.min(0.9 * MW / (x1 - x0), 0.72 * MH / (y1 - y0));
+  const cV = mul(transpose(B.Qend), [(x0 + x1) / 2, (y0 + y1) / 2 - 30 * k / zV]);
+  const camV = {c: cV, s: zV, Q: B.Qend, W: MW, H: MH};
+  // grid of tilt-series insets, upright
+  const ts = mv.targets.filter(x => x.ts), n = ts.length;
+  let grid = null;
+  if(n){
+    const fw = Math.max(...ts.map(x => Math.max(x.ts.geo.nx, x.ts.geo.ny) * x.ts.geo.ps));
+    const L0 = 40 * k, R0 = MW - (c.schematic ? 360 * k : 40 * k), T0 = 190 * k, B0 = MH - 130 * k, AW = R0 - L0, AH = B0 - T0;
+    let best = null;
+    for(let cols = 1; cols <= n; cols++){ const rows = Math.ceil(n / cols), s = Math.min(0.92 * AW / cols / fw, 0.9 * AH / rows / fw); if(!best || s > best.s) best = {cols, rows, s}; }
+    const cw = AW / best.cols, ch = AH / best.rows, cells = new Map();
+    ts.forEach((x, j) => {
+      const rr = Math.floor(j / best.cols), inRow = Math.min(best.cols, n - rr * best.cols), col = j - rr * best.cols;
+      cells.set(x.k, [L0 + (AW - inRow * cw) / 2 + (col + 0.5) * cw, T0 + (AH - best.rows * ch) / 2 + (rr + 0.5) * ch]);
+    });
+    grid = {s: best.s, cells, right: R0, bottom: B0, px: Math.max(256, Math.min(1024, 2 ** Math.ceil(Math.log2(fw * best.s * 1.1))))};
+    mv.cacheMax = Math.max(64, n * 12);
+  }
+  const TV = Math.max(0.5, c.tToView), TP = Math.max(0.2, c.tPick), axisSlot = c.tiltAxis ? 1 : 0;
+  const tE = B.tD + TV, tF = tE + 1.0, tP = tF + (mv.targets.length + axisSlot) * TP, tG = tP + 1.0, tH = n ? tG + 1.8 : tG;
+  const total = tH + (n ? mv.seq.length / Math.max(1, c.tiltFps) + 1.5 : 0.5);
+  mv.plan = {...B, kind: "parallel", TV, TP, axisSlot, camV, zV, tE, tF, tP, tG, tH, total, grid, tr};
+  mv.bgEnd = null;
+  mvTimeline(total, `${mv.targets.length} area${mv.targets.length === 1 ? "" : "s"}, ${n} with a tilt series · ${mv.seq.length} tilt steps${mv.seq.length ? ` (${mvSchemeText(mv.seq)})` : ""}`);
+}
+function mvTimeline(total, what){
+  const c = mv.cfg, sl = $("#mvTime");
+  sl.max = total.toFixed(3); sl.step = (1 / c.fps).toFixed(4);
+  $("#mvInfo").textContent = `${total.toFixed(1)} s · ${Math.round(total * c.fps)} frames · ${what}`;
+}
+
+// ---- drawing helpers (same look as the SerialEM Grid Viewer's movies)
+function mvRound(g, x, y, w, h, r, fill){ g.fillStyle = fill; g.beginPath(); if(g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); g.fill(); }
+function mvTitle(g, k, title, sub, alpha){
+  if(alpha <= 0 || !title) return;
+  const ff = mvFont();
+  g.save(); g.globalAlpha = alpha; g.textBaseline = "middle"; g.textAlign = "left";
+  g.font = `600 ${40 * k}px ${ff}`; const tw = g.measureText(title).width;
+  mvRound(g, 40 * k, 36 * k, tw + 44 * k, 70 * k, 14 * k, "rgba(0,0,0,0.6)"); g.fillStyle = "#fff"; g.fillText(title, 62 * k, 72 * k);
+  if(sub){ g.font = `600 ${28 * k}px ${ff}`; const sw = g.measureText(sub).width; mvRound(g, 40 * k, 116 * k, sw + 44 * k, 50 * k, 12 * k, "rgba(0,0,0,0.6)"); g.fillStyle = "rgb(230,230,230)"; g.fillText(sub, 62 * k, 142 * k); }
+  g.restore();
+}
+function mvBar(g, k, nmPerPx, x1, y){
+  let Lb = 10; for(const v of [10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000, 100000, 200000, 500000, 1000000]){ Lb = v; if(v / nmPerPx >= 140 * k) break; }
+  const bl = Lb / nmPerPx, x0 = x1 - bl, lab = Lb >= 1000 ? `${Lb / 1000} µm` : `${Lb} nm`;
+  g.save(); mvRound(g, x0 - 20 * k, y - 52 * k, bl + 40 * k, 74 * k, 12 * k, "rgba(0,0,0,0.6)");
+  g.fillStyle = "#fff"; g.fillRect(x0, y - 4 * k, bl, 10 * k);
+  g.font = `600 ${28 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText(lab, (x0 + x1) / 2, y - 26 * k); g.restore();
+}
+const mvSceneBar = (g, P, cam) => mvBar(g, P.k, 1000 / cam.s, P.MW - 60 * P.k, P.MH - 60 * P.k);
+function mvPoly(g, cam, G, alpha, k, color = "rgb(255,200,40)", lw = 5){
+  if(alpha <= 0) return;
+  const P = corners(G).map(q => mvPt(cam, q));
+  g.save(); g.globalAlpha = alpha; g.strokeStyle = color; g.lineWidth = lw * k; g.lineJoin = "round";
+  g.beginPath(); P.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.stroke();
+  const ext = Math.max(Math.max(...P.map(q => q[0])) - Math.min(...P.map(q => q[0])), Math.max(...P.map(q => q[1])) - Math.min(...P.map(q => q[1])));
+  if(ext < 40 * k){ const cx = P.reduce((a, q) => a + q[0], 0) / 4, cy = P.reduce((a, q) => a + q[1], 0) / 4; g.lineWidth = 4 * k; g.beginPath(); g.arc(cx, cy, 34 * k, 0, Math.PI * 2); g.stroke(); }
+  g.restore();
+}
+function mvSchematic(g, k, cx, cy, ang, al){            // beam coming down onto a specimen slab tilted by ang degrees
+  if(al <= 0 || !Number.isFinite(ang)) return;
+  g.save(); g.globalAlpha = al;
+  mvRound(g, cx - 150 * k, cy - 150 * k, 300 * k, 285 * k, 18 * k, "rgba(0,0,0,0.55)");
+  g.font = `600 ${28 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "rgb(230,230,230)"; g.fillText("Stage tilt", cx, cy - 122 * k);
+  g.strokeStyle = g.fillStyle = "rgba(120,190,255,0.9)"; g.lineWidth = 3 * k;
+  for(const bx of [-50, 0, 50]){
+    g.beginPath(); g.moveTo(cx + bx * k, cy - 98 * k); g.lineTo(cx + bx * k, cy - 52 * k); g.stroke();
+    g.beginPath(); g.moveTo(cx + (bx - 8) * k, cy - 60 * k); g.lineTo(cx + (bx + 8) * k, cy - 60 * k); g.lineTo(cx + bx * k, cy - 44 * k); g.fill();
+  }
+  g.strokeStyle = "rgba(255,255,255,0.35)"; g.lineWidth = 2 * k; g.beginPath(); g.moveTo(cx - 120 * k, cy + 10 * k); g.lineTo(cx + 120 * k, cy + 10 * k); g.stroke();
+  g.save(); g.translate(cx, cy + 10 * k); g.rotate(-ang * Math.PI / 180);
+  g.fillStyle = "rgba(255,200,40,0.95)"; g.strokeStyle = "#fff"; g.lineWidth = 1.5 * k; g.fillRect(-92 * k, -9 * k, 184 * k, 18 * k); g.strokeRect(-92 * k, -9 * k, 184 * k, 18 * k);
+  g.restore();
+  g.fillStyle = "rgb(30,30,30)"; g.beginPath(); g.arc(cx, cy + 10 * k, 6 * k, 0, Math.PI * 2); g.fill();
+  if(Math.abs(ang) > 0.5){
+    const a0 = Math.min(0, -ang) * Math.PI / 180, a1 = Math.max(0, -ang) * Math.PI / 180;
+    g.strokeStyle = "rgba(255,255,255,0.8)"; g.lineWidth = 3 * k;
+    g.beginPath(); g.arc(cx, cy + 10 * k, 60 * k, a0, a1); g.stroke(); g.beginPath(); g.arc(cx, cy + 10 * k, 60 * k, a0 + Math.PI, a1 + Math.PI); g.stroke();
+  }
+  g.restore();
+}
+function mvAngleBar(g, k, xs, y0, angle){             // the angle, and a dot on a track from the lowest to the highest angle
+  if(!Number.isFinite(angle)) return;
+  const c = mv.cfg, ff = mvFont();
+  g.save(); g.font = `600 ${40 * k}px ${ff}`;
+  const lw = Math.max(...["−60°", "+60°", "−00°"].map(t => g.measureText(t).width));
+  mvRound(g, xs, y0, lw + 36 * k, 62 * k, 14 * k, "rgba(0,0,0,0.67)");
+  g.fillStyle = "#fff"; g.textAlign = "right"; g.textBaseline = "middle"; g.fillText(mvDeg(angle), xs + lw + 18 * k, y0 + 33 * k);
+  const lo = Math.min(c.low, c.high), hi = Math.max(c.low, c.high), tx0 = xs + lw + 80 * k, tx1 = xs + lw + 380 * k, ty = y0 + 31 * k, X = v => tx0 + (v - lo) / Math.max(1e-6, hi - lo) * (tx1 - tx0);
+  g.strokeStyle = "rgba(255,255,255,0.55)"; g.lineWidth = 3 * k; g.beginPath(); g.moveTo(tx0, ty); g.lineTo(tx1, ty); g.stroke();
+  g.lineWidth = 2 * k; for(const v of [lo, ...(lo < 0 && hi > 0 ? [0] : []), hi]){ g.beginPath(); g.moveTo(X(v), ty - 9 * k); g.lineTo(X(v), ty + 9 * k); g.stroke(); }
+  g.fillStyle = "rgb(255,200,40)"; g.beginPath(); g.arc(X(Math.max(lo, Math.min(hi, angle))), ty, 9 * k, 0, Math.PI * 2); g.fill();
+  g.restore();
+}
+// mix: 0 = the atlas alone, 1 = the search map alone (plus the Search image as a close-up, faded in by `close`)
+function mvScene(g, cam, mix, close = 0){
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.globalCompositeOperation = "source-over";
+  g.fillStyle = "#000"; g.fillRect(0, 0, cam.W, cam.H);
+  if(!mv.atlas) mix = 1;
+  if(mix < 1) mvDrawImg(g, cam, mv.atlas, 1 - mix);
+  if(mix > 0) for(const L of mv.maps) mvDrawImg(g, cam, L, mix);
+  if(close > 0 && mv.search) mvDrawImg(g, cam, mv.search, close);
+}
+// atlas → zoom → search map: the same in both movies; true if t falls in them
+function mvMapStages(g, t, P, L){
+  const k = P.k, cam = (c, s, Q) => ({c, s, Q, W: P.MW, H: P.MH});
+  const mapBox = mv.mapGeos.length === 1 ? mv.mapGeos[0] : null;
+  if(P.hasAtlas && t < P.tB){
+    const cm = cam(P.full.c, P.full.s, P.Q0);
+    mvScene(g, cm, 0);
+    for(const G of mapBox ? [mapBox] : mv.mapGeos) mvPoly(g, cm, G, mvEase((t - Math.min(1, P.tB / 3)) / 0.8), k);
+    mvTitle(g, k, L[0][0], L[0][1], 1); mvSceneBar(g, P, cm);
+  } else if(P.hasAtlas && t < P.tC){
+    const u = (t - P.tB) / P.TB, z = mvZoomCam(u, P.full.c, P.full.s, P.mapC, P.zMap), cm = cam(z.c, z.s, P.turnAM(mvEase(u)));
+    const mix = mvEase((z.s / P.zMap - 0.3) / 0.55);
+    mvScene(g, cm, mix); for(const G of mapBox ? [mapBox] : mv.mapGeos) mvPoly(g, cm, G, 1 - mix, k);
+    mvTitle(g, k, L[0][0], L[0][1], 1); mvSceneBar(g, P, cm);
+  } else if(t < P.tD){
+    const tc = (t - P.tC) * 2 / P.TS, cm = cam(P.mapC, P.zMap, P.hasAtlas ? P.turnAM(1) : P.Q0);
+    mvScene(g, cm, 1);
+    const sub = L[1][1] || mv.mapName;
+    if(P.hasAtlas && tc < 0.8) mvTitle(g, k, L[0][0], L[0][1], 1 - mvEase(tc / 0.8)); else mvTitle(g, k, L[1][0], sub, P.hasAtlas ? mvEase((tc - 0.8) / 0.8) : 1);
+    mvSceneBar(g, P, cm);
+  } else return false;
+  return true;
+}
+// footprint of a tilt series (or the camera field) at an area, as a geo for mvPoly
+function mvFoot(x){
+  if(x.ts) return x.ts.geo;
+  const cam = overlay().cam, R = mv.series[0]?.geo.R || (mv.Qs ? transpose(mv.Qs) : IDENT);
+  return {S: x.stage, R, ps: cam / 100, nx: 100, ny: 100};
+}
+// draw the frame at time t; returns [series, z, px] of a tilt image it needs that is not loaded yet
+function mvFrame(t){
+  return mv.kind === "parallel" ? mvFramePar(t) : mvFrameSingle(t);
+}
+function mvInset(u){
+  const n = mv.plan.ins, e = mvEase(u);
+  return {s: n.s0 * Math.pow(n.s1 / n.s0, e), th: n.th0 * (1 - e), p: [n.p0[0] + (n.p1[0] - n.p0[0]) * e, n.p0[1] + (n.p1[1] - n.p0[1]) * e]};
+}
+// a tilt image drawn centred at p, s screen px per µm, turned by th (0 = upright as in the Exposure tab)
+function mvTiltDraw(g, L, ts, p, s, th, k, alpha = 1, label = ""){
+  const G = ts.geo, w = G.nx * G.ps * s, h = G.ny * G.ps * s;
+  g.save(); g.globalAlpha = alpha; g.translate(p[0], p[1]); g.rotate(th);
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = "high";
+  if(L) g.drawImage(L.cv, -w / 2, -h / 2, w, h); else { g.fillStyle = "rgba(255,255,255,0.08)"; g.fillRect(-w / 2, -h / 2, w, h); }
+  g.strokeStyle = "rgba(255,255,255,0.86)"; g.lineWidth = 2.5 * k; g.strokeRect(-w / 2, -h / 2, w, h);
+  g.restore();
+  if(label){
+    const ca = Math.abs(Math.cos(th)), sa = Math.abs(Math.sin(th)), ew = w * ca + h * sa, eh = w * sa + h * ca;
+    g.save(); g.globalAlpha = alpha; g.font = `700 ${24 * k}px ${mvFont()}`; g.textAlign = "left"; g.textBaseline = "middle";
+    const tw = g.measureText(label).width, lx = p[0] - ew / 2 + 8 * k, ly = p[1] - eh / 2 + 22 * k;
+    mvRound(g, lx, ly - 16 * k, tw + 16 * k, 32 * k, 8 * k, "rgba(0,0,0,0.7)"); g.fillStyle = AREA.exp; g.fillText(label, lx + 8 * k, ly + 1 * k);
+    g.restore();
+  }
+  return {w, h};
+}
+function mvFrameSingle(t){
+  const P = mv.plan, c = mv.cfg, g = mv.g, k = P.k, L = c.labels, ts = mv.series[0], p = mv.p;
+  const cam = (cc, s, Q) => ({c: cc, s, Q, W: P.MW, H: P.MH});
+  const sub2 = L[2][1] || `${p.name} · area ${p.id}.${ts.k}`, sub3 = L[3][1] || mvSchemeText(mv.seq);
+  const z0 = mv.seq.length ? mv.seq[0].z.get(ts.k) : ts.secs[0].z, a0 = mv.seq.length ? mv.seq[0].a : NaN;
+  let need = null;
+  const timg = z => { const im = mv.timg.get(mvKey(ts.path, z, 1024)); if(!im) need = [ts, z, 1024]; return im || mv.timg.get(mvKey(ts.path, z0, 1024)) || null; };
+  if(mvMapStages(g, t, P, L)) return null;
+  if(t < P.tE){
+    const td = t - P.tD, ZT = P.ZT, u = Math.min(1, td / ZT), z = mvZoomCam(u, P.mapC, P.zMap, ts.geo.S, P.zTg), cm = cam(z.c, z.s, P.turnMS(mvEase(u)));
+    mvScene(g, cm, 1, mvEase((Math.log(z.s / P.zMap) / Math.log(P.zTg / P.zMap)) * 1.6 - 0.5));
+    mvPoly(g, cm, ts.geo, mvEase((td - ZT - 0.2) / 0.6), k);
+    if(td < ZT - 0.8) mvTitle(g, k, L[1][0], L[1][1] || mv.mapName, 1 - mvEase((td - ZT + 1.4) / 0.6)); else mvTitle(g, k, L[2][0], sub2, mvEase((td - ZT + 0.8) / 0.6));
+    mvSceneBar(g, P, cm);
+    return null;
+  }
+  if(!mv.bgEnd){ mv.bgEnd = document.createElement("canvas"); mv.bgEnd.width = P.MW; mv.bgEnd.height = P.MH; mvScene(mv.bgEnd.getContext("2d"), P.camEnd, 1, 1); }
+  const frame = (img, ins, dim, angle, title, sub, ta, bar, schAng, schAlpha) => {
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = "#000"; g.fillRect(0, 0, P.MW, P.MH);
+    g.globalAlpha = dim; g.drawImage(mv.bgEnd, 0, 0); g.globalAlpha = 1;
+    const {w, h} = mvTiltDraw(g, img, ts, ins.p, ins.s, ins.th, k);
+    const ca = Math.abs(Math.cos(ins.th)), sa = Math.abs(Math.sin(ins.th)), ew = w * ca + h * sa, eh = w * sa + h * ca;
+    const xs = ins.p[0] - ew / 2, xr = ins.p[0] + ew / 2, yb = ins.p[1] + eh / 2;
+    mvAngleBar(g, k, xs, yb + 22 * k, angle);
+    if(c.schematic) mvSchematic(g, k, Math.min(P.MW - 170 * k, xr + 190 * k), ins.p[1], schAng, schAlpha);
+    if(bar) mvBar(g, k, 1000 / ins.s, xr - 20 * k, yb - 24 * k);
+    mvTitle(g, k, title, sub, ta);
+  };
+  if(t < P.tF){
+    const te = t - P.tE, ins = mvInset((te - 0.2) / 1.6), first = te < 0.6;
+    frame(timg(z0), ins, 1 - 0.6 * mvEase(te / 1.2), te > 1.6 ? a0 : NaN, first ? L[2][0] : L[3][0], first ? sub2 : sub3,
+      first ? 1 - mvEase(te / 0.6) : mvEase((te - 0.6) / 0.6), te > 1.6, a0, mvEase((te - 1.4) / 0.6));
+  } else {
+    const n = mv.seq.length, x = (t - P.tF) * Math.max(1, c.tiltFps), j = Math.max(0, Math.min(Math.floor(x), n - 1)), jn = Math.min(j + 1, n - 1), fr = j < n - 1 ? x - j : 0;
+    const cur = n ? mv.seq[j] : {z: new Map([[ts.k, z0]]), a: a0}, nxt = n ? mv.seq[jn] : cur;
+    frame(timg(cur.z.get(ts.k)), mvInset(1), 0.4, cur.a, L[3][0], sub3, 1, true, cur.a + (nxt.a - cur.a) * fr, 1);
+  }
+  return need;
+}
+// the tilt axis through N.1 (Tomo5's tilt-axis angle, in stage coordinates)
+function mvAxis(g, cam, alpha, k){
+  if(!mv.cfg.tiltAxis || alpha <= 0 || !mv.targets.length) return;
+  const ta = (mv.p.plan?.tiltAxis || 0) * Math.PI / 180, o = mv.targets[0].stage;
+  const p = mvPt(cam, o), q = mvPt(cam, [o[0] + Math.cos(ta), o[1] + Math.sin(ta)]), L = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+  let ux = (q[0] - p[0]) / L, uy = (q[1] - p[1]) / L;
+  if(ux < -1e-6 || (Math.abs(ux) < 1e-6 && uy > 0)){ ux = -ux; uy = -uy; }
+  const R = Math.hypot(cam.W, cam.H);
+  g.save(); g.globalAlpha = alpha; g.strokeStyle = "rgba(120,200,255,0.95)"; g.lineWidth = 3 * k; g.setLineDash([18 * k, 12 * k]);
+  g.beginPath(); g.moveTo(p[0] - ux * R, p[1] - uy * R); g.lineTo(p[0] + ux * R, p[1] + uy * R); g.stroke(); g.setLineDash([]);
+  const d = Math.abs(ux) > 0.35 ? (cam.W * 0.8 - p[0]) / ux : (cam.H * 0.22 - p[1]) / uy;
+  g.translate(p[0] + ux * d, p[1] + uy * d); g.rotate(Math.atan2(uy, ux));
+  g.font = `600 ${24 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle";
+  const tw = g.measureText("Tilt axis").width;
+  mvRound(g, -tw / 2 - 12 * k, -46 * k, tw + 24 * k, 36 * k, 9 * k, "rgba(0,0,0,0.65)"); g.fillStyle = "rgb(120,200,255)"; g.fillText("Tilt axis", 0, -27 * k);
+  g.restore();
+}
+// a picked area: yellow camera box, a beam circle drawn around it, its number N.k
+function mvMark(g, cam, x, prog, k, alpha){
+  if(prog <= 0 || alpha <= 0) return;
+  const G = mvFoot(x), P = corners(G).map(q => mvPt(cam, q)), c0 = mvPt(cam, x.stage), r = Math.max(16 * k, overlay().beam / 2 * cam.s);
+  g.save(); g.globalAlpha = alpha * mvEase(prog / 0.35); g.strokeStyle = "rgb(255,200,40)"; g.lineWidth = 3 * k; g.lineJoin = "round";
+  g.beginPath(); P.forEach((q, i) => i ? g.lineTo(q[0], q[1]) : g.moveTo(q[0], q[1])); g.closePath(); g.stroke();
+  const sweep = mvEase((prog - 0.2) / 0.5);
+  if(sweep > 0){ g.globalAlpha = alpha; g.strokeStyle = AREA.exp; g.lineWidth = 3.5 * k; g.beginPath(); g.arc(c0[0], c0[1], r, -Math.PI / 2, -Math.PI / 2 + sweep * Math.PI * 2); g.stroke(); }
+  const na = mvEase((prog - 0.45) / 0.35);
+  if(na > 0){
+    g.globalAlpha = alpha * na; g.font = `700 ${26 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle";
+    const lab = `${mv.p.id}.${x.k}`, tw = g.measureText(lab).width, lx = c0[0] + r * 0.74 + 24 * k, ly = c0[1] - r * 0.74 - 14 * k;
+    mvRound(g, lx - tw / 2 - 9 * k, ly - 17 * k, tw + 18 * k, 34 * k, 9 * k, "rgba(0,0,0,0.7)"); g.fillStyle = AREA.exp; g.fillText(lab, lx, ly + 1 * k);
+  }
+  g.restore();
+}
+function mvTracking(g, cam, alpha, k){            // Tomo5's tracking area (yellow), shown with the tilt axis
+  const tr = mv.plan.tr; if(!tr || alpha <= 0) return;
+  const c0 = mvPt(cam, tr), r = overlay().beam / 2 * cam.s;
+  g.save(); g.globalAlpha = alpha; g.strokeStyle = AREA.track; g.lineWidth = 3 * k; g.setLineDash([10 * k, 8 * k]);
+  g.beginPath(); g.arc(c0[0], c0[1], r, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+  g.font = `600 ${22 * k}px ${mvFont()}`; g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = AREA.track; g.fillText("Tracking", c0[0], c0[1] + r + 22 * k);
+  g.restore();
+}
+function mvFramePar(t){
+  const P = mv.plan, c = mv.cfg, g = mv.g, k = P.k, L = c.pLabels, n = mv.targets.length, ts = mv.targets.filter(x => x.ts);
+  const cam = (cc, s, Q) => ({c: cc, s, Q, W: P.MW, H: P.MH});
+  if(mvMapStages(g, t, P, L)) return null;
+  let need = null;
+  const imgOf = (x, z) => {
+    const im = z == null ? null : mv.timg.get(mvKey(x.ts.path, z, P.grid.px));
+    if(im){ mv.lastImg.set(x.k, im); return im; }
+    if(z != null && !need) need = [x.ts, z, P.grid.px];
+    return mv.lastImg.get(x.k) || null;
+  };
+  const pickSub = kk => L[2][1] || `${mv.p.name} · area ${mv.p.id}.${mv.targets[kk - 1].k} (${kk} of ${n})`;
+  const allSub = L[2][1] || `${mv.p.name} · ${n} area${n === 1 ? "" : "s"}`;
+  if(t < P.tE){
+    const u = (t - P.tD) / P.TV, z = mvZoomCam(u, P.mapC, P.zMap, P.camV.c, P.zV), cm = cam(z.c, z.s, P.turnMS(mvEase(u)));
+    mvScene(g, cm, 1, mvEase((z.s / P.zV - 0.25) / 0.55));
+    if(u < 0.65) mvTitle(g, k, L[1][0], L[1][1] || mv.mapName, 1 - mvEase((u - 0.35) / 0.3)); else mvTitle(g, k, L[2][0], allSub, mvEase((u - 0.7) / 0.3));
+    mvSceneBar(g, P, cm); return null;
+  }
+  if(t < P.tG){
+    const cm = P.camV; mvScene(g, cm, 1, 1);
+    // area 1, then the tilt axis (and tracking area) in a slot of the same length, then the other areas one slot each
+    const ax = mvEase((t - P.tF - 1.0 * P.TP) / Math.max(0.3, 0.6 * P.TP));
+    mvAxis(g, cm, ax, k); if(P.axisSlot) mvTracking(g, cm, ax, k);
+    let kk = 0;
+    mv.targets.forEach((x, i) => { const pr = (t - P.tF - (i ? i + P.axisSlot : 0) * P.TP) / P.TP; if(pr > 0) kk = i + 1; mvMark(g, cm, x, Math.min(1.5, pr), k, 1); });
+    mvTitle(g, k, L[2][0], kk ? pickSub(kk) : allSub, 1);
+    mvSceneBar(g, P, cm); return null;
+  }
+  // from here on: the View with all areas marked, dimmed, and the tilt series in a grid
+  if(!mv.bgEnd){
+    mv.bgEnd = document.createElement("canvas"); mv.bgEnd.width = P.MW; mv.bgEnd.height = P.MH;
+    const bg = mv.bgEnd.getContext("2d"); mvScene(bg, P.camV, 1, 1); mvAxis(bg, P.camV, 1, k); if(P.axisSlot) mvTracking(bg, P.camV, 1, k); mv.targets.forEach(x => mvMark(bg, P.camV, x, 1.5, k, 1));
+  }
+  const G = P.grid, sub3 = L[3][1] || `${ts.length} area${ts.length === 1 ? "" : "s"} in parallel${mv.seq.length ? ` · ${mvSchemeText(mv.seq)}` : ""}`;
+  g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1; g.fillStyle = "#000"; g.fillRect(0, 0, P.MW, P.MH);
+  if(!G){ g.globalAlpha = 1; g.drawImage(mv.bgEnd, 0, 0); mvTitle(g, k, L[2][0], allSub, 1); return null; }
+  const thOf = x => { const QR = mmul(P.Qend, x.ts.geo.R); return det2(QR) > 0 ? Math.atan2(QR[1][0], QR[0][0]) : 0; };
+  if(t < P.tH){
+    const u = (t - P.tG) / 1.8, e = mvEase(u);
+    g.globalAlpha = 1 - 0.65 * e; g.drawImage(mv.bgEnd, 0, 0); g.globalAlpha = 1;
+    for(const x of ts){
+      const z = mv.seq.length ? mv.seq[0].z.get(x.k) : null, p0 = mvPt(P.camV, x.ts.geo.S), p1 = G.cells.get(x.k), s = P.zV * Math.pow(G.s / P.zV, e);
+      mvTiltDraw(g, imgOf(x, z), x.ts, [p0[0] + (p1[0] - p0[0]) * e, p0[1] + (p1[1] - p0[1]) * e], s, thOf(x) * (1 - e), k, 1, e > 0.6 ? `${mv.p.id}.${x.k}` : "");
+    }
+    if(u < 0.35) mvTitle(g, k, L[2][0], allSub, 1 - mvEase(u / 0.35)); else mvTitle(g, k, L[3][0], sub3, mvEase((u - 0.35) / 0.35));
+    return need;
+  }
+  g.globalAlpha = 0.35; g.drawImage(mv.bgEnd, 0, 0); g.globalAlpha = 1;
+  const ns = mv.seq.length, x0 = (t - P.tH) * Math.max(1, c.tiltFps), j = Math.max(0, Math.min(Math.floor(x0), ns - 1)), jn = Math.min(j + 1, ns - 1), fr = j < ns - 1 ? x0 - j : 0;
+  const cur = mv.seq[j], nxt = mv.seq[jn];
+  for(const x of ts) mvTiltDraw(g, imgOf(x, cur?.z.get(x.k)), x.ts, G.cells.get(x.k), G.s, 0, k, 1, `${mv.p.id}.${x.k}`);
+  if(cur){
+    mvAngleBar(g, k, Math.max(40 * k, (G.right - 40 * k) / 2 - 200 * k), G.bottom + 20 * k, cur.a);
+    if(c.schematic) mvSchematic(g, k, P.MW - 190 * k, P.MH / 2, cur.a + (nxt.a - cur.a) * fr, 1);
+  }
+  mvBar(g, k, 1000 / G.s, P.MW - 60 * k, P.MH - 60 * k);
+  mvTitle(g, k, L[3][0], sub3, 1);
+  return need;
+}
+
+// ---- preview: show, play, scrub
+async function mvDraw(t){ let need, guard = 0; while((need = mvFrame(t)) && guard++ < 200) await mvTiltImg(...need); }
+function mvShow(t){
+  if(!mv?.ready) return;
+  mv.t = Math.max(0, Math.min(mv.plan.total, t));
+  const need = mvFrame(mv.t);
+  const sl = $("#mvTime"); if(document.activeElement !== sl) sl.value = mv.t;
+  $("#mvClock").textContent = `${mv.t.toFixed(1)} / ${mv.plan.total.toFixed(1)} s`;
+  const nk = need && mvKey(need[0].path, need[1], need[2]);
+  if(nk && !mv.loading.has(nk)){
+    const self = mv; self.loading.add(nk);
+    mvTiltImg(...need).then(() => { if(mv === self && !self.busy && !self.playing) mvShow(self.t); }).catch(() => {}).finally(() => self.loading.delete(nk));
+  }
+}
+function mvPlay(on){
+  if(!mv?.ready) return;
+  mv.playing = on; $("#mvPlay").textContent = on ? "Pause" : "Play";
+  if(!on) return;
+  if(mv.t >= mv.plan.total - 0.05) mv.t = 0;
+  const self = mv, t0 = performance.now() - mv.t * 1000;
+  const step = () => { if(mv !== self || !self.playing || self.busy) return; const t = (performance.now() - t0) / 1000; mvShow(t); if(t >= self.plan.total) return mvPlay(false); requestAnimationFrame(step); };
+  requestAnimationFrame(step);
+}
+function mvSay(t, err){ const el = $("#mvStatus"); el.textContent = t || ""; el.classList.toggle("err", !!err); }
+
+// ---- settings panel
+function mvForm(){
+  const c = mv.cfg, par = mv.kind === "parallel", labs = par ? c.pLabels : c.labels, p = mv.p;
+  const stage = par ? ["Atlas", "Search Map", "Target selection", "Tilt series"] : ["Atlas", "Search Map", "Acquisition position", "Tilt series"];
+  const subPh = i => i === 1 ? "Subtitle (empty = the map name)" : i === 2 ? (par ? "Subtitle (empty = position and area)" : "Subtitle (empty = position and area)") : i === 3 ? "Subtitle (empty = the angle scheme)" : "Subtitle";
+  const areaOpts = p.areas.map(a => `<option value="${a.k}" ${a.k === mv.k ? "selected" : ""} ${a.mrc ? "" : "disabled"}>${p.id}.${a.k}${a.mrc ? "" : " (no tilt series)"}</option>`).join("");
+  $("#mvSide").innerHTML = `
+    ${par ? `<p class="mvnote">${esc(p.name)}: ${p.areas.length} area${p.areas.length === 1 ? "" : "s"}, ${p.areas.filter(a => a.mrc).length} with a tilt series.</p>`
+          : `<label class="mvf full">Area<select id="mvArea">${areaOpts}</select></label>`}
+    <h4>Labels</h4>
+    ${stage.map((s, i) => `<div class="mvlab"><span>${i + 1}. ${s}</span><input type="text" data-lab="${i}:0" value="${esc(labs[i][0])}" placeholder="Title (empty = none)" aria-label="${s} title"><input type="text" data-lab="${i}:1" value="${esc(labs[i][1])}" placeholder="${subPh(i)}" aria-label="${s} subtitle"></div>`).join("")}
+    <h4>Camera</h4>
+    <div class="mvfs">
+      ${par ? `<label class="mvf" title="1 = all areas just fit. Lower shows more around them.">View zoom ×<input type="number" id="mvVZoom" min="0.2" max="5" step="0.1" value="${c.viewZoom}"></label>
+               <label class="mvc full"><input type="checkbox" id="mvAxis" ${c.tiltAxis ? "checked" : ""}> Show the tilt axis and tracking area</label>`
+            : `<label class="mvf" title="Zoom on the area relative to the whole search map">Final zoom ×<input type="number" id="mvZoom" min="1" max="200" step="1" value="${c.zoom || ""}"></label>`}
+    </div>
+    <h4>Timing (seconds)</h4>
+    <div class="mvfs">
+      <label class="mvf">Atlas<input type="number" id="mvTAtlas" min="0.5" max="30" step="0.5" value="${c.tAtlas}"></label>
+      <label class="mvf">Zoom to map<input type="number" id="mvTToMap" min="0.5" max="30" step="0.5" value="${c.tToMap}"></label>
+      <label class="mvf">Search map<input type="number" id="mvTMap" min="0.5" max="30" step="0.5" value="${c.tMap}"></label>
+      ${par ? `<label class="mvf">Zoom to areas<input type="number" id="mvTToV" min="0.5" max="30" step="0.5" value="${c.tToView}"></label>
+               <label class="mvf">Per area<input type="number" id="mvTPick" min="0.2" max="10" step="0.1" value="${c.tPick}"></label>`
+            : `<label class="mvf">Zoom to area<input type="number" id="mvTToTg" min="0.5" max="30" step="0.5" value="${c.tToTg}"></label>
+               <label class="mvf">Hold on area<input type="number" id="mvHold" min="0" max="20" step="0.5" value="${c.hold}"></label>`}
+    </div>
+    <h4>Tilt series playback</h4>
+    <div class="mvfs">
+      <label class="mvf full">Order<select id="mvOrder">
+        <option value="sweep" ${c.order === "sweep" ? "selected" : ""}>start → lowest → highest → start</option>
+        <option value="acq" ${c.order === "acq" ? "selected" : ""}>as acquired (.mdoc time, else file order)</option>
+        <option value="angle" ${c.order === "angle" ? "selected" : ""}>by angle, lowest → highest</option></select></label>
+      <label class="mvf">Images per second<input type="number" id="mvTfps" min="1" max="30" step="1" value="${c.tiltFps}"></label>
+      <label class="mvf" title="Low-pass for the tilt images (Å); 0 = off">Low-pass (Å)<input type="number" id="mvLp" min="0" max="500" step="5" value="${c.lp}"></label>
+      <label class="mvf">Lowest angle (°)<input type="number" id="mvLow" step="1" value="${c.low ?? -60}"></label>
+      <label class="mvf">Highest angle (°)<input type="number" id="mvHigh" step="1" value="${c.high ?? 60}"></label>
+      <label class="mvc full"><input type="checkbox" id="mvSchem" ${c.schematic ? "checked" : ""}> Show the stage-tilt schematic</label>
+    </div>
+    <h4>Output</h4>
+    <div class="mvfs">
+      <label class="mvf">Size<select id="mvSize">${["1920x1080", "1280x720", "3840x2160"].map(v => `<option ${c.size === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+      <label class="mvf">Frames per second<select id="mvFps">${[24, 30, 60].map(v => `<option ${c.fps === v ? "selected" : ""}>${v}</option>`).join("")}</select></label>
+    </div>`;
+}
+function mvRead(){
+  const c = mv.cfg, n = (id, d) => { const el = $(id); if(!el) return d; const v = Number(el.value); return el.value !== "" && Number.isFinite(v) ? v : d; };
+  const labs = mv.kind === "parallel" ? c.pLabels : c.labels;
+  $$("#mvSide [data-lab]").forEach(el => { const [i, j] = el.dataset.lab.split(":").map(Number); labs[i][j] = el.value; });
+  const lpOld = c.lp;
+  Object.assign(c, {zoom: Math.max(1, n("#mvZoom", c.zoom)), hold: Math.max(0, n("#mvHold", c.hold)),
+    tAtlas: n("#mvTAtlas", 3), tToMap: n("#mvTToMap", 4), tMap: n("#mvTMap", 2), tToTg: n("#mvTToTg", c.tToTg), tToView: n("#mvTToV", c.tToView),
+    viewZoom: Math.max(0.2, n("#mvVZoom", c.viewZoom)), tiltAxis: $("#mvAxis") ? $("#mvAxis").checked : c.tiltAxis, tPick: Math.max(0.2, n("#mvTPick", c.tPick)),
+    tiltFps: Math.max(1, n("#mvTfps", 10)), lp: Math.max(0, n("#mvLp", 60)), low: n("#mvLow", c.low), high: n("#mvHigh", c.high), order: $("#mvOrder").value,
+    schematic: $("#mvSchem").checked, size: $("#mvSize").value, fps: Number($("#mvFps").value) || 30});
+  if(c.low > c.high) [c.low, c.high] = [c.high, c.low];
+  if(c.lp !== lpOld){ mv.timg.clear(); mv.lastImg.clear(); mv.bgEnd = null; }
+  mvSaveCfg();
+}
+$("#mvSide").addEventListener("change", e => {
+  if(!mv || mv.busy) return;
+  if(e.target.id === "mvArea"){ mvPlay(false); return void mvOpen(mv.pi, +e.target.value, "single"); }
+  mvRead(); if(!mv.ready) return;
+  const frac = mv.plan.total ? mv.t / mv.plan.total : 0, isLab = !!e.target.dataset.lab;
+  mvPlan(); mvShow(isLab ? mv.t : Math.min(mv.plan.total, frac * mv.plan.total));
+});
+$("#mvTime").addEventListener("input", e => { if(mv && !mv.busy){ mvPlay(false); mvShow(Number(e.target.value)); } });
+$("#mvPlay").addEventListener("click", () => { if(mv && !mv.busy) mvPlay(!mv.playing); });
+$("#mvClose").addEventListener("click", () => $("#mvDlg").close());
+$("#mvDlg").addEventListener("close", () => { if(mv){ mv.cancel = true; mv.playing = false; } });
+$("#mvDlg").addEventListener("cancel", e => { if(mv?.busy){ e.preventDefault(); mv.cancel = true; } });
+
+// ---- encoding: ffmpeg on the server (.mp4), else WebCodecs in this browser (.webm)
+function mvWebm(chunks, codecId, w, h, fps){               // minimal WebM writer, exact time stamps
+  const cat = arrs => { const n = arrs.reduce((a, x) => a + x.length, 0), o = new Uint8Array(n); let k = 0; for(const x of arrs){ o.set(x, k); k += x.length; } return o; };
+  const uint = v => { const b = []; do{ b.unshift(v % 256); v = Math.floor(v / 256); }while(v > 0); return Uint8Array.from(b); };
+  const f64 = v => { const b = new Uint8Array(8); new DataView(b.buffer).setFloat64(0, v); return b; };
+  const str = t => new TextEncoder().encode(t);
+  const size = n => { const b = new Uint8Array(8); b[0] = 1; let v = n; for(let i = 7; i > 0; i--){ b[i] = v % 256; v = Math.floor(v / 256); } return b; };
+  const el = (id, body) => { const d = body instanceof Uint8Array ? body : cat(body); return cat([Uint8Array.from(id), size(d.length), d]); };
+  const ms = us => Math.round(us / 1000), dur = chunks.length * 1000 / fps;
+  const head = el([0x1A,0x45,0xDF,0xA3], [el([0x42,0x86], uint(1)), el([0x42,0xF7], uint(1)), el([0x42,0xF2], uint(4)), el([0x42,0xF3], uint(8)), el([0x42,0x82], str("webm")), el([0x42,0x87], uint(2)), el([0x42,0x85], uint(2))]);
+  const info = el([0x15,0x49,0xA9,0x66], [el([0x2A,0xD7,0xB1], uint(1000000)), el([0x4D,0x80], str("Tomo5 Data Viewer")), el([0x57,0x41], str("Tomo5 Data Viewer")), el([0x44,0x89], f64(dur))]);
+  const tracks = el([0x16,0x54,0xAE,0x6B], el([0xAE], [el([0xD7], uint(1)), el([0x73,0xC5], uint(1)), el([0x9C], uint(0)), el([0x86], str(codecId)), el([0x83], uint(1)), el([0x23,0xE3,0x83], uint(Math.round(1e9 / fps))),
+    el([0xE0], [el([0xB0], uint(w)), el([0xBA], uint(h))])]));
+  const clusters = []; let cur = null, t0 = 0;
+  for(const c of chunks){
+    const t = ms(c.t);
+    if(!cur || c.key || t - t0 > 30000){ if(cur) clusters.push(el([0x1F,0x43,0xB6,0x75], cur)); t0 = t; cur = [el([0xE7], uint(t))]; }
+    const rel = t - t0, hd = Uint8Array.from([0x81, (rel >> 8) & 255, rel & 255, c.key ? 0x80 : 0]);
+    cur.push(el([0xA3], cat([hd, c.data])));
+  }
+  if(cur) clusters.push(el([0x1F,0x43,0xB6,0x75], cur));
+  return new Blob([head, el([0x18,0x53,0x80,0x67], [info, tracks, ...clusters])], {type: "video/webm"});
+}
+async function mvBrowserCodec(w, h, fps){
+  if(!window.VideoEncoder || !window.VideoFrame) return null;
+  for(const [codec, id] of [["vp8", "V_VP8"], ["vp09.00.40.08", "V_VP9"], ["vp09.00.51.08", "V_VP9"]]){
+    try{ const cfg = {codec, width: w, height: h, bitrate: w * h >= 3840 * 2160 ? 40e6 : 16e6, framerate: fps}; if((await VideoEncoder.isConfigSupported(cfg)).supported) return {cfg, id}; }catch{}
+  }
+  return null;
+}
+function mvEncoderNote(){
+  $("#mvEnc").textContent = SERVER?.ffmpeg ? "Encoding: ffmpeg on the server → .mp4"
+    : "Encoding: in this browser → .webm (ffmpeg was not found on the server; start it with --ffmpeg PATH for .mp4)";
+}
+const mvName = () => { const p = mv.p; return mv.kind === "parallel" ? `${p.name}_parallel_acquisition_movie` : `${p.name}${mv.k > 1 ? `_${mv.k}` : ""}_acquisition_movie`; };
+/* One encoder for every movie (acquisition movies, Export movie): frames drawn on a canvas go to
+   ffmpeg on the server (.mp4), or without it to WebCodecs in this browser (.webm).
+   frame(i) draws frame i and returns its canvas; returns {url, ext, size, frames, how}. */
+async function encodeMovie({w, h, fps, n, frame, progress = () => {}, cancelled = () => false}){
+  const stop = () => { if(cancelled()) throw new Error("cancelled"); };
+  if(SERVER?.ffmpeg){
+    const r = await fetch("api/movie/start", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({w, h, fps})});
+    const j = await r.json(); if(!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    try{
+      for(let i = 0; i < n; i++){
+        stop();
+        const cv = await frame(i), blob = await new Promise(res => cv.toBlob(res, "image/jpeg", 0.93));
+        const fr = await fetch(`api/movie/frame?id=${j.id}`, {method: "POST", headers: {"Content-Type": "image/jpeg"}, body: blob});
+        if(!fr.ok) throw new Error((await fr.json().catch(() => ({}))).error || `HTTP ${fr.status}`);
+        progress(i, n, "ffmpeg");
+      }
+      const e = await fetch(`api/movie/end?id=${j.id}`, {method: "POST"}), ej = await e.json(); if(!e.ok) throw new Error(ej.error || `HTTP ${e.status}`);
+      return {url: `api/movie/file?id=${j.id}`, ext: "mp4", size: ej.size, frames: ej.frames, how: j.encoder};
+    }catch(err){ fetch(`api/movie/cancel?id=${j.id}`, {method: "POST"}).catch(() => {}); throw err; }
+  }
+  const bc = await mvBrowserCodec(w, h, fps);
+  if(!bc) throw new Error("this browser cannot encode video, and the server has no ffmpeg. Start the server with --ffmpeg PATH, or use a current Chrome or Edge.");
+  const chunks = []; let failed = null;
+  const enc = new VideoEncoder({output: ch => { const d = new Uint8Array(ch.byteLength); ch.copyTo(d); chunks.push({t: ch.timestamp, key: ch.type === "key", data: d}); }, error: e => { failed = e; }});
+  enc.configure(bc.cfg);
+  try{
+    for(let i = 0; i < n; i++){
+      stop(); if(failed) throw failed;
+      const vf = new VideoFrame(await frame(i), {timestamp: Math.round(i * 1e6 / fps), duration: Math.round(1e6 / fps)});
+      enc.encode(vf, {keyFrame: i % (fps * 2) === 0}); vf.close();
+      while(enc.encodeQueueSize > 4) await new Promise(res => setTimeout(res, 5));
+      progress(i, n, "browser");
+    }
+    await enc.flush();
+  }finally{ if(enc.state !== "closed") enc.close(); }
+  if(failed) throw failed;
+  const blob = mvWebm(chunks, bc.id, w, h, fps);
+  return {url: URL.createObjectURL(blob), ext: "webm", size: blob.size, frames: n, how: `this browser (${bc.cfg.codec})`};
+}
+async function mvRender(){
+  if(!mv?.ready || mv.busy) return;
+  const self = mv, c = self.cfg, btn = $("#mvRender"), out = $("#mvOut");
+  mvPlay(false); self.busy = true; self.cancel = false; out.innerHTML = ""; btn.textContent = "Cancel";
+  $$("#mvSide input, #mvSide select, #mvTime, #mvPlay").forEach(el => el.disabled = true);
+  const prog = (t, f) => { mvSay(t); $("#mvProg").value = f; $("#mvProg").hidden = false; };
+  try{
+    // read every tilt image first, so no frame shows a stand-in
+    const px = self.kind === "parallel" ? self.plan.grid?.px : 1024, need = [];
+    if(px) for(const st of self.seq) for(const ts of self.series){ const z = st.z.get(ts.k); if(z != null) need.push([ts, z]); }
+    const uniq = [...new Map(need.map(([ts, z]) => [mvKey(ts.path, z, px), [ts, z]])).values()];
+    self.cacheMax = Math.max(self.cacheMax || 0, uniq.length + 8);
+    for(let i = 0; i < uniq.length; i++){ if(self.cancel) throw new Error("cancelled"); prog(`Reading tilt image ${i + 1} of ${uniq.length}…`, 0.15 * i / uniq.length); await mvTiltImg(uniq[i][0], uniq[i][1], px); }
+    const P = self.plan;
+    const res = await encodeMovie({w: P.MW, h: P.MH, fps: c.fps, n: Math.round(P.total * c.fps), cancelled: () => self.cancel,
+      frame: async i => { await mvDraw(i / c.fps); return self.canvas; },
+      progress: (i, n, how) => { if(i % 5 === 0) prog(`${how === "ffmpeg" ? "Rendering" : "Encoding"} frame ${i + 1} of ${n}${how === "browser" ? " in this browser" : ""}…`, 0.15 + 0.83 * i / n); }});
+    out.innerHTML = `<a class="btn primary" href="${res.url}" download="${esc(mvName())}.${res.ext}">Download .${res.ext} (${(res.size / 1e6).toFixed(1)} MB)</a>`;
+    mvSay(`Done: ${res.frames} frames, ${P.total.toFixed(1)} s, encoded with ${res.how}.`);
+  }catch(e){
+    mvSay(e.message === "cancelled" ? "Cancelled." : `Rendering failed: ${e.message}`, e.message !== "cancelled");
+  }finally{
+    self.busy = false; btn.textContent = "Make movie"; $("#mvProg").hidden = true;
+    $$("#mvSide input, #mvSide select, #mvTime, #mvPlay").forEach(el => el.disabled = false);
+    if(mv === self && $("#mvDlg").open) mvShow(self.t);
+  }
+}
+$("#mvRender").addEventListener("click", () => { if(mv?.busy) mv.cancel = true; else mvRender(); });
+// what the right-click menu offers for a position (and area)
+function movieItems(item, head, pi, k){
+  const p = SESSION.positions[pi]; if(!p) return;
+  const a = p.areas.find(x => x.k === k) || p.areas[0], withTs = p.areas.filter(x => x.mrc).length;
+  head("Movie");
+  item(`Make acquisition movie (${p.id}.${a?.k ?? 1})…`, () => mvOpen(pi, a?.k ?? 1, "single"),
+    {disabled: !a?.mrc, hint: a?.mrc ? "" : "no tilt series: choose the Tilt Series Folder"});
+  item(`Make parallel acquisition movie (${p.name})…`, () => mvOpen(pi, a?.k ?? 1, "parallel"),
+    {disabled: p.areas.length < 2 || !withTs, hint: p.areas.length < 2 ? "only one area" : !withTs ? "no tilt series" : `${withTs} of ${p.areas.length} areas with a tilt series`});
+}
+
+/* ------------------------------------------------------------------ Movie Player
+   Plays a tilt series in the Exposure tab. Frames come from the preview cache when there is one
+   (<tilt series folder>/tiltseries_movie/Position_N[_k].mrc + .json, made by
+   `python3 tomo5_viewer.py --make-previews TILTDIR`): one 8-bit file, read in one request, so it
+   starts at once. Without it, each section is read from the tilt series and shrunk on the server
+   (live: limited by how fast the server reads the full-size stack). Paused, the full-resolution
+   section is shown again. The Movie Player task lists every tilt series of the session. */
+const PREVIEW_DIR = "tiltseries_movie", PLAY_PX = 512, TS_RATINGS = "tiltseries_ratings.xml";
+// star rating of a tilt series: clickable unless the server is --read-only (saved at once, no Save needed)
+const tsStars = m => SERVER && !SERVER.readOnly
+  ? starsHtml(m.a.tsRating || 0, `data-ts="${m.pi}:${m.k}"`, `Rate this tilt series: click a star, or press 1–5 (0 clears); saved to ${PREVIEW_DIR}/${TS_RATINGS}`)
+  : starsHtml(m.a.tsRating || 0);
+async function rateTilt(pi, k, r, toggle = true){
+  const s = SESSION, p = s?.positions[pi], a = p?.areas.find(x => x.k === k);
+  if(!a?.mrc || SERVER?.readOnly) return;
+  const old = a.tsRating || 0, want = toggle && old === r ? 0 : r, name = a.mrc.split("/").pop();
+  if(want === old) return;
+  a.tsRating = want; renderTable(); updateChrome();
+  try{
+    const res = await fetch("api/rate-tilt", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({base: s.tsRateBase, name, rating: want})});
+    const j = await res.json(); if(!res.ok) throw new Error(j.error || res.statusText);
+    status(`${p.id}.${k} (${name}): ${want ? `${want} star${want > 1 ? "s" : ""}` : "not rated"} · saved in ${j.file}`);
+  }catch(e){
+    a.tsRating = old; renderTable(); updateChrome();
+    status(`Could not save the rating: ${e.message}`, true);
+  }
+}
+document.addEventListener("click", e => {
+  const st = e.target.closest(".stars.rate[data-ts] span[data-r]"); if(!st) return;
+  e.stopPropagation(); e.preventDefault();
+  const [pi, k] = st.parentElement.dataset.ts.split(":").map(Number);
+  rateTilt(pi, k, +st.dataset.r);
+}, true);
+const PL = {key: null, frames: [], order: [], idx: 0, playing: false, loading: false, timer: null, src: "", meta: null};
+// the tilt series of the session (each area with a stack), in position order
+function movieList(){ return SESSION ? SESSION.positions.flatMap((p, pi) => p.areas.filter(a => a.mrc).map(a => ({pi, k: a.k, p, a}))) : []; }
+const posTask = () => STATE.task === "batch" || STATE.task === "movie";
+const curIndex = () => STATE.task === "batch" ? STATE.pos : STATE.task === "movie" ? movieList().findIndex(m => m.pi === STATE.pos && m.k === STATE.area) : STATE.sel;
+
+// previews made by --make-previews, in <tilt folder>/tiltseries_movie and <session>/tiltseries_movie
+async function findPreviews(s){
+  let n = 0;
+  for(const p of s.positions) for(const a of p.areas){ a.preview = null; a.tsRating = 0; }
+  const dirs = [];
+  s.tsRateBase = null;
+  for(const d of new Set([s.tilt?.path, s.path].filter(Boolean))){           // only folders that exist (no 404s)
+    const l = await SRC.list(d).catch(() => null), sub = l?.dirs.find(x => x.name.toLowerCase() === PREVIEW_DIR);
+    if(sub) dirs.push([d, join(d, sub.name)]);
+  }
+  const byName = new Map(s.positions.flatMap(p => p.areas.filter(a => a.mrc).map(a => [a.mrc.split("/").pop(), a])));
+  for(const [base, dir] of dirs){
+    const l = await SRC.list(dir).catch(() => null);
+    if(!l) continue;
+    const names = new Set(l.files.map(f => f.name));
+    // star ratings of the tilt series (Movie Player): tiltseries_movie/tiltseries_ratings.xml
+    if(names.has(TS_RATINGS) && !s.tsRateBase){
+      s.tsRateBase = base;
+      try{
+        const doc = new DOMParser().parseFromString(await SRC.text(join(dir, TS_RATINGS)), "application/xml");
+        for(const el of doc.querySelectorAll("TiltSeries")){ const a = byName.get(el.getAttribute("name")), r = +el.getAttribute("rating"); if(a && r >= 1 && r <= 5) a.tsRating = r; }
+      }catch(e){ console.warn("ratings", e); }
+    }
+    const byId = new Map(s.positions.map(p => [p.id, p]));
+    for(const f of l.files){
+      const m = f.name.match(/^Position_(\d+)(?:_(\d+))?\.mrc$/i), stem = f.name.slice(0, -4);
+      if(!m || !names.has(stem + ".json")) continue;
+      const a = byId.get(+m[1])?.areas.find(a => a.k === (m[2] ? +m[2] : 1));
+      if(!a || !a.mrc || a.preview) continue;
+      a.preview = {mrc: join(dir, f.name), json: join(dir, stem + ".json"), mp4: names.has(stem + ".mp4") ? join(dir, stem + ".mp4") : null, dir};
+      n++;
+    }
+  }
+  // new ratings go next to the ratings file, else next to the previews, else into the tilt-series folder
+  s.tsRateBase = s.tsRateBase || dirs[0]?.[0] || s.tilt?.path || s.path;
+  s.previews = n;
+  return n;
+}
+
+// sections of the current tilt series: angle and time from the .mdoc (or the preview's .json)
+async function plSections(ex, nz, meta){
+  const tilt = await getTiltSections(ex.path, ex.mdoc);
+  PL.md = ex.mdoc ? await getMdoc(ex.mdoc).catch(() => null) : null;
+  PL.tilt = tilt;
+  return Array.from({length: nz}, (_, z) => {
+    const s = tilt.secs[z];
+    const a = s && Number.isFinite(s.a) ? s.a : Number.isFinite(meta?.angles?.[z]) ? meta.angles[z] : NaN;
+    const t = s && Number.isFinite(s.t) ? s.t : mvTime(meta?.times?.[z]);
+    return {z, a, t};
+  });
+}
+function plOrder(){
+  const secs = PL.secs, how = $("#plOrder").value;
+  PL.order = mvOrder(secs, how === "angle" && secs.every(s => Number.isFinite(s.a)) ? "angle" : "acq", 0).map(s => s.z);
+}
+function plCurrent(){
+  const p = SESSION?.positions[STATE.pos], ex = p && exposureOf(p, STATE.area);
+  return ex && ex.kind === "tilt series" ? ex : null;
+}
+// load every frame: from the preview (one request) or live, section by section
+async function plLoad(ex){
+  const header = await getHeader(ex.path), geo = SCENE?.kind === "exposure" ? SCENE.layers[0].geo : null;
+  if(!geo) throw new Error("open the tilt series in the Exposure tab first");
+  const pv = ex.area.preview, key = ex.path;
+  PL.loading = true; PL.cancel = false; PL.key = null; PL.frames = []; PL.meta = null; PL.filling = null; PL.token = (PL.token || 0) + 1;
+  plChrome();
+  let meta = null, why = "";
+  if(pv){
+    try{
+      meta = JSON.parse(await SRC.text(pv.json));
+      const sh = meta.sourceShape || [], size = ex.area.mrcSize;
+      if(sh[2] !== header.nz || sh[0] !== header.nx || (size && meta.sourceSize && size !== meta.sourceSize)){ why = "the preview is out of date (rerun --make-previews)"; meta = null; }
+    }catch(e){ why = "the preview could not be read"; meta = null; }
+  }
+  PL.secs = await plSections(ex, header.nz, meta);
+  plOrder();
+  const frames = new Array(header.nz);
+  if(meta){
+    const ph = await getHeader(pv.mrc), w = ph.nx, h = ph.ny, n = w * h;
+    $("#plInfo").textContent = "Loading preview…";
+    const buf = await SRC.bytes(pv.mrc, 1024 + ph.nxt, 1024 + ph.nxt + n * ph.nz - 1);
+    const b = meta.bin || header.nx / w;
+    for(let z = 0; z < ph.nz && z < header.nz; z++) frames[z] = {img: {data: new Uint8Array(buf, z * n, n), w, h, bin: b}, geo};
+    PL.src = "preview";
+  } else {
+    // live: two requests at a time, in the order of play from where it starts; playing begins
+    // once the first frames are in, the rest keep coming (PL.filling) while it plays
+    const start = Math.max(0, PL.order.indexOf(STATE.z[key])), order = [...PL.order.slice(start), ...PL.order.slice(0, start)];
+    const token = PL.token = (PL.token || 0) + 1, need = Math.min(order.length, 8), t0 = performance.now();
+    let next = 0, done = 0, ready;
+    const readyP = new Promise(r => ready = r);
+    PL.loadedN = 0;
+    const worker = async () => {
+      while(next < order.length && !PL.cancel && PL.token === token){
+        const z = order[next++];
+        try{ frames[z] = {img: await getImage(ex.path, PLAY_PX, z), geo}; }catch(e){ console.warn(e); }
+        PL.loadedN = ++done;
+        if(done >= need) ready();
+        if(!PL.playing && PL.token === token){
+          const el = (performance.now() - t0) / 1000;
+          $("#plInfo").textContent = `Loading ${done}/${order.length} live… ${Math.round(el / done * (order.length - done))} s left`;
+        }
+      }
+    };
+    const all = Promise.all([worker(), worker()]).finally(() => ready());
+    await readyP;
+    if(PL.cancel || PL.token !== token){ PL.loading = false; plChrome(); return false; }
+    PL.filling = done < order.length ? all.then(() => { if(PL.token === token) PL.filling = null; }) : null;
+    PL.src = "live" + (why ? ` (${why})` : "");
+  }
+  if(plCurrent()?.path !== key){ PL.loading = false; return false; }     // moved on meanwhile
+  PL.frames = frames; PL.key = key; PL.meta = meta; PL.loading = false;
+  PL.pool = plPool();
+  return true;
+}
+// one contrast for the whole series: a sample of every frame (after the low-pass)
+function plPool(){
+  const s = [];
+  for(const fr of PL.frames){ if(!fr) continue; const d = layerData(fr), st = Math.max(1, Math.floor(d.length / 20000)); for(let i = 0; i < d.length; i += st) if(Number.isFinite(d[i])) s.push(d[i]); }
+  return Float32Array.from(s).sort();
+}
+function plShow(i){
+  if(!PL.frames.length || !SCENE) return;
+  PL.idx = (i + PL.order.length) % PL.order.length;
+  const z = PL.order[PL.idx], fr = PL.frames[z];
+  if(!fr) return;
+  const {lo, hi, inv} = contrastRange();
+  paintLayer(fr, lo, hi, inv);
+  SCENE.layers = [fr]; draw();
+  const s = PL.secs[z];
+  plInfo(z, fr);
+  $("#plPos").value = PL.idx;
+  $("#plInfo").textContent = `${Number.isFinite(s.a) ? mvDeg(s.a) + " · " : ""}${PL.idx + 1}/${PL.order.length} · ${PL.src}${PL.filling ? ` · loading ${PL.loadedN}/${PL.order.length}` : ""}`;
+  if($("#secSel").querySelector(`option[value="${z}"]`)) $("#secSel").value = z;
+}
+// Image Information follows the frame shown: section, angle and the .mdoc values of that section
+function plInfo(z, fr){
+  if(!PL.baseRows) return;
+  const rows0 = PL.tilt?.secs[z]?.rows, g = k => rows0 && PL.md ? PL.md.val(rows0, k) : undefined, s = PL.secs[z];
+  const per = {"Section": `${z + 1} / ${PL.secs.length}`, "Tilt Angle": Number.isFinite(s.a) ? `${s.a.toFixed(2)}°` : undefined,
+    "Dose": g("ExposureDose") && `${g("ExposureDose")} e/Å²`, "Defocus": g("Defocus") && `${g("Defocus")} µm`,
+    "Exposure Time": g("ExposureTime") && `${g("ExposureTime")} s`, "Acquired": g("DateTime")};
+  const skip = new Set(["Shown at", "Maximum", "Minimum", "Mean", "Std Dev", "RMS"]);
+  const rows = PL.baseRows.filter(([k]) => !skip.has(k)).map(([k, v]) => [k, k in per ? esc(per[k] ?? "–") : v]);
+  rows.push(["Playing", `${PL.src.split(" ")[0]} · ${fr.img.w} × ${fr.img.h} px`]);
+  $("#info").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+}
+async function plPlay(){
+  const ex = plCurrent();
+  if(!ex || PL.loading) return;
+  try{
+    if(PL.key !== ex.path && !(await plLoad(ex))) return;
+  }catch(e){ console.error(e); PL.loading = false; status(`Movie Player: ${e.message}`, true); plChrome(); return; }
+  if(plCurrent()?.path !== ex.path) return;
+  PL.playing = true;
+  PL.baseRows = SCENE?.info?.rows ? SCENE.info.rows.slice() : null;
+  STATS = {sorted: PL.pool};                // the player's contrast: the whole series
+  $("#plPos").max = PL.order.length - 1;
+  const start = PL.order.indexOf(STATE.z[ex.path]);
+  plShow(start >= 0 ? start : 0);
+  renderContrast();
+  plTimer(); plChrome();
+}
+function plTimer(){
+  clearInterval(PL.timer);
+  if(!PL.playing) return;
+  PL.timer = setInterval(() => {
+    if(!PL.playing) return;
+    if(PL.idx + 1 >= PL.order.length && $("#plNext").checked && STATE.task === "movie"){
+      const list = movieList();                        // the next series, back to the first after the last
+      if(list.length > 1){ plStop(); PL.autoNext = true; select((curIndex() + 1) % list.length); return; }
+    }
+    const nxt = (PL.idx + 1) % PL.order.length;
+    if(!PL.frames[PL.order[nxt]]) return;              // live: that frame is still loading, wait for it
+    plShow(nxt);
+  }, 1000 / (+$("#plFps").value || 10));
+}
+function plStop(){ clearInterval(PL.timer); PL.timer = null; PL.playing = false; plChrome(); }
+// pause: back to the full-resolution section where it stopped
+function plPause(){
+  const z = PL.order[PL.idx];
+  plStop();
+  if(PL.key && Number.isFinite(z)){ STATE.z[PL.key] = z; loadScene(); }
+}
+function plChrome(){
+  const ex = STATE.tab === "exposure" ? plCurrent() : null, nz = $("#secSel").options.length;
+  $("#playBar").hidden = !ex || nz < 2;
+  if($("#playBar").hidden) return;
+  $("#plPlay").textContent = PL.loading ? "Loading…" : PL.playing ? "❚❚ Pause" : "▶ Play";
+  $("#plPlay").disabled = false;
+  $("#plNextWrap").hidden = STATE.task !== "movie";
+  const pv = ex.area.preview;
+  if(!PL.playing && !PL.loading) $("#plInfo").textContent = PL.key === ex.path ? `${PL.order.length} frames · ${PL.src}` : pv ? "preview ready (tiltseries_movie)" : "live (no preview: see --make-previews)";
+  $("#plExport").disabled = PL.loading;
+}
+$("#plPlay").addEventListener("click", () => { if(PL.loading){ PL.cancel = true; return; } PL.playing ? plPause() : plPlay(); });
+$("#plFps").addEventListener("change", () => { savePlayerPrefs(); plTimer(); });
+$("#plOrder").addEventListener("change", () => {
+  savePlayerPrefs();
+  if(!PL.frames.length) return;
+  const z = PL.order[PL.idx]; plOrder(); $("#plPos").max = PL.order.length - 1;
+  if(PL.playing) plShow(Math.max(0, PL.order.indexOf(z)));
+});
+$("#plNext").addEventListener("change", savePlayerPrefs);
+$("#plPos").addEventListener("input", e => {
+  if(PL.key === plCurrent()?.path && PL.frames.length){ if(PL.playing) plStop(); STATS = {sorted: PL.pool}; plShow(+e.target.value); }
+});
+$("#plPos").addEventListener("change", e => {
+  if(PL.key === plCurrent()?.path && PL.frames.length){ STATE.z[PL.key] = PL.order[+e.target.value]; loadScene(); }
+});
+function savePlayerPrefs(){ try{ localStorage.setItem("tomo5.player", JSON.stringify({fps: $("#plFps").value, order: $("#plOrder").value, next: $("#plNext").checked})); }catch{} }
+(() => { try{ const o = JSON.parse(localStorage.getItem("tomo5.player") || "{}"); if(o.fps) $("#plFps").value = o.fps; if(o.order) $("#plOrder").value = o.order; $("#plNext").checked = !!o.next; }catch{} })();
+
+// export the series as it plays (order, contrast, low-pass) to .mp4 (server ffmpeg) or .webm (browser)
+async function plExport(){
+  const ex = plCurrent(); if(!ex || PL.loading) return;
+  if(PL.key !== ex.path && !(await plLoad(ex).catch(e => (status(e.message, true), false)))) return;
+  if(PL.filling) await PL.filling;                    // live: every frame first
+  const wasPlaying = PL.playing; if(wasPlaying) plStop();
+  const fps = +$("#plFps").value || 10, fr0 = PL.frames.find(Boolean), W = fr0.img.w + (fr0.img.w % 2), H = fr0.img.h + (fr0.img.h % 2);
+  const cv = Object.assign(document.createElement("canvas"), {width: W, height: H}), g = cv.getContext("2d");
+  const saved = STATS; STATS = {sorted: PL.pool};
+  const {lo, hi, inv} = contrastRange(); STATS = saved;
+  const name = `${ex.path.split("/").pop().replace(/\.mrc$/i, "")}_tilt_series`;
+  const frame = i => {                                // the frame as it plays, with its angle
+    const z = PL.order[i], fr = PL.frames[z]; paintLayer(fr, lo, hi, inv);
+    g.fillStyle = "#000"; g.fillRect(0, 0, W, H); g.drawImage(fr.canvas, 0, 0);
+    const a = PL.secs[z].a, k = H / 512, t = Number.isFinite(a) ? mvDeg(a) : `z ${z}`;
+    g.font = `600 ${22 * k}px ${mvFont()}`; g.textBaseline = "top";
+    const tw = g.measureText(t).width;
+    g.fillStyle = "rgba(0,0,0,0.6)"; g.fillRect(8 * k, 8 * k, tw + 16 * k, 32 * k); g.fillStyle = "#fff"; g.fillText(t, 16 * k, 13 * k);
+    return cv;
+  };
+  try{
+    $("#plExport").disabled = true;
+    const res = await encodeMovie({w: W, h: H, fps, n: PL.order.length, frame,
+      progress: (i, n) => { $("#plInfo").textContent = `Exporting ${i + 1}/${n}…`; }});
+    const a = Object.assign(document.createElement("a"), {href: res.url, download: `${name}.${res.ext}`});
+    document.body.appendChild(a); a.click(); a.remove();
+    status(`Exported ${name}.${res.ext} (${res.frames} frames at ${fps} fps, ${(res.size / 1e6).toFixed(1)} MB, ${res.how}).`);
+  }catch(e){ console.error(e); status(`Export failed: ${e.message}`, true); }
+  finally{ $("#plExport").disabled = false; plChrome(); if(wasPlaying) plPlay(); }
+}
+$("#plExport").addEventListener("click", plExport);
+
+/* ------------------------------------------------------------------ right-click zoom menu
+   Levels: Atlas › Overview › Search Map › Search › Exposure. Zoom in can jump to any deeper level
+   for the item under the cursor; zoom out goes exactly one level up (like the previous tab).
+   The item is selected first, so the table always matches, and the next view opens centred on it. */
+const LEVELS = ["atlas", "overview", "searchmap", "search", "exposure"];
+const LEVEL_NAME = {atlas: "Atlas", overview: "Overview", searchmap: "Search Map", search: "Search", exposure: "Exposure"};
+
+async function navigate({tab, map, pos, area, centre, zoom = 1}){
+  closeMenu();
+  if(pos != null){
+    if(!posTask()){ STATE.task = "batch"; renderTasks(); }
+    STATE.pos = pos; STATE.area = area || 1;
+    if(map == null){ const mi = await mapOfPosition(SESSION.positions[pos]); if(mi >= 0) STATE.sel = mi; }
+  }
+  if(map != null){
+    STATE.sel = map;
+    // Batch Positions / Movie Player show the map of the selected position: only another map needs Search Maps
+    const own = posTask() && SESSION.positions[STATE.pos]?.map === map;
+    if(pos == null && STATE.task !== "searchMaps" && !own && !["search", "exposure"].includes(tab)){ STATE.task = "searchMaps"; renderTasks(); }
+  }
+  renderTable();
+  STATE.pendingCentre = centre ? {pt: centre, zoom} : null;
+  await setTab(tab);
+}
+
+// what is under the cursor: a position (and which of its areas), or a search map
+function positionAt(sx, sy){
+  if(!SCENE) return null;
+  const list = SCENE.kind === "search" ? [{i: STATE.pos, pos: SCENE.overlay.pos}] : (SCENE.marks || []).filter(m => m.kind === "pos");
+  const beam = overlay().beam * V.s;
+  let best = null;
+  for(const m of list){
+    const p = m.pos;
+    if(p.plan && beam >= 6 && SCENE.kind !== "atlas"){
+      for(const a of p.areas){
+        if(!a.off) continue;
+        const [x, y] = toScreen(areaStage(p, a.off)), d = Math.hypot(sx - x, sy - y);
+        if(d <= Math.max(beam / 2, 8) && (!best || d < best.d)) best = {i: m.i, pos: p, k: a.k, d, pt: areaStage(p, a.off)};
+      }
+    } else if(m.point){
+      const [x, y] = toScreen(m.point), d = Math.hypot(sx - x, sy - y);
+      if(d <= 9 && (!best || d < best.d)) best = {i: m.i, pos: p, k: null, d, pt: m.point};
+    }
+  }
+  return best;
+}
+function mapAt(sx, sy){
+  if(SCENE?.kind === "atlas"){ const m = markAt(sx, sy, "map"); return m ? {i: m.i, map: m.map, pt: m.geo ? m.geo.S : m.point} : null; }
+  if(["overview", "tiles", "searchmap"].includes(SCENE?.kind) && STATE.sel >= 0){
+    const b = sceneBounds(SCENE);
+    const vx = (sx - V.tx) / V.s, vy = (sy - V.ty) / V.s;
+    if(vx >= b.x0 && vx <= b.x1 && vy >= b.y0 && vy <= b.y1) return {i: STATE.sel, map: SESSION.maps[STATE.sel], pt: null};
+  }
+  return null;
+}
+
+function menuItems(sx, sy){
+  const items = [], level = STATE.tab;
+  const stage = SCENE ? mul(transpose(SCENE.Q), [(sx - V.tx) / V.s, (sy - V.ty) / V.s]) : null;
+  const hit = positionAt(sx, sy);
+  // on the Atlas a position dot sits inside its search map's marker: offer both
+  const mp = !hit || level === "atlas" ? mapAt(sx, sy) : null;
+  const head = t => items.push({head: t});
+  const item = (label, fn, opts = {}) => items.push({label, fn, ...opts});
+  const exposures = (p, i, pt, first) => {      // one item per area, the one under the cursor first
+    const ks = (p.areas.length ? p.areas : [{k: 1}]).map(a => a.k).sort((a, b) => (a === first ? -1 : b === first ? 1 : a - b));
+    for(const k of ks){
+      const ex = exposureOf(p, k);
+      item(`Exposure ${p.id}.${k}`, () => navigate({tab: "exposure", pos: i, area: k}),
+        {disabled: !ex, hint: ex ? ex.kind : /^Initialized/i.test(p.status) ? "initialized only" : "no image"});
+    }
+  };
+  if(mp && level === "atlas"){
+    head(`Zoom in · ${mp.map.name}`);
+    item("Overview", () => navigate({tab: "overview", map: mp.i}), {disabled: !mp.map.names.has("Overview.mrc")});
+    item("Search Map", () => navigate({tab: "searchmap", map: mp.i}), {disabled: !mp.map.tiles.length && !mp.map.names.has("SearchMap.mrc")});
+  }
+  if(hit){
+    const p = hit.pos, mi = p.map ?? -1;
+    head(`Zoom in · ${p.name}${hit.k ? ` (area ${p.id}.${hit.k})` : ""}`);
+    if(level === "atlas"){
+      item("Overview", () => navigate({tab: "overview", pos: hit.i, centre: hit.pt, zoom: 2}), {disabled: mi < 0, hint: mi < 0 ? "no search map" : SESSION.maps[mi]?.name});
+      item("Search Map", () => navigate({tab: "searchmap", pos: hit.i, centre: hit.pt, zoom: 2}), {disabled: mi < 0});
+      item("Search", () => navigate({tab: "search", pos: hit.i}), {disabled: !p.search});
+    } else if(level === "overview"){
+      // no Exposure from here: still too small to judge; go through Search Map or Search
+      item("Search Map", () => navigate({tab: "searchmap", pos: hit.i, area: hit.k, centre: hit.pt, zoom: 2}), {disabled: mi < 0});
+      item("Search", () => navigate({tab: "search", pos: hit.i, area: hit.k}), {disabled: !p.search});
+    } else if(level === "searchmap"){
+      item("Search", () => navigate({tab: "search", pos: hit.i, area: hit.k}), {disabled: !p.search});
+      exposures(p, hit.i, hit.pt, hit.k);
+    } else if(level === "search"){
+      exposures(p, hit.i, hit.pt, hit.k || STATE.area);
+    }
+  } else if(mp && level === "atlas"){
+    // already listed above
+  } else if(mp && level === "overview"){
+    head(`Zoom in · ${mp.map.name}`);
+    item("Search Map", () => navigate({tab: "searchmap", map: mp.i, centre: stage, zoom: 2}), {disabled: !mp.map.tiles.length && !mp.map.names.has("SearchMap.mrc")});
+  } else if(level === "atlas" && SCENE){
+    head("Zoom in");
+    item("Zoom in 2× here", () => { closeMenu(); zoomTo(V.s * 2, sx, sy); });
+  } else if(level === "search" && posTask()){
+    const p = SESSION.positions[STATE.pos];
+    if(p){ head(`Zoom in · ${p.name}`); exposures(p, STATE.pos, null, STATE.area); }
+  } else if(level === "exposure"){
+    const p = SESSION.positions[STATE.pos];
+    if(p && p.areas.length > 1){
+      head("Other area");
+      for(const a of p.areas) if(a.k !== STATE.area){
+        const ex = exposureOf(p, a.k);
+        item(`Exposure ${p.id}.${a.k}`, () => navigate({tab: "exposure", pos: STATE.pos, area: a.k}), {disabled: !ex, hint: ex ? ex.kind : "no image"});
+      }
+    }
+  }
+  // acquisition movies: a sub-position (or its tilt series) of a batch position
+  if(SESSION?.positions.length){
+    if(level === "exposure" && STATE.pos >= 0) movieItems(item, head, STATE.pos, STATE.area);
+    else if(level === "search" && posTask() && STATE.pos >= 0) movieItems(item, head, hit ? hit.i : STATE.pos, hit?.k || STATE.area);
+    else if(hit && (level === "searchmap" || level === "overview")) movieItems(item, head, hit.i, hit.k || 1);
+  }
+  // edit mode (Batch Positions › Search, selected position): add / delete sub-positions
+  if(canEditAreas() && stage){
+    const p = SESSION.positions[STATE.pos], next = Math.max(1, ...p.areas.map(a => a.k)) + 1;
+    head("Edit");
+    item(`Add sub-position ${p.id}.${next} here`, () => { closeMenu(); addArea(p, stage); });
+    if(hit && hit.k >= 2){
+      const a = p.areas.find(a => a.k === hit.k);
+      if(a?.added) item(`Delete sub-position ${p.id}.${hit.k}`, () => { closeMenu(); deleteArea(p, a); });
+      else if(a?.moved) item(`Undo move of ${p.id}.${hit.k}`, () => { closeMenu(); a.off = a.offOriginal.slice(); a.moved = false; markEdited(p); draw(); });
+    }
+  }
+  // zoom out: exactly one level up
+  const up = LEVELS[LEVELS.indexOf(level) - 1];
+  if(up){
+    const p = posTask() ? SESSION.positions[STATE.pos] : null;
+    const upOk = !$(`.tab[data-tab=${up}]`).disabled;
+    const centre = p ? (up === "searchmap" || up === "overview" ? p.plan?.stage : null) : null;
+    head("Zoom out");
+    item(LEVEL_NAME[up], () => navigate({tab: up, centre, zoom: centre ? 2 : 1}), {disabled: !upOk, hint: p && up !== "atlas" ? `centred on ${p.name}` : ""});
+  }
+  // always
+  items.push({sep: true});
+  item("Fit to window", () => { closeMenu(); fit(); }, {disabled: !SCENE});
+  if(stage && SCENE?.scaled) item("Copy stage X, Y", () => {
+    closeMenu();
+    const t = `${stage[0].toFixed(2)}, ${stage[1].toFixed(2)}`;
+    (navigator.clipboard?.writeText(t) || Promise.reject()).then(() => status(`Copied stage position ${t} µm.`), () => status(`Stage position: ${t} µm`));
+  }, {hint: `${stage[0].toFixed(1)}, ${stage[1].toFixed(1)} µm`});
+  if(mp && level === "atlas" && mp.i !== STATE.sel) item(`Select ${mp.map.name}`, async () => { closeMenu(); if(STATE.task !== "searchMaps"){ STATE.task = "searchMaps"; renderTasks(); renderTable(); } await select(mp.i); });
+  if(hit) item(`Select ${hit.pos.name}${hit.k ? ` (area ${hit.pos.id}.${hit.k})` : ""}`, async () => {
+    closeMenu();
+    if(STATE.task === "movie"){                               // Movie Player selects by tilt series, not by position
+      const i = movieIndexOf(hit.i, hit.k || 1);
+      if(i >= 0){ await select(i); renderTable(); updateChrome(); draw(); return; }
+      STATE.task = "batch"; renderTasks();                    // no tilt series: show it in Batch Positions
+    }
+    if(!posTask()){ STATE.task = "batch"; renderTasks(); }
+    STATE.area = hit.k || STATE.area; if(hit.i !== STATE.pos) await select(hit.i, hit.k || 1); renderTable(); updateChrome(); draw();
+  });
+  else if(mp && level !== "atlas" && mp.i !== STATE.sel) item(`Select ${mp.map.name}`, async () => { closeMenu(); if(STATE.task !== "searchMaps"){ STATE.task = "searchMaps"; renderTasks(); renderTable(); } await select(mp.i); });
+  return items;
+}
+function openMenu(e){
+  const r = view.getBoundingClientRect(), sx = e.clientX - r.left, sy = e.clientY - r.top;
+  const items = menuItems(sx, sy), el = $("#ctxMenu");
+  el.innerHTML = items.map((it, n) => it.sep ? '<div class="sep"></div>' : it.head ? `<div class="hd">${esc(it.head)}</div>`
+    : `<button class="it" role="menuitem" data-n="${n}"${it.disabled ? " disabled" : ""}${it.disabled && it.hint ? ` title="${esc(it.hint)}"` : ""}>${esc(it.label)}${it.hint ? `<small>${esc(it.hint)}</small>` : ""}</button>`).join("");
+  el.onclick = ev => { const b = ev.target.closest(".it"); if(b && !b.disabled) items[+b.dataset.n].fn(); };
+  el.hidden = false;
+  const w = el.offsetWidth, h = el.offsetHeight;
+  el.style.left = `${Math.min(e.clientX, innerWidth - w - 6)}px`; el.style.top = `${Math.min(e.clientY, innerHeight - h - 6)}px`;
+  el.querySelector(".it:not(:disabled)")?.focus();
+}
+function closeMenu(){ $("#ctxMenu").hidden = true; }
+view.addEventListener("contextmenu", e => { e.preventDefault(); if(SESSION) openMenu(e); });
+addEventListener("pointerdown", e => { if(!e.target.closest("#ctxMenu")) closeMenu(); }, true);
+addEventListener("blur", closeMenu);
+$("#ctxMenu").addEventListener("keydown", e => {
+  const its = [...$("#ctxMenu").querySelectorAll(".it:not(:disabled)")], i = its.indexOf(document.activeElement);
+  if(e.key === "Escape"){ closeMenu(); view.focus(); }
+  else if(e.key === "ArrowDown"){ e.preventDefault(); its[(i + 1) % its.length]?.focus(); }
+  else if(e.key === "ArrowUp"){ e.preventDefault(); its[(i - 1 + its.length) % its.length]?.focus(); }
+});
+
 view.addEventListener("dblclick", e => {
   const r = view.getBoundingClientRect(), m = SCENE?.marks && markAt(e.clientX - r.left, e.clientY - r.top);
   if(m){ selectMark(m).then(() => setTab(m.kind === "pos" ? "search" : "overview")); return; }
@@ -1583,13 +3559,30 @@ new ResizeObserver(() => draw()).observe(view);
 
 /* ------------------------------------------------------------------ controls */
 $$(".tab").forEach(b => b.addEventListener("click", () => { if(!b.disabled && b.dataset.tab !== STATE.tab) setTab(b.dataset.tab); }));
-$("#mapTable tbody").addEventListener("click", e => { const tr = e.target.closest("tr[data-i]"); if(tr) select(+tr.dataset.i); });
-$("#prevMap").addEventListener("click", () => select((STATE.task === "batch" ? STATE.pos : STATE.sel) - 1));
-$("#nextMap").addEventListener("click", () => select((STATE.task === "batch" ? STATE.pos : STATE.sel) + 1));
+$("#mapTable tbody").addEventListener("click", async e => {
+  const tr = e.target.closest("tr[data-i]"); if(!tr) return;
+  const btn = e.target.closest(".ar");
+  if(!btn) return select(+tr.dataset.i);
+  // an area circle: select the position and that area, and show it in Exposure when there is an image
+  const i = +tr.dataset.i, k = +btn.dataset.k, p = SESSION.positions[i];
+  const changed = i !== STATE.pos || k !== STATE.area;
+  STATE.area = k;
+  if(i !== STATE.pos) await select(i, k); else { renderTable(); updateChrome(); }
+  if(exposureOf(p, k)){ if(STATE.tab !== "exposure") await setTab("exposure"); else if(changed) await loadScene(); }
+  else {
+    status(`Area ${p.id}.${k}: ${/^Initialized/i.test(p.status) ? "the position is only initialized" : "no image yet"}.`);
+    if(STATE.tab === "exposure") await setTab("search"); else if(STATE.tab === "search") draw();
+  }
+});
+$("#prevMap").addEventListener("click", () => step(-1));
+$("#nextMap").addEventListener("click", () => step(1));
 $("#smMode").addEventListener("change", e => { STATE.smMode = e.target.value; loadScene(); });
+$("#secSel").addEventListener("change", e => {
+  const ex = exposureOf(SESSION?.positions[STATE.pos], STATE.area);
+  if(ex){ STATE.z[ex.path] = +e.target.value; loadScene(); }
+});
 $("#tasksHead").addEventListener("click", e => { const b = e.currentTarget, open = b.getAttribute("aria-expanded") !== "true"; b.setAttribute("aria-expanded", open); $("#taskList").hidden = !open; });
-$$(".task.soon").forEach(b => b.addEventListener("click", () => status(`${b.firstChild.textContent.trim()}: coming later.`)));
-$$(".task[data-task=searchMaps], .task[data-task=batch]").forEach(b => b.addEventListener("click", () => setTask(b.dataset.task)));
+$$(".task[data-task=searchMaps], .task[data-task=batch], .task[data-task=movie]").forEach(b => b.addEventListener("click", () => setTask(b.dataset.task)));
 for(const id of ["#lo", "#hi"]) $(id).addEventListener("input", () => {
   $("#auto").checked = false;
   if(+$("#lo").value >= +$("#hi").value) $(id === "#lo" ? "#hi" : "#lo").value = id === "#lo" ? +$("#lo").value + 1 : +$("#hi").value - 1;
@@ -1598,26 +3591,26 @@ for(const id of ["#lo", "#hi"]) $(id).addEventListener("input", () => {
 $("#auto").addEventListener("change", renderContrast);
 $("#invert").addEventListener("change", renderContrast);
 $("#metaFilter").addEventListener("input", renderMeta);
+$("#keysBtn").addEventListener("click", () => $("#keysDlg").showModal());
+$("#keysClose").addEventListener("click", () => $("#keysDlg").close());
+$("#keysDlg").addEventListener("click", e => { if(e.target === e.currentTarget) e.currentTarget.close(); });    // click outside closes
 addEventListener("keydown", e => {
   if(e.target.closest("input,select,dialog,textarea")) return;
   if(e.key === "+" || e.key === "=") zoomTo(V.s * 1.5);
   else if(e.key === "-" || e.key === "_") zoomTo(V.s / 1.5);
   else if(e.key === "f" || e.key === "F") fit();
-  else if(e.key === "ArrowDown" || e.key === "ArrowRight"){ if(SESSION){ e.preventDefault(); select((STATE.task === "batch" ? STATE.pos : STATE.sel) + 1); } }
-  else if(e.key === "ArrowUp" || e.key === "ArrowLeft"){ if(SESSION){ e.preventDefault(); select((STATE.task === "batch" ? STATE.pos : STATE.sel) - 1); } }
+  else if(e.key === "ArrowDown" || e.key === "ArrowRight"){ if(SESSION){ e.preventDefault(); step(1); } }
+  else if(e.key === "ArrowUp" || e.key === "ArrowLeft"){ if(SESSION){ e.preventDefault(); step(-1); } }
+  else if(e.key === "?"){ e.preventDefault(); $("#keysDlg").showModal(); }
+  else if(e.key === " " && !$("#playBar").hidden){ e.preventDefault(); $("#plPlay").click(); }
+  else if(/^[0-5]$/.test(e.key) && STATE.tab === "exposure" && plCurrent() && !SERVER?.readOnly){
+    e.preventDefault(); rateTilt(STATE.pos, STATE.area, +e.key, false);   // 1–5 set, 0 clears
+  }
 });
 
-$("#openLocal").addEventListener("click", () => $("#localDir").click());
-$("#localDir").addEventListener("change", e => {
-  const files = e.target.files; if(!files.length) return;
-  // File objects are only handles: picking a session with big tilt series reads nothing until needed
-  const src = LocalSource(files);
-  openSession(src, src.root());
-  e.target.value = "";
-});
 
 /* ------------------------------------------------------------------ server folder picker */
-const FP = {path: ""};
+const FP = {path: "", mode: "session", tiltPath: ""};
 async function fpGo(path){
   FP.path = path;
   const list = $("#fpList"), note = $("#fpNote");
@@ -1630,8 +3623,9 @@ async function fpGo(path){
     const files = l.files.slice(0, 200).map(f => `<div class="fp-item file"><span class="ic">·</span>${esc(f.name)}<span class="sz">${fmtBytes(f.size)}</span></div>`);
     list.innerHTML = dirs.join("") + files.join("") + (l.files.length > 200 ? `<div class="fp-note" style="padding:6px 8px">… and ${l.files.length - 200} more files</div>` : "") ||
       '<div class="fp-note" style="padding:8px">Empty folder.</div>';
-    const looks = l.dirs.some(d => d.name === "Atlas" || d.name === "SearchMaps") || l.files.some(f => f.name === "Session.dm");
-    note.textContent = !path ? "Pick a shared folder." : looks ? "Looks like a Tomo5 session." : "";
+    const tilts = l.files.filter(f => f.size > 0 && /^Position_\d+(_\d+)?\.mrc$/i.test(f.name)).length;
+    const looks = FP.mode === "tilt" ? tilts > 0 : l.dirs.some(d => d.name === "Atlas" || d.name === "SearchMaps") || l.files.some(f => f.name === "Session.dm");
+    note.textContent = !path ? "Pick a shared folder." : !looks ? "" : FP.mode === "tilt" ? `${tilts} tilt series here.` : "Looks like a Tomo5 session.";
     note.classList.toggle("ok", looks);
     $("#fpUse").disabled = !path;
   }catch(e){ list.innerHTML = `<div class="fp-note" style="padding:8px;color:var(--err)">${esc(e.message)}</div>`; }
@@ -1639,8 +3633,21 @@ async function fpGo(path){
 $("#fpList").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if(b) fpGo(b.dataset.go); });
 $("#fpCrumbs").addEventListener("click", e => { const b = e.target.closest("[data-go]"); if(b) fpGo(b.dataset.go); });
 $("#fpCancel").addEventListener("click", () => $("#picker").close());
-$("#fpUse").addEventListener("click", () => { $("#picker").close(); openSession(ServerSource, FP.path); });
-$("#openServer").addEventListener("click", () => { $("#picker").showModal(); fpGo(FP.path || (SESSION && SRC === ServerSource ? SESSION.path : (SERVER.roots.length === 1 ? SERVER.roots[0].name : ""))); });
+$("#fpUse").addEventListener("click", () => {
+  $("#picker").close();
+  if(FP.mode === "tilt"){ FP.tiltPath = FP.path; setTiltFolder(FP.path); } else openSession(ServerSource, FP.path);
+});
+function openPicker(mode){
+  FP.mode = mode;
+  $("#fpTitle").textContent = mode === "tilt" ? "Tilt Series Folder" : "Open Session Data";
+  $("#fpUse").textContent = mode === "tilt" ? "Use this folder" : "Open this folder";
+  $("#picker").showModal();
+  const start = mode === "tilt" ? (SESSION?.tilt?.path || FP.tiltPath || (SESSION?.path || "").split("/").slice(0, -1).join("/"))
+                                : (FP.path || (SESSION && SRC === ServerSource ? SESSION.path : (SERVER.roots.length === 1 ? SERVER.roots[0].name : "")));
+  fpGo(start);
+}
+$("#openServer").addEventListener("click", () => openPicker("session"));
+$("#openTilt").addEventListener("click", () => { if(SESSION) openPicker("tilt"); });
 
 /* ------------------------------------------------------------------ start */
 (async function start(){
@@ -1649,13 +3656,13 @@ $("#openServer").addEventListener("click", () => { $("#picker").showModal(); fpG
     const r = await fetch("api/info");
     if(r.ok){
       SERVER = await r.json();
-      $("#openServer").hidden = false; $("#welcomeServer").hidden = false;
-      $("#openLocal").textContent = "From this computer…";
+      $("#openServer").hidden = false; $("#openTilt").hidden = false; $("#welcomeServer").hidden = false;
+      $("#editBar").hidden = !SERVER.edit;
       $("#welcomeLocal").hidden = true;
       const q = new URLSearchParams(location.hash.slice(1));
-      if(q.get("session")) openSession(ServerSource, q.get("session"), {map: q.get("map"), tab: q.get("tab"), task: q.get("task"), pos: q.get("pos")});
+      if(q.get("session")) openSession(ServerSource, q.get("session"), {map: q.get("map"), tab: q.get("tab"), task: q.get("task"), pos: q.get("pos"), area: q.get("area"), tilt: q.get("tilt")});
     }
-  }catch{ /* opened as a plain file: local folders only */ }
+  }catch{ /* opened without the server: the welcome card says how to start it */ }
   draw();
 })();
 </script>
